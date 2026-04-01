@@ -9,6 +9,9 @@ screenshots/
 # Local Claude settings
 .claude/settings.local.json
 
+# Per-user notification mute
+assets/mute
+
 # Playwright MCP logs
 .playwright-mcp/
 

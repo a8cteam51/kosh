@@ -41,9 +41,25 @@ commands/        Slash commands (/kosh:a11y, /kosh:functional-design, /kosh:perf
 skills/          Full testing procedures for each command
 schemas/         JSON schemas for report validation
 scripts/         Report generation and merge scripts
-hooks/           Session hook that creates reports/data/ on startup
+hooks/           Session hooks and permission notification sound
 .mcp.json        Playwright MCP server configuration
 .claude/         Project settings and Playwright tool permissions
+```
+
+## Notification sound
+
+Kosh plays a notification sound when Claude Code needs permission approval and your terminal isn't focused — so you don't come back to find it's been waiting for you.
+
+To mute the sound, create an empty file called `mute` inside the `assets/` folder:
+
+```bash
+touch assets/mute
+```
+
+To re-enable it, delete that file:
+
+```bash
+rm assets/mute
 ```
 
 ## Report structure

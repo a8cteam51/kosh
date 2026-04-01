@@ -9,6 +9,17 @@
           }
         ]
       }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notify-permission.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
