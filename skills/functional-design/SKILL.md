@@ -19,6 +19,16 @@ You are a design-focused Quality Engineer using the Playwright MCP to perform **
 - You MUST validate design consistency, and functional requirements simultaneously
 - If you cannot perform these actions, explicitly state that the Playwright MCP is not available and cannot proceed with testing
 
+## Investigate before reporting
+
+When any built-in script in this skill flags an issue, treat that as the start of an investigation, not as the finding itself. Before writing the issue into the report:
+
+- Read the underlying markup that produced the behavior.
+- Distinguish between **source/upload** issues (the asset, plugin, or data is the problem) and **markup** issues (the template or block configuration is the problem). The fix and the owner are different.
+- Confirm visible behavior matches what the script reported. Script summaries and serialized views can lose context that the live markup preserves — check the source of truth before trusting either.
+
+Each finding in the report MUST name the markup that is actually wrong and what to change. "The script reported X" is not a finding. For findings logged as `critical` or `high`, a reader should be able to act on the writeup without re-running the test.
+
 ---
 
 ## Environment Awareness
@@ -114,38 +124,103 @@ If you detect signs of a non-production environment that wasn't explicitly speci
 - ✅ Images scale appropriately without pixelation
 - Document: Any images that appear low-res or need replacement
 
-Run this script on every page to programmatically flag images rendered larger than their natural dimensions. It accounts for device pixel ratio, so results are accurate on both standard and HiDPI displays. Any image returned is being upscaled and may appear pixelated.
+Run this script on every page to programmatically flag images whose available pixels are less than the slot needs at the current device pixel ratio. For each flagged image the script returns one of two diagnoses — `source` (the asset or srcset doesn't offer a large-enough candidate; upload/CMS fix) or `markup` (the srcset has a large-enough candidate but the page told the browser to pick a smaller one; markup fix, usually `sizes`). When `object-fit: cover`/`contain` is in effect, the script appends a note to the diagnosis so the reader knows the visible image is cropped — but this doesn't suppress the finding, because cover still scales the source up to fill the slot. When the image hasn't loaded yet, the script returns `status: "unknown"` rather than guessing.
 
 ```javascript
 (() => {
   const dpr = window.devicePixelRatio || 1;
   const results = [];
 
+  // Density (`2x`) descriptors are dropped — they don't give absolute pixel counts.
+  const parseSrcset = (srcset) => {
+    if (!srcset) return [];
+    return srcset.split(',')
+      .map(s => s.trim())
+      .map(s => {
+        const m = s.match(/^(\S+)\s+(\d+)w$/);
+        return m ? { url: m[1], width: parseInt(m[2], 10) } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.width - b.width);
+  };
+
   document.querySelectorAll('img').forEach(img => {
-    // Skip unloaded images, SVGs (naturalWidth is unreliable), and hidden images
-    if (!img.complete || img.naturalWidth === 0) return;
-    if ((img.currentSrc || img.src || '').includes('.svg')) return;
     const rect = img.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+    const renderedW = Math.round(rect.width);
+    const renderedH = Math.round(rect.height);
+    if (renderedW === 0 || renderedH === 0) return;
 
-    // Physical pixels needed for a crisp render at the current DPR
-    const neededWidth = rect.width * dpr;
-    const neededHeight = rect.height * dpr;
+    const srcUrl = img.currentSrc || img.src || '';
+    // SVGs scale losslessly.
+    if (srcUrl.toLowerCase().endsWith('.svg') || srcUrl.includes('image/svg')) return;
 
-    // Ratio of available pixels to needed pixels (< 1 means upscaled / low-res)
-    const ratio = Math.min(img.naturalWidth / neededWidth, img.naturalHeight / neededHeight);
+    const cs = getComputedStyle(img);
+    const objectFit = cs.objectFit;
+    const srcset = img.getAttribute('srcset');
+    const sizesAttr = img.getAttribute('sizes');
+    const candidates = parseSrcset(srcset);
+    const largestCandidate = candidates.length ? candidates[candidates.length - 1].width : null;
 
-    if (ratio < 1.0) {
+    if (!img.complete || img.naturalWidth === 0) {
       results.push({
-        src: (img.currentSrc || img.src).split('/').pop().substring(0, 60),
-        naturalSize: `${img.naturalWidth}x${img.naturalHeight}px`,
-        renderedCSS: `${Math.round(rect.width)}x${Math.round(rect.height)}px`,
-        neededForCrisp: `${Math.round(neededWidth)}x${Math.round(neededHeight)}px (${dpr}x DPR)`,
-        resolutionRatio: +ratio.toFixed(2),
-        status: ratio < 0.75 ? 'flag' : 'needs visual review',
+        src: srcUrl.split('/').pop().substring(0, 60),
+        renderedCSS: `${renderedW}x${renderedH}px`,
+        status: 'unknown',
+        reason: 'image not yet loaded — re-run after scroll/wait',
         alt: (img.alt || '(no alt)').substring(0, 40)
       });
+      return;
     }
+
+    const naturalW = img.naturalWidth;
+    const naturalH = img.naturalHeight;
+    const neededW = renderedW * dpr;
+    const neededH = renderedH * dpr;
+    const ratio = Math.min(naturalW / neededW, naturalH / neededH);
+    if (ratio >= 1.0) return;
+
+    // 5% slack absorbs browser candidate-selection rounding (e.g. 768w vs. an 800px slot need).
+    const sizesIsAuto = /\bauto\b/i.test(sizesAttr || '');
+
+    let diagnosis;
+    if (!candidates.length) {
+      diagnosis = {
+        category: 'source',
+        explanation: 'No srcset present. The picked src is too small for the slot at this DPR. Investigate the upload (is the original large enough?), the srcset generator (is it producing sized variants?), or the src URL itself (does it point to a small derivative like `?w=485`?).'
+      };
+    } else if (largestCandidate >= neededW * 0.95) {
+      const sizesNote = sizesIsAuto
+        ? `The \`sizes\` attribute uses \`auto\` (which normally picks based on layout width), so the cause may be subtler: lazy-load timing, an aspect-ratio mismatch under \`object-fit: cover\`, or a \`<picture>\`/\`<source>\` selecting badly. Investigate before recommending a sizes change.`
+        : `Likely cause: \`sizes\` attribute (${sizesAttr || 'missing'}) under-declares the rendered width (actually ${renderedW}px). Fix: correct \`sizes\` so the browser picks the larger candidate.`;
+      diagnosis = {
+        category: 'markup',
+        explanation: `srcset offers a ${largestCandidate}w candidate (enough for the ${Math.round(neededW)}px slot needs at ${dpr}x DPR), but the browser picked a smaller one. ${sizesNote}`
+      };
+    } else {
+      diagnosis = {
+        category: 'source',
+        explanation: `Largest srcset candidate is ${largestCandidate}w; slot needs ${Math.round(neededW)}px at ${dpr}x DPR. Investigate the upload (is the original large enough?) or the srcset generator (is it producing the larger sizes it should?).`
+      };
+    }
+
+    const objectFitNote = (objectFit === 'cover' || objectFit === 'contain')
+      ? ` object-fit: ${objectFit} is in effect — the visible image is cropped/scaled to fit the slot, but this does not change the underlying resolution problem.`
+      : '';
+
+    results.push({
+      src: srcUrl.split('/').pop().substring(0, 60),
+      naturalSize: `${naturalW}x${naturalH}px`,
+      renderedCSS: `${renderedW}x${renderedH}px`,
+      neededForCrisp: `${Math.round(neededW)}x${Math.round(neededH)}px (${dpr}x DPR)`,
+      resolutionRatio: +ratio.toFixed(2),
+      status: ratio < 0.75 ? 'flag' : 'needs visual review',
+      diagnosisCategory: diagnosis.category,
+      diagnosis: diagnosis.explanation + objectFitNote,
+      objectFit,
+      largestSrcsetCandidate: largestCandidate ? `${largestCandidate}w` : 'none',
+      sizesAttr: sizesAttr || 'missing',
+      alt: (img.alt || '(no alt)').substring(0, 40)
+    });
   });
 
   return results.length
@@ -154,7 +229,18 @@ Run this script on every page to programmatically flag images rendered larger th
 })()
 ```
 
-A `resolutionRatio` below 0.75 means the image is being rendered at more than 133% of its natural size — flag it as an issue in the report. Between 0.75 and 1.0 is marginal — note it in the report as "needs visual review" and do not make a pass/fail call yourself.
+Reading the results:
+
+- **`status: "flag"` (`resolutionRatio` < 0.75)** — the image is being rendered at more than 133% of the picked candidate's natural size. Use the `diagnosisCategory` to decide what to flag:
+  - `source` → "the asset (or its srcset) doesn't offer a large-enough candidate." Action: investigate the upload, the srcset generator, and the src URL to find which is the constraint, then fix that one.
+  - `markup` → "the asset is fine; the page told the browser to pick the wrong candidate." Action: fix `sizes` (or `width`/`srcset`) in the block markup. Do NOT recommend re-uploading.
+- **`status: "needs visual review"` (0.75 ≤ `resolutionRatio` < 1.0)** — marginal. Note in the report without making a pass/fail call yourself.
+- **`status: "unknown"`** — image hadn't loaded when the script ran (lazy-load before scroll, etc.). Scroll the image into view, wait 1-2s, and re-run before reporting.
+
+Sanity checks before writing any of this into the report:
+- If `objectFit` is `cover` or `contain`, do NOT claim the image is being "stretched" or "aspect-ratio distorted." The image is being cropped to fit the slot. Aspect-ratio is preserved.
+- If `diagnosisCategory` is `markup`, do NOT write "the source asset is too small." The source is fine.
+- If `diagnosisCategory` is `source`, you may want to probe the original upload URL directly (stripping any Photon/CDN `?resize=` or `?w=` parameters) to confirm the source's true dimensions before writing the finding.
 
 ### 1.5 Design Baseline (Desktop 1920px)
 **Initial Page Load & Above-the-Fold:**
