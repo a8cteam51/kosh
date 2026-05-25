@@ -160,6 +160,8 @@ Run this script on every page to programmatically flag images whose available pi
     const sizesAttr = img.getAttribute('sizes');
     const candidates = parseSrcset(srcset);
     const largestCandidate = candidates.length ? candidates[candidates.length - 1].width : null;
+    const pictureParent = img.parentElement?.tagName === 'PICTURE' ? img.parentElement : null;
+    const pictureSourceCount = pictureParent ? pictureParent.querySelectorAll('source[srcset]').length : 0;
 
     if (!img.complete || img.naturalWidth === 0) {
       results.push({
@@ -207,6 +209,10 @@ Run this script on every page to programmatically flag images whose available pi
       ? ` object-fit: ${objectFit} is in effect — the visible image is cropped/scaled to fit the slot, but this does not change the underlying resolution problem.`
       : '';
 
+    const pictureNote = pictureParent
+      ? ` This \`<img>\` is inside a \`<picture>\` element with ${pictureSourceCount} \`<source srcset>\` sibling(s) that this script doesn't read — inspect those before attributing the cause, since the loaded image may have come from a \`<source>\` rather than the \`<img>\`'s own \`src\`/\`srcset\`.`
+      : '';
+
     results.push({
       src: srcUrl.split('/').pop().substring(0, 60),
       naturalSize: `${naturalW}x${naturalH}px`,
@@ -215,7 +221,7 @@ Run this script on every page to programmatically flag images whose available pi
       resolutionRatio: +ratio.toFixed(2),
       status: ratio < 0.75 ? 'flag' : 'needs visual review',
       diagnosisCategory: diagnosis.category,
-      diagnosis: diagnosis.explanation + objectFitNote,
+      diagnosis: diagnosis.explanation + objectFitNote + pictureNote,
       objectFit,
       largestSrcsetCandidate: largestCandidate ? `${largestCandidate}w` : 'none',
       sizesAttr: sizesAttr || 'missing',
