@@ -160,8 +160,9 @@ Run this script on every page to programmatically flag images whose available pi
     const sizesAttr = img.getAttribute('sizes');
     const candidates = parseSrcset(srcset);
     const largestCandidate = candidates.length ? candidates[candidates.length - 1].width : null;
-    const pictureParent = img.parentElement?.tagName === 'PICTURE' ? img.parentElement : null;
-    const pictureSourceCount = pictureParent ? pictureParent.querySelectorAll('source[srcset]').length : 0;
+    const pictureSourceCount = img.parentElement?.tagName === 'PICTURE'
+      ? img.parentElement.querySelectorAll('source[srcset]').length
+      : 0;
 
     if (!img.complete || img.naturalWidth === 0) {
       results.push({
@@ -181,7 +182,6 @@ Run this script on every page to programmatically flag images whose available pi
     const ratio = Math.min(naturalW / neededW, naturalH / neededH);
     if (ratio >= 1.0) return;
 
-    // 5% slack absorbs browser candidate-selection rounding (e.g. 768w vs. an 800px slot need).
     const sizesIsAuto = /\bauto\b/i.test(sizesAttr || '');
 
     let diagnosis;
@@ -190,7 +190,7 @@ Run this script on every page to programmatically flag images whose available pi
         category: 'source',
         explanation: 'No srcset present. The picked src is too small for the slot at this DPR. Investigate the upload (is the original large enough?), the srcset generator (is it producing sized variants?), or the src URL itself (does it point to a small derivative like `?w=485`?).'
       };
-    } else if (largestCandidate >= neededW * 0.95) {
+    } else if (largestCandidate >= neededW * 0.95) { // 5% slack absorbs browser candidate-selection rounding (e.g. 768w vs. an 800px slot need).
       const sizesNote = sizesIsAuto
         ? `The \`sizes\` attribute uses \`auto\` (which normally picks based on layout width), so the cause may be subtler: lazy-load timing, an aspect-ratio mismatch under \`object-fit: cover\`, or a \`<picture>\`/\`<source>\` selecting badly. Investigate before recommending a sizes change.`
         : `Likely cause: \`sizes\` attribute (${sizesAttr || 'missing'}) under-declares the rendered width (actually ${renderedW}px). Fix: correct \`sizes\` so the browser picks the larger candidate.`;
@@ -209,9 +209,12 @@ Run this script on every page to programmatically flag images whose available pi
       ? ` object-fit: ${objectFit} is in effect — the visible image is cropped/scaled to fit the slot, but this does not change the underlying resolution problem.`
       : '';
 
-    const pictureNote = pictureParent
-      ? ` This \`<img>\` is inside a \`<picture>\` element with ${pictureSourceCount} \`<source srcset>\` sibling(s) that this script doesn't read — inspect those before attributing the cause, since the loaded image may have come from a \`<source>\` rather than the \`<img>\`'s own \`src\`/\`srcset\`.`
-      : '';
+    let pictureNote = '';
+    if (pictureSourceCount > 0) {
+      // <picture> <source srcset> siblings override the img's srcset selection without being read here, so source/markup attribution isn't reliable.
+      diagnosis.category = 'unknown';
+      pictureNote = ` This \`<img>\` is inside a \`<picture>\` element with ${pictureSourceCount} \`<source srcset>\` sibling(s) that this script doesn't read — inspect those before attributing the cause, since the loaded image may have come from a \`<source>\` rather than the \`<img>\`'s own \`src\`/\`srcset\`.`;
+    }
 
     results.push({
       src: srcUrl.split('/').pop().substring(0, 60),
@@ -240,6 +243,7 @@ Reading the results:
 - **`status: "flag"` (`resolutionRatio` < 0.75)** — the image is being rendered at more than 133% of the picked candidate's natural size. Use the `diagnosisCategory` to decide what to flag:
   - `source` → "the asset (or its srcset) doesn't offer a large-enough candidate." Action: investigate the upload, the srcset generator, and the src URL to find which is the constraint, then fix that one.
   - `markup` → "the asset is fine; the page told the browser to pick the wrong candidate." Action: fix `sizes` (or `width`/`srcset`) in the block markup. Do NOT recommend re-uploading.
+  - `unknown` → the `<img>` is inside a `<picture>` element with `<source srcset>` siblings that the script doesn't read. The resolution shortfall is real, but either source or markup could be responsible. Action: read the `<source>` srcsets in the markup before publishing a finding.
 - **`status: "needs visual review"` (0.75 ≤ `resolutionRatio` < 1.0)** — marginal. Note in the report without making a pass/fail call yourself.
 - **`status: "unknown"`** — image hadn't loaded when the script ran (lazy-load before scroll, etc.). Scroll the image into view, wait 1-2s, and re-run before reporting.
 
