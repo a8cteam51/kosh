@@ -702,7 +702,8 @@ As you perform testing in Sections 1-3, collect the following data:
       "issue": "Brief description",
       "impact": "User-facing impact",
       "device": "mobile|desktop|both",
-      "pages": ["https://example.com/page1"]
+      "pages": ["https://example.com/page1"],
+      "screenshots": ["screenshots/example-finding.png"]
     }
   ],
   "high": [...],
@@ -710,6 +711,9 @@ As you perform testing in Sections 1-3, collect the following data:
   "low": [...]
 }
 ```
+
+**`screenshots` field (optional but strongly encouraged):**
+When a finding is visual — broken layout, low-contrast text, design inconsistency, broken UI element, mis-rendered image — attach the relevant screenshot(s) so the HTML report can embed them inline next to the finding. The path should be relative to the `reports/` directory (e.g., `screenshots/homepage-desktop-atf.png` for a file saved at `reports/screenshots/homepage-desktop-atf.png`). You can attach multiple screenshots per finding (e.g., desktop + mobile views of the same issue, or before/after pairs). Skip the field for findings where a screenshot wouldn't add information (e.g., missing meta tags, broken hrefs that aren't visually distinct).
 
 **Issue categories for this test:**
 - Design (layout, spacing, typography, visual consistency)

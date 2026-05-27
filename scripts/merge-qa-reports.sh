@@ -92,8 +92,8 @@ node "$MERGE_SCRIPT_PATH" "$FUNCTIONAL_JSON" "$PERFORMANCE_JSON" "$ACCESSIBILITY
 
 echo -e "${GREEN}✓ Reports merged successfully${NC}"
 
-# Run generate-report.js to create final Markdown report
-echo -e "${BLUE}Step 5: Generating Markdown report...${NC}"
+# Run generate-report.js to create final HTML report
+echo -e "${BLUE}Step 5: Generating HTML report...${NC}"
 
 GENERATE_SCRIPT_PATH="$(dirname "$0")/generate-report.js"
 if [ ! -f "$GENERATE_SCRIPT_PATH" ]; then
@@ -105,9 +105,9 @@ fi
 node "$GENERATE_SCRIPT_PATH" "$MERGED_JSON"
 
 # Verify output was created
-WEBSITE_NAME_UPPER=$(echo "$WEBSITE_NAME" | tr '[:lower:]' '[:upper:]')
+WEBSITE_NAME_UPPER=$(echo "$WEBSITE_NAME" | tr '[:lower:]' '[:upper:]' | tr ' ' '_')
 REPORT_DATE=$(echo "$TIMESTAMP" | cut -d'T' -f1)
-REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_QA_REPORT_${REPORT_DATE}.md"
+REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_QA_REPORT_${REPORT_DATE}.html"
 
 if [ -f "$REPORT_FILE" ]; then
   echo -e "${GREEN}✓ Report successfully generated!${NC}"

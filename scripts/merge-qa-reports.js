@@ -38,6 +38,12 @@ const mergedReport = {
   url: functional.url,
   websiteName: functional.websiteName,
   timestamp: functional.timestamp,
+  environment: functional.environment,
+  testMethodology: functional.testMethodology,
+  visitedPages: functional.visitedPages,
+  environment: functional.environment || performance.environment || accessibility.environment,
+  testMethodology: functional.testMethodology,
+  visitedPages: functional.visitedPages,
 
   // Merge viewport data from all three reports
   mobile: {
