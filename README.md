@@ -6,13 +6,13 @@ A Claude Code plugin for testing WordPress sites. Run automated functional, perf
 
 ## What it does
 
-Kosh tests a site across three dimensions:
+kosh tests a site across three dimensions:
 
 - **Functional & design:** User journeys, layout consistency, link validation, OpenGraph metadata, content quality
 - **Performance:** Load times, console errors, network failures, mixed content
 - **Accessibility:** WCAG 2.2 Level AA compliance: heading hierarchy, alt text, color contrast, keyboard navigation, form labels, ARIA
 
-Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. An optional script converts any report to a formatted Markdown document, and a merge script combines all three into one comprehensive report.
+Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. A render script converts the JSON into a self-contained HTML report with color-coded severity, collapsible sections, and inline screenshots. A merge script combines all three test types into one comprehensive report.
 
 ## Quick start
 

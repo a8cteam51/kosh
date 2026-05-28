@@ -3,8 +3,9 @@ node_modules/
 
 # Test output — reports and raw data are client-specific, not committed
 reports/data/
+reports/screenshots/
+reports/*.html
 reports/*.md
-screenshots/
 
 # Local Claude settings
 .claude/settings.local.json

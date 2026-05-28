@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # QA Report Generation Workflow Script
-# This script ensures the proper workflow: JSON -> generate-report.js -> Markdown Report
+# Reads a kosh JSON report and emits a self-contained HTML report.
 #
 # Usage:
 #   ./run-qa-report.sh <path-to-json> [--functional] [--performance] [--accessibility]
@@ -10,7 +10,7 @@
 #   ./run-qa-report.sh qa-report-functional-wholyme.json --functional
 #   ./run-qa-report.sh qa-report.json --performance
 #   ./run-qa-report.sh qa-report.json --functional --performance --accessibility
-#   ./run-qa-report.sh qa-report.json (includes all available data by default)
+#   ./run-qa-report.sh qa-report.json (auto-detects test type from filename)
 
 set -e  # Exit on any error
 
@@ -62,7 +62,7 @@ echo -e "${GREEN}  Website: $WEBSITE_NAME${NC}"
 echo -e "${GREEN}  Timestamp: $TIMESTAMP${NC}"
 
 # Step 3: Run generate-report.js script
-echo -e "${BLUE}Step 3: Generating Markdown report using generate-report.js...${NC}"
+echo -e "${BLUE}Step 3: Generating HTML report using generate-report.js...${NC}"
 
 # Auto-detect test type from filename if no flags provided
 if [ -z "$TEST_TYPE_FLAGS" ]; then
@@ -85,7 +85,10 @@ else
 fi
 
 # Step 4: Verify output was created
-WEBSITE_NAME_UPPER=$(echo "$WEBSITE_NAME" | tr '[:lower:]' '[:upper:]' | tr ' ' '_')
+WEBSITE_NAME_UPPER=$(printf '%s' "$WEBSITE_NAME" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_' | tr -s '_')
+WEBSITE_NAME_UPPER="${WEBSITE_NAME_UPPER#_}"
+WEBSITE_NAME_UPPER="${WEBSITE_NAME_UPPER%_}"
+[ -z "$WEBSITE_NAME_UPPER" ] && WEBSITE_NAME_UPPER="REPORT"
 REPORT_DATE=$(echo "$TIMESTAMP" | cut -d'T' -f1)
 if [[ "$TEST_TYPE_FLAGS" == "--functional" ]]; then
   TEST_TYPE_LABEL="FUNCTIONAL"
@@ -97,9 +100,9 @@ else
   TEST_TYPE_LABEL=""
 fi
 if [ -n "$TEST_TYPE_LABEL" ]; then
-  REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_${TEST_TYPE_LABEL}_QA_REPORT_${REPORT_DATE}.md"
+  REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_${TEST_TYPE_LABEL}_QA_REPORT_${REPORT_DATE}.html"
 else
-  REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_QA_REPORT_${REPORT_DATE}.md"
+  REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_QA_REPORT_${REPORT_DATE}.html"
 fi
 if [ -f "$REPORT_FILE" ]; then
   echo -e "${GREEN}✓ Report successfully generated!${NC}"
