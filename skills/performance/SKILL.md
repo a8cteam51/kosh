@@ -310,7 +310,7 @@ Populate `reports/data/qa-report-performance.json` with this structure:
         "impact": "How this affects users",
         "device": "mobile|desktop|both",
         "pages": ["https://example.com/page"],
-        "metric": "Optional: specific measurement, e.g. Load time 4200ms",
+        "metric": "Load time >3s",
         "screenshots": ["screenshots/example-finding.png"]
       }
     ],

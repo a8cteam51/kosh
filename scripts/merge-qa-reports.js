@@ -110,7 +110,7 @@ function mergeIssues(...issueLists) {
           impact: issue.impact,
           device: issue.device || 'both',
           pages: issue.pages || [],
-          // Include optional fields if present
+          ...(Array.isArray(issue.screenshots) && issue.screenshots.length > 0 && { screenshots: issue.screenshots }),
           ...(issue.metric && { metric: issue.metric }),
           ...(issue.wcag_criterion && { wcag_criterion: issue.wcag_criterion })
         });

@@ -78,9 +78,10 @@ let runTypesLabel;
 if (testTypeLabel) {
   runTypesLabel = testTypeLabel.toLowerCase();
 } else {
-  const parts = ['functional'];
+  const parts = [];
   if (hasPerformanceData) parts.push('performance');
   if (hasAccessibilityData) parts.push('accessibility');
+  if (parts.length === 0) parts.push('functional');
   runTypesLabel = parts.join(' + ');
 }
 
@@ -90,7 +91,7 @@ const renderScreenshots = (screenshots) => {
     .map((relPath) => {
       const safePath = escAttr(relPath);
       const filename = relPath.split('/').pop();
-      return `<figure class="screenshot"><a href="${safePath}" target="_blank"><img src="${safePath}" alt="${escAttr(filename)}" loading="lazy"></a><figcaption>${escHtml(filename)}</figcaption></figure>`;
+      return `<figure class="screenshot"><a href="${safePath}" target="_blank" rel="noopener noreferrer"><img src="${safePath}" alt="${escAttr(filename)}" loading="lazy"></a><figcaption>${escHtml(filename)}</figcaption></figure>`;
     })
     .join('');
   return `<div class="screenshots">${figures}</div>`;
@@ -99,7 +100,7 @@ const renderScreenshots = (screenshots) => {
 const renderPages = (pages) => {
   if (!Array.isArray(pages) || pages.length === 0) return '';
   const items = pages
-    .map((p) => `<li><a href="${escAttr(p)}" target="_blank">${escHtml(p)}</a></li>`)
+    .map((p) => `<li><a href="${escAttr(p)}" target="_blank" rel="noopener noreferrer">${escHtml(p)}</a></li>`)
     .join('');
   return `<details class="pages"><summary>${pages.length} page${pages.length === 1 ? '' : 's'}</summary><ul>${items}</ul></details>`;
 };
@@ -156,7 +157,7 @@ const renderSeverityBlock = (sev) => {
 
 const visitedPages = Array.isArray(report.visitedPages) ? report.visitedPages : [];
 const visitedPagesList = visitedPages.length
-  ? `<ul>${visitedPages.map((p) => `<li><a href="${escAttr(p)}" target="_blank">${escHtml(p)}</a></li>`).join('')}</ul>`
+  ? `<ul>${visitedPages.map((p) => `<li><a href="${escAttr(p)}" target="_blank" rel="noopener noreferrer">${escHtml(p)}</a></li>`).join('')}</ul>`
   : '<p class="muted">Not recorded.</p>';
 
 const TOKENS = {
@@ -474,7 +475,7 @@ const html = `<!doctype html>
 <div class="wrap">
   <header class="report-head">
     <h1>kosh ${escHtml(runTypesLabel)} QA report — ${escHtml(websiteName)}</h1>
-    <p class="site-url"><a href="${escAttr(report.url)}" target="_blank">${escHtml(report.url)}</a></p>
+    <p class="site-url"><a href="${escAttr(report.url)}" target="_blank" rel="noopener noreferrer">${escHtml(report.url)}</a></p>
     <dl class="meta">
       <dt>Environment</dt><dd>${envTag}</dd>
       <dt>Test date</dt><dd>${escHtml(reportDate)}</dd>

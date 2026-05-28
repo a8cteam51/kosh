@@ -105,7 +105,10 @@ fi
 node "$GENERATE_SCRIPT_PATH" "$MERGED_JSON"
 
 # Verify output was created
-WEBSITE_NAME_UPPER=$(echo "$WEBSITE_NAME" | tr '[:lower:]' '[:upper:]' | tr ' ' '_')
+WEBSITE_NAME_UPPER=$(printf '%s' "$WEBSITE_NAME" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_' | tr -s '_')
+WEBSITE_NAME_UPPER="${WEBSITE_NAME_UPPER#_}"
+WEBSITE_NAME_UPPER="${WEBSITE_NAME_UPPER%_}"
+[ -z "$WEBSITE_NAME_UPPER" ] && WEBSITE_NAME_UPPER="REPORT"
 REPORT_DATE=$(echo "$TIMESTAMP" | cut -d'T' -f1)
 REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_QA_REPORT_${REPORT_DATE}.html"
 
