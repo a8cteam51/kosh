@@ -4,7 +4,7 @@ kosh is a Claude Code plugin that runs functional, performance, and accessibilit
 
 ## How it works
 
-Each test is triggered by a **command** (`commands/`) which parses user input and delegates to a **skill** (`skills/`). The skill contains the full testing procedure — what to check, how to check it, and how to report findings. Results follow the structure defined in a **schema** (`schemas/`) and are saved as JSON reports, which can be converted to Markdown via scripts in `scripts/`.
+Each test is triggered by a **command** (`commands/`) which parses user input and delegates to a **skill** (`skills/`). The skill contains the full testing procedure — what to check, how to check it, and how to report findings. Results follow the structure defined in a **schema** (`schemas/`) and are saved as JSON reports, which are then rendered to self-contained HTML reports via scripts in `scripts/`.
 
 ```
 commands/        → parse input, delegate to a skill

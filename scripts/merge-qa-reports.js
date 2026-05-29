@@ -34,10 +34,13 @@ try {
 
 // Merge the reports into a single comprehensive report
 const mergedReport = {
-  // Use functional as base for metadata
+  // Use functional as base for metadata; fall through to performance/a11y for environment if missing.
   url: functional.url,
   websiteName: functional.websiteName,
   timestamp: functional.timestamp,
+  environment: functional.environment || performance.environment || accessibility.environment,
+  testMethodology: functional.testMethodology,
+  visitedPages: functional.visitedPages,
 
   // Merge viewport data from all three reports
   mobile: {
@@ -107,7 +110,7 @@ function mergeIssues(...issueLists) {
           impact: issue.impact,
           device: issue.device || 'both',
           pages: issue.pages || [],
-          // Include optional fields if present
+          ...(Array.isArray(issue.screenshots) && issue.screenshots.length > 0 && { screenshots: issue.screenshots }),
           ...(issue.metric && { metric: issue.metric }),
           ...(issue.wcag_criterion && { wcag_criterion: issue.wcag_criterion })
         });

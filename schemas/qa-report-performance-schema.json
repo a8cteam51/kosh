@@ -36,7 +36,8 @@
         "impact": "How this affects users",
         "device": "mobile|desktop|both",
         "pages": ["https://example.com/page1"],
-        "metric": "Load time >3s"
+        "metric": "Load time >3s",
+        "screenshots": ["screenshots/example-finding.png"]
       }
     ],
     "high": [],
