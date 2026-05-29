@@ -61,6 +61,7 @@
     },
     "visitedPages": {
       "type": "array",
+      "minItems": 4,
       "items": { "type": "string", "format": "uri" },
       "description": "URLs of every page visited during the analysis. The homepage is the primary scoring target; inner pages provide supporting evidence (named team, blog freshness, FAQ structure, etc.). Minimum 4 entries."
     },

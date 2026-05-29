@@ -404,7 +404,10 @@ ${report.threshold === 'strong'
 
 // ---------- Write output ----------
 
-const timestamp = new Date(report.timestamp).toISOString().split('T')[0];
+const parsedTimestamp = new Date(report.timestamp);
+const timestamp = Number.isNaN(parsedTimestamp.getTime())
+  ? new Date().toISOString().split('T')[0]
+  : parsedTimestamp.toISOString().split('T')[0];
 const slug = websiteName.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_-]/g, '');
 const outputFilename = `${slug}_AEO_QA_REPORT_${timestamp}.md`;
 const reportsDir = path.join(__dirname, '../reports');

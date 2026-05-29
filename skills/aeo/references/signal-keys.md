@@ -2,7 +2,7 @@
 
 Use these exact keys when populating `criteria.{criterion}.signals.{key}` and `issues.*[].signal` in the JSON report. Do not invent variants. Consistency across runs depends on this list being authoritative. If a signal name is missing or unclear, surface it to the maintainer rather than inventing a new key.
 
-```
+```text
 technicalHealth:     robotsAndCrawlerAccess, noNoindex, httpsNoMixedContent,
                      sitemapLastmod, nojsAccessible, canonicalUrls
 
@@ -38,7 +38,7 @@ llmsTxt:             llmsTxtPresent, llmsFullTxtPresent, llmsTxtContent
 
 The top-level `siteType` field on every report uses one of these values:
 
-```
+```text
 agency, ecommerce, mediaBlog, saas, education,
 localBusiness, nonprofit, community, other
 ```

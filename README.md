@@ -13,7 +13,7 @@ Kosh tests a site across four dimensions:
 - **Accessibility:** WCAG 2.2 Level AA compliance: heading hierarchy, alt text, color contrast, keyboard navigation, form labels, ARIA
 - **AEO (Answer Engine Optimization):** How AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews discover, parse, understand, and cite the site. 49 signals across 8 criteria, site-type-aware and content-driven (100 pts)
 
-Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. An optional script converts any report to a formatted Markdown document, and a merge script combines all three into one comprehensive report.
+Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. An optional script converts any report to a formatted Markdown document, and a merge script combines all dimensions into one comprehensive report.
 
 ## Quick start
 
@@ -38,7 +38,7 @@ For detailed setup instructions (including troubleshooting), see the [Getting St
 
 ## Project structure
 
-```
+```text
 commands/        Slash commands (/kosh:a11y, /kosh:aeo, /kosh:functional-design, /kosh:performance)
 skills/          Full testing procedures for each command
 schemas/         JSON schemas for report validation

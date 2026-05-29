@@ -4,7 +4,7 @@ Reference summary of every signal's max points, grouped by criterion. The full s
 
 **49 signals across 8 criteria, 100 points total.**
 
-#### Technical Health — 20 pts
+## Technical Health — 20 pts
 | Signal | Max |
 |---|---|
 | robots.txt and AI crawler access (training-vs-retrieval split aware) | 6 |
@@ -15,7 +15,7 @@ Reference summary of every signal's max points, grouped by criterion. The full s
 | Canonical URLs on homepage and inner pages | 1 |
 | **Subtotal** | **20** |
 
-#### Structured Data — 18 pts
+## Structured Data — 18 pts
 | Signal | Max |
 |---|---|
 | Organization schema | 5 |
@@ -27,7 +27,7 @@ Reference summary of every signal's max points, grouped by criterion. The full s
 | Review or AggregateRating schema | 1 |
 | **Subtotal** | **18** |
 
-#### AEO Readiness — 16 pts
+## AEO Readiness — 16 pts
 | Signal | Max |
 |---|---|
 | Direct answers after headings | 3 |
@@ -40,7 +40,7 @@ Reference summary of every signal's max points, grouped by criterion. The full s
 | FAQ schema applied | 1 |
 | **Subtotal** | **16** |
 
-#### E-E-A-T Signals — 14 pts
+## E-E-A-T Signals — 14 pts
 | Signal | Max |
 |---|---|
 | Named individuals with roles (team / authors / founders / contributors) | 3 |
@@ -53,7 +53,7 @@ Reference summary of every signal's max points, grouped by criterion. The full s
 | Tenure indicators (founded in, publishing since, active since) | 1 |
 | **Subtotal** | **14** |
 
-#### Content Freshness — 12 pts
+## Content Freshness — 12 pts
 | Signal | Max |
 |---|---|
 | Copyright year current | 3 |
@@ -65,7 +65,7 @@ Reference summary of every signal's max points, grouped by criterion. The full s
 | Current domain references (current tech, research, methods, standards) | 1 |
 | **Subtotal** | **12** |
 
-#### Entity Clarity — 10 pts
+## Entity Clarity — 10 pts
 | Signal | Max |
 |---|---|
 | Named entity identifiable in one sentence | 3 |
@@ -75,7 +75,7 @@ Reference summary of every signal's max points, grouped by criterion. The full s
 | Consistent identity signals | 1 |
 | **Subtotal** | **10** |
 
-#### Content Specificity — 7 pts
+## Content Specificity — 7 pts
 | Signal | Max |
 |---|---|
 | Primary offering detail (what, who, outcome) | 2 |
@@ -85,7 +85,7 @@ Reference summary of every signal's max points, grouped by criterion. The full s
 | Passage extraction quality | 1 |
 | **Subtotal** | **7** |
 
-#### llms.txt — 3 pts
+## llms.txt — 3 pts
 | Signal | Max |
 |---|---|
 | llms.txt present | 2 |
@@ -93,11 +93,11 @@ Reference summary of every signal's max points, grouped by criterion. The full s
 | llms.txt content accurate and specific | 0.5 |
 | **Subtotal** | **3** |
 
-### Grand total
+## Grand total
 
 20 + 18 + 16 + 14 + 12 + 10 + 7 + 3 = **100**
 
-### Score thresholds
+## Score thresholds
 
 | Score | Status |
 |---|---|
