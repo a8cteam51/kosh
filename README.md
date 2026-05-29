@@ -2,15 +2,16 @@
 
 <img alt="kosh; text reads one moment of perfect beauty" width="300" src="https://github.com/user-attachments/assets/db9737bb-7ea8-4dbf-b539-e503c29bb9a5">
 
-A Claude Code plugin for testing WordPress sites. Run automated functional, performance, and accessibility audits against any live URL using real browser automation via Playwright MCP.
+A Claude Code plugin for testing WordPress sites. Run automated functional, performance, accessibility, and AEO audits against any live URL using real browser automation via Playwright MCP.
 
 ## What it does
 
-Kosh tests a site across three dimensions:
+Kosh tests a site across four dimensions:
 
 - **Functional & design:** User journeys, layout consistency, link validation, OpenGraph metadata, content quality
 - **Performance:** Load times, console errors, network failures, mixed content
 - **Accessibility:** WCAG 2.2 Level AA compliance: heading hierarchy, alt text, color contrast, keyboard navigation, form labels, ARIA
+- **AEO (Answer Engine Optimization):** How AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews discover, parse, understand, and cite the site. 49 signals across 8 criteria, site-type-aware and content-driven (100 pts)
 
 Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. An optional script converts any report to a formatted Markdown document, and a merge script combines all three into one comprehensive report.
 
@@ -30,6 +31,7 @@ Then run a test:
 /kosh:functional-design https://example.com
 /kosh:performance https://example.com
 /kosh:a11y https://example.com
+/kosh:aeo https://example.com
 ```
 
 For detailed setup instructions (including troubleshooting), see the [Getting Started guide](docs/getting-started.md).
@@ -37,7 +39,7 @@ For detailed setup instructions (including troubleshooting), see the [Getting St
 ## Project structure
 
 ```
-commands/        Slash commands (/kosh:a11y, /kosh:functional-design, /kosh:performance)
+commands/        Slash commands (/kosh:a11y, /kosh:aeo, /kosh:functional-design, /kosh:performance)
 skills/          Full testing procedures for each command
 schemas/         JSON schemas for report validation
 scripts/         Report generation and merge scripts

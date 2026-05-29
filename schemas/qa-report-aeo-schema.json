@@ -1,0 +1,186 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kosh AEO Report",
+  "description": "Schema for the kosh AEO (Answer Engine Optimization) / AI Mode analysis report. Evaluates a WordPress site the way AI tools do — crawling, parsing structure, extracting entities, and deciding whether to cite it in a generated answer.",
+  "type": "object",
+  "required": ["url", "websiteName", "timestamp", "mode", "aeoRubricVersion", "siteType", "score", "threshold", "visitedPages", "criteria", "issues", "actionablePrompts", "technicalNotes"],
+  "properties": {
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "The homepage URL that was analyzed."
+    },
+    "websiteName": {
+      "type": "string",
+      "description": "Site name extracted from Organization schema, og:site_name, the WordPress site title, or page title."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the analysis was run."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["aeo"],
+      "description": "Analysis mode identifier."
+    },
+    "aeoRubricVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "Version of the AEO scoring rubric used for this analysis. Format: major.minor (e.g. 1.0). Major bumps when point values or criteria change; minor bumps when signals are added or removed within a criterion."
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["local", "development", "staging", "production"],
+      "description": "Environment the site was running in during the test. Determined from $ARGUMENTS or inferred from the URL. Defaults to production."
+    },
+    "siteType": {
+      "type": "string",
+      "enum": ["agency", "ecommerce", "mediaBlog", "saas", "education", "localBusiness", "nonprofit", "community", "other"],
+      "description": "Detected site type, set in Phase 0. Drives how the generalized signals are evaluated — e.g. primaryEntitySchema scores Service for agencies, Product for ecommerce, Article/BlogPosting for media, Course for education, LocalBusiness for retail. Default is 'other' when detection is ambiguous."
+    },
+    "siteTypeConfidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Confidence in the site type detection. high = unambiguous (schema markup explicitly identifies the type or content overwhelmingly matches); medium = strong but mixed signals; low = ambiguous, scored against the 'other' default-by-evidence path."
+    },
+    "siteTypeRationale": {
+      "type": "string",
+      "description": "Short explanation of the evidence used to determine the site type (e.g., 'WooCommerce shop schema + 47 Product pages in sitemap')."
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Total AEO score out of 100."
+    },
+    "threshold": {
+      "type": "string",
+      "enum": ["strong", "needs-work", "at-risk"],
+      "description": "Score threshold label. strong = 80-100, needs-work = 50-79, at-risk = 0-49."
+    },
+    "visitedPages": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "URLs of every page visited during the analysis. The homepage is the primary scoring target; inner pages provide supporting evidence (named team, blog freshness, FAQ structure, etc.). Minimum 4 entries."
+    },
+    "criteria": {
+      "type": "object",
+      "required": ["technicalHealth", "structuredData", "aeoReadiness", "eeatSignals", "contentFreshness", "entityClarity", "contentSpecificity", "llmsTxt"],
+      "properties": {
+        "technicalHealth": { "$ref": "#/definitions/criterion", "description": "Max 20pts. Crawlability, HTTPS, robots.txt, sitemap, JS dependency." },
+        "structuredData": { "$ref": "#/definitions/criterion", "description": "Max 18pts. Schema markup, OG tags, Twitter Cards." },
+        "aeoReadiness": { "$ref": "#/definitions/criterion", "description": "Max 16pts. Answer Engine Optimization — FAQ, question headings, direct answers." },
+        "eeatSignals": { "$ref": "#/definitions/criterion", "description": "Max 14pts. Experience, Expertise, Authoritativeness, Trustworthiness signals." },
+        "contentFreshness": { "$ref": "#/definitions/criterion", "description": "Max 12pts. Copyright year, blog recency, date stamps, sitemap lastmod." },
+        "entityClarity": { "$ref": "#/definitions/criterion", "description": "Max 10pts. Named entity identification, service specificity, geographic clarity." },
+        "contentSpecificity": { "$ref": "#/definitions/criterion", "description": "Max 7pts. Named platforms, industries, outcomes, and passage extractability." },
+        "llmsTxt": { "$ref": "#/definitions/criterion", "description": "Max 3pts. llms.txt and llms-full.txt presence and quality." }
+      }
+    },
+    "issues": {
+      "type": "object",
+      "required": ["critical", "high", "medium", "low"],
+      "properties": {
+        "critical": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Signal scores 0 where max is 3pts or more. Blocking AI discoverability or citation." },
+        "high": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Signal scores 0 or 1 where max is 2pts. Significantly weakens AI understanding." },
+        "medium": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Signal scores below max but not zero. Improvement opportunity." },
+        "low": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Minor gaps. Worth noting but low priority." }
+      }
+    },
+    "actionablePrompts": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/actionablePrompt" },
+      "description": "One entry per signal scoring below maximum. Each includes a ready-to-use Claude prompt the site owner can paste directly."
+    },
+    "technicalNotes": {
+      "type": "object",
+      "description": "Technical findings from HTTP fetches and browser inspection.",
+      "properties": {
+        "robotsTxt": { "type": "string", "description": "URL fetched and short summary of AI crawler access rules found." },
+        "sitemapUrl": { "type": "string", "description": "Sitemap URL found, or empty/'not found'." },
+        "llmsTxtFound": { "type": "boolean" },
+        "llmsFullTxtFound": { "type": "boolean" },
+        "javascriptRequired": { "type": "boolean", "description": "Whether core homepage content requires JavaScript to render." },
+        "httpsActive": { "type": "boolean" },
+        "mixedContentCount": { "type": "integer", "minimum": 0 },
+        "cmsDetected": { "type": "string", "description": "Detected CMS (e.g. 'WordPress', 'WordPress + Yoast', 'WordPress + RankMath', 'Headless'). Used by the skill to tune effort estimates." },
+        "schemaFormats": {
+          "type": "object",
+          "description": "Counts of structured-data formats present on the homepage. JSON-LD is preferred for AI parsing; microdata and RDFa earn partial credit on the structured-data signals.",
+          "properties": {
+            "jsonLd": { "type": "integer", "minimum": 0, "description": "Count of <script type=\"application/ld+json\"> blocks." },
+            "microdata": { "type": "integer", "minimum": 0, "description": "Count of [itemscope][itemtype] elements." },
+            "rdfa": { "type": "integer", "minimum": 0, "description": "Count of [typeof] elements inside a vocab=\"http://schema.org/\" or compatible prefix scope." }
+          }
+        },
+        "applicableSchemas": {
+          "type": "object",
+          "description": "Phase 0.4 schema relevance map. Keys are schema.org type names; values describe how relevant that schema is to the site's actual content. Drives primaryEntitySchema and relevantSchemasApplied scoring.",
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["high", "medium", "low", "absent"]
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "criterion": {
+      "type": "object",
+      "required": ["score", "maxScore", "signals"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0 },
+        "maxScore": { "type": "number", "minimum": 0 },
+        "signals": {
+          "type": "object",
+          "description": "Object keyed by canonical signal key (see skills/aeo/references/signal-keys.md).",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["score", "maxScore"],
+            "properties": {
+              "score": { "type": "number", "minimum": 0 },
+              "maxScore": { "type": "number", "minimum": 0 },
+              "notes": { "type": "string", "description": "Short evidence sentence describing what was found and why this score was awarded." }
+            }
+          }
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "required": ["criterion", "signal", "issue", "impact", "effort"],
+      "properties": {
+        "criterion": { "type": "string", "description": "Criterion key, e.g. 'structuredData'." },
+        "signal": { "type": "string", "description": "Canonical signal key from skills/aeo/references/signal-keys.md." },
+        "issue": { "type": "string", "description": "One sentence describing the specific gap found on this site." },
+        "impact": { "type": "string", "description": "One sentence explaining the consequence for AI discoverability or citation." },
+        "effort": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "unknown"],
+          "description": "Implementation effort estimate. low = content edit or simple config change, no developer required (under 1 hour). medium = requires a developer, plugin, or significant content creation (hours to a day). high = requires design or development work, refactoring, or substantial content creation (days or more). unknown = stack context insufficient to assess."
+        },
+        "effortRationale": {
+          "type": "string",
+          "description": "Optional. Short site-specific note explaining why this effort rating was assigned, e.g. 'WordPress with Yoast detected — one-field edit in the SEO panel'. Only include when site context meaningfully changes the baseline."
+        },
+        "pages": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" },
+          "description": "Optional. URLs of pages where this issue was observed. Used for inner-page findings (FAQ structure, dated posts, etc.)."
+        }
+      }
+    },
+    "actionablePrompt": {
+      "type": "object",
+      "required": ["criterion", "signal", "issue", "impact", "prompt"],
+      "properties": {
+        "criterion": { "type": "string", "description": "Criterion key, e.g. 'structuredData'." },
+        "signal": { "type": "string", "description": "Signal key, e.g. 'organizationSchema'." },
+        "issue": { "type": "string", "description": "Specific issue found on this site." },
+        "impact": { "type": "string", "description": "One sentence explaining the impact on AI discoverability or citation." },
+        "prompt": { "type": "string", "description": "Ready-to-use Claude prompt the site owner can paste directly." }
+      }
+    }
+  }
+}
