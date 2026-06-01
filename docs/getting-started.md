@@ -71,18 +71,18 @@ kosh has three test commands. Each one takes a URL — the site you want to test
 
 Replace `https://example.com` with the URL of the site you want to test. The test will take a few minutes — kosh opens a real browser, visits 4-6+ pages, and runs checks on each one.
 
-When it's done, you'll find the results in the `reports/` folder as both a JSON file and a formatted Markdown report.
+When it's done, you'll find the results in the `reports/` folder as both a JSON file (the raw data) and a self-contained HTML report (the formatted view).
 
 ## Step 4: Read the results
 
-The Markdown report is the easiest way to review findings. It groups issues by severity:
+The HTML report is the easiest way to review findings. It groups issues by severity:
 
 - **Critical:** Major problems that need immediate attention
 - **High:** Significant issues that should be fixed soon
 - **Medium:** Things worth addressing but not urgent
 - **Low:** Minor improvements or suggestions
 
-You can open the Markdown file in any text editor, or preview it on GitHub if you push it to a branch.
+Open the HTML file in any browser to view it — double-click in Finder, or drag it into a browser window. The CSS is inlined so it renders the same anywhere; any screenshots attached to findings load from the adjacent `reports/screenshots/` directory, so keep the two together when sharing the report.
 
 ## Going further
 
@@ -128,7 +128,7 @@ After running all three tests against the same site, you can merge them into one
 /kosh:merge
 ```
 
-This creates a single Markdown document covering functional, performance, and accessibility findings.
+This creates a single HTML document covering functional, performance, and accessibility findings.
 
 ## Specifying the environment
 

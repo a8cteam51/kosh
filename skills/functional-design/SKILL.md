@@ -252,7 +252,129 @@ Sanity checks before writing any of this into the report:
 - If `diagnosisCategory` is `markup`, do NOT write "the source asset is too small." The source is fine.
 - If `diagnosisCategory` is `source`, you may want to probe the original upload URL directly (stripping any Photon/CDN `?resize=` or `?w=` parameters) to confirm the source's true dimensions before writing the finding.
 
-### 1.5 Design Baseline (Desktop 1920px)
+### 1.5 Color Contrast Baseline
+**Color contrast assessment across entire site:**
+- ✅ Body and heading text meets WCAG 2.2 AA contrast thresholds
+- ✅ Navigation links (both active and inactive states) meet contrast requirements
+- ✅ Button text against button background meets contrast requirements
+- ✅ Footer text (a frequent failure point) meets contrast requirements
+- Document: Any text overlaid on images or gradients (the script cannot measure these — assess visually)
+
+WCAG 2.2 AA contrast thresholds:
+- Normal text (< 18pt regular or < 14pt bold): **4.5:1 minimum**
+- Large text (≥ 18pt regular or ≥ 14pt bold): **3:1 minimum**
+- UI components (buttons, form borders, icons): **3:1 minimum**
+
+Run this script on every page to programmatically detect contrast failures on text against resolved backgrounds. Many elements use `rgba()` or `transparent` backgrounds, meaning the visible background is actually inherited from an ancestor — the script walks up the DOM to find the first opaque background and composites any semi-transparent layers on top of it. The script cannot measure text overlaid on images or gradients; assess those visually.
+
+```javascript
+(() => {
+  // Parse an rgb/rgba string into {r, g, b, a}
+  function parseColor(str) {
+    const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (!m) return null;
+    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? +m[4] : 1 };
+  }
+
+  // Composite a semi-transparent foreground over an opaque background
+  function composite(fg, bg) {
+    return {
+      r: Math.round(fg.r * fg.a + bg.r * (1 - fg.a)),
+      g: Math.round(fg.g * fg.a + bg.g * (1 - fg.a)),
+      b: Math.round(fg.b * fg.a + bg.b * (1 - fg.a)),
+      a: 1
+    };
+  }
+
+  // Walk up the DOM to resolve the effective background color
+  function resolveBackground(el) {
+    let layers = [];
+    let current = el;
+    while (current) {
+      const bg = parseColor(window.getComputedStyle(current).backgroundColor);
+      if (bg) {
+        layers.push(bg);
+        if (bg.a === 1) break; // found an opaque layer, stop
+      }
+      current = current.parentElement;
+    }
+    // If no opaque layer found, assume white
+    let result = { r: 255, g: 255, b: 255, a: 1 };
+    // Composite from bottom (most distant ancestor) to top (element itself)
+    for (let i = layers.length - 1; i >= 0; i--) {
+      result = composite(layers[i], result);
+    }
+    return result;
+  }
+
+  // Relative luminance per WCAG 2.x
+  function luminance(c) {
+    const [rs, gs, bs] = [c.r, c.g, c.b].map(v => {
+      v = v / 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+  }
+
+  // Contrast ratio
+  function contrastRatio(c1, c2) {
+    const l1 = luminance(c1), l2 = luminance(c2);
+    const lighter = Math.max(l1, l2), darker = Math.min(l1, l2);
+    return +((lighter + 0.05) / (darker + 0.05)).toFixed(2);
+  }
+
+  // Collect elements to check
+  const selectors = 'a, button, p, h1, h2, h3, h4, h5, h6, span, li, td, th, label, input, select, textarea';
+  const seen = new Set();
+  const results = [];
+
+  document.querySelectorAll(selectors).forEach(el => {
+    const text = el.textContent?.trim().substring(0, 40);
+    if (!text || seen.has(el)) return;
+    seen.add(el);
+
+    const styles = window.getComputedStyle(el);
+    const textColor = parseColor(styles.color);
+    const effectiveBg = resolveBackground(el);
+    if (!textColor || !effectiveBg) return;
+
+    const ratio = contrastRatio(textColor, effectiveBg);
+    const fontSize = parseFloat(styles.fontSize);
+    const fontWeight = parseInt(styles.fontWeight) || 400;
+    const isLarge = fontSize >= 24 || (fontSize >= 18.66 && fontWeight >= 700);
+    const threshold = isLarge ? 3 : 4.5;
+
+    if (ratio < threshold) {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        text: text,
+        textColor: `rgb(${textColor.r},${textColor.g},${textColor.b})`,
+        effectiveBg: `rgb(${effectiveBg.r},${effectiveBg.g},${effectiveBg.b})`,
+        ratio: ratio,
+        threshold: threshold,
+        fontSize: fontSize + 'px',
+        fontWeight: fontWeight,
+        isLarge: isLarge
+      });
+    }
+  });
+
+  return results.length ? results : 'All checked elements meet contrast thresholds';
+})()
+```
+
+Reading the results:
+
+- **Any element returned** — contrast failure. Report it with the actual ratio and threshold from the script output.
+- **`"All checked elements meet contrast thresholds"`** — no programmatic failures. Still visually assess text overlaid on images, gradients, or video, which the script cannot measure.
+
+Sanity checks before writing any of this into the report:
+- Take a screenshot of every flagged element and confirm the failure is visible to the eye before reporting. The script is heuristic — verify the live render matches what the numbers say.
+- When the script flags many elements at the same color combination, the underlying issue is likely the color choice itself (e.g., a brand color that simply doesn't have enough contrast for body text). Write the finding at the system level ("brand red used as body text fails AA across the site") rather than listing every occurrence.
+- If a flagged element sits inside a more prominent design problem (e.g., a nav whose colors fight with the brand palette), the contrast ratio may not be the real story — describe the larger design issue and treat the ratio as supporting evidence.
+- The script measures only text on resolved opaque backgrounds. Text on images, gradients, or video has no single background color it can extract — handle those by visual inspection only.
+
+### 1.6 Design Baseline (Desktop 1920px)
 **Initial Page Load & Above-the-Fold:**
 - ✅ Page loads successfully on desktop
 - ✅ Initial viewport appearance clean (no layout shifts)
@@ -303,7 +425,7 @@ On **desktop (1920px) viewport**:
 - ✅ Font sizes are appropriate and readable
 - ✅ Line heights provide good readability
 - ✅ No text truncation issues
-- ✅ Text color provides good contrast with background
+- ✅ Run the contrast extraction script from Section 1.5 — report every element it returns as a contrast failure (with the actual ratio and threshold)
 - ✅ Font family is consistent with homepage
 
 **Visual Consistency:**
@@ -702,7 +824,8 @@ As you perform testing in Sections 1-3, collect the following data:
       "issue": "Brief description",
       "impact": "User-facing impact",
       "device": "mobile|desktop|both",
-      "pages": ["https://example.com/page1"]
+      "pages": ["https://example.com/page1"],
+      "screenshots": ["screenshots/example-finding.png"]
     }
   ],
   "high": [...],
@@ -710,6 +833,9 @@ As you perform testing in Sections 1-3, collect the following data:
   "low": [...]
 }
 ```
+
+**`screenshots` field (optional but strongly encouraged):**
+When a finding is visual — broken layout, low-contrast text, design inconsistency, broken UI element, mis-rendered image — attach the relevant screenshot(s) so the HTML report can embed them inline next to the finding. The path should be relative to the `reports/` directory (e.g., `screenshots/homepage-desktop-atf.png` for a file saved at `reports/screenshots/homepage-desktop-atf.png`). You can attach multiple screenshots per finding (e.g., desktop + mobile views of the same issue, or before/after pairs). Skip the field for findings where a screenshot wouldn't add information (e.g., missing meta tags, broken hrefs that aren't visually distinct).
 
 **Issue categories for this test:**
 - Design (layout, spacing, typography, visual consistency)

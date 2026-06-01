@@ -11,9 +11,9 @@ Kosh tests a site across four dimensions:
 - **Functional & design:** User journeys, layout consistency, link validation, OpenGraph metadata, content quality
 - **Performance:** Load times, console errors, network failures, mixed content
 - **Accessibility:** WCAG 2.2 Level AA compliance: heading hierarchy, alt text, color contrast, keyboard navigation, form labels, ARIA
-- **AEO (Answer Engine Optimization):** How AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews discover, parse, understand, and cite the site. 49 signals across 8 criteria, site-type-aware and content-driven (100 pts)
+- **AEO (Answer Engine Optimization):** How AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews discover, parse, understand, and cite the site. 49 signals across 8 criteria, status-based evaluation (pass / partial / fail / N/A), site-type-aware and content-driven.
 
-Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. An optional script converts any report to a formatted Markdown document; the functional, performance, and accessibility reports can also be merged into a single combined report.
+Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. A render script converts the JSON into a self-contained HTML report with color-coded severity, collapsible sections, and inline screenshots. The functional, performance, and accessibility test types can also be merged into one comprehensive report.
 
 ## Quick start
 

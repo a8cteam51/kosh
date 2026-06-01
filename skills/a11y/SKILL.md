@@ -566,7 +566,8 @@ Populate `reports/data/qa-report-accessibility.json`:
         "impact": "How this affects users with disabilities",
         "device": "mobile|desktop|both",
         "pages": ["https://example.com/contact/"],
-        "wcag_criterion": "1.3.1 Info and Relationships"
+        "wcag_criterion": "1.3.1 Info and Relationships",
+        "screenshots": ["screenshots/example-finding.png"]
       }
     ],
     "high": [],
@@ -575,6 +576,9 @@ Populate `reports/data/qa-report-accessibility.json`:
   }
 }
 ```
+
+**`screenshots` field (optional but strongly encouraged for visual a11y findings):**
+Attach screenshots for findings where a visual is helpful — low-contrast text examples, missing focus indicators, touch targets that look too small, broken keyboard-only navigation flows. The path is relative to the `reports/` directory (e.g., `screenshots/contact-form-focus-state.png` for a file saved at `reports/screenshots/contact-form-focus-state.png`). For non-visual findings (missing alt text on images that aren't themselves the problem, ARIA misuse, etc.), skip the field.
 
 ### A11y Issue Types
 

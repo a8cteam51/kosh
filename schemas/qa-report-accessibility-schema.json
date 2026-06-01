@@ -31,7 +31,8 @@
         "impact": "How this affects users with disabilities",
         "device": "mobile|desktop|both",
         "pages": ["https://example.com/page1"],
-        "wcag_criterion": "1.1.1 Non-text Content"
+        "wcag_criterion": "1.1.1 Non-text Content",
+        "screenshots": ["screenshots/example-finding.png"]
       }
     ],
     "high": [],

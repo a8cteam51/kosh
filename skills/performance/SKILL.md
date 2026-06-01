@@ -310,7 +310,8 @@ Populate `reports/data/qa-report-performance.json` with this structure:
         "impact": "How this affects users",
         "device": "mobile|desktop|both",
         "pages": ["https://example.com/page"],
-        "metric": "Optional: specific measurement, e.g. Load time 4200ms"
+        "metric": "Load time >3s",
+        "screenshots": ["screenshots/example-finding.png"]
       }
     ],
     "high": [],
@@ -321,6 +322,9 @@ Populate `reports/data/qa-report-performance.json` with this structure:
 ```
 
 **Note:** The `mobile` and `desktop` objects represent homepage data. Per-page findings for other pages are captured in the `issues` array.
+
+**`screenshots` field (optional):**
+When a performance finding is visually verifiable — a slow-loading hero, layout-shift evidence, a console-error overlay, network-tab capture — attach the relevant screenshot(s) so the HTML report can embed them inline. The path is relative to the `reports/` directory (e.g., `screenshots/homepage-network-tab.png` for a file saved at `reports/screenshots/homepage-network-tab.png`). Skip for findings that are purely numeric (load-time metrics, request counts).
 
 ### Issue Categories
 

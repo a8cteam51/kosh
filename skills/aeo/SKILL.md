@@ -1855,7 +1855,7 @@ Example — ❌ "I'm Maple Creative, a Toronto branding agency. My homepage has 
 
 Example — ✅ "Write a complete JSON-LD Organization schema block for a Toronto branding agency homepage `<head>`. Include name, url, logo, description, and sameAs links for LinkedIn and Twitter. Output a single `<script type=\"application/ld+json\">` block."
 
-### Generate the Markdown report
+### Generate the HTML report
 
 Once `reports/data/qa-report-aeo.json` is saved, run:
 
@@ -1863,7 +1863,7 @@ Once `reports/data/qa-report-aeo.json` is saved, run:
 node scripts/generate-report.js reports/data/qa-report-aeo.json
 ```
 
-The AEO branch is auto-detected from `report.mode === "aeo"`. The script writes a Markdown report to `reports/` and prints the output path. `--aeo` can be passed explicitly to force the AEO branch.
+The AEO branch is auto-detected from `report.mode === "aeo"`. The script writes a self-contained HTML report to `reports/` (color-coded status pills, per-criterion signal tables, schema-relevance section, collapsible severity blocks, paste-ready Claude prompts) and prints the output path. `--aeo` can be passed explicitly to force the AEO branch.
 
 ### Terminal summary
 
