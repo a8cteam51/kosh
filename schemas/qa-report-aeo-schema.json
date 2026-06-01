@@ -52,7 +52,7 @@
       "type": "array",
       "minItems": 1,
       "items": { "type": "string", "format": "uri" },
-      "description": "URLs of every page visited during the analysis. The homepage is the primary evaluation target; inner pages provide supporting evidence (named team, blog freshness, FAQ structure, canonical URLs, content update recency, author bylines, archive-page quality). Typically 4-6 entries; single-page sites are an allowed exception (cap at the homepage URL only, recorded in technicalNotes)."
+      "description": "URLs of every page visited during the analysis. The homepage is the primary evaluation target; inner pages provide supporting evidence (named team, blog freshness, FAQ structure, canonical URLs, content update recency, author bylines, archive-page quality). Typically 4-6 entries. Single-page sites are an allowed exception — cap at the homepage URL only; the per-signal `notes` field on `recentFeaturedWork`, `currentDomainReferences`, etc. captures the N/A rationale."
     },
     "summary": {
       "type": "object",
@@ -69,15 +69,16 @@
     "criteria": {
       "type": "object",
       "required": ["technicalHealth", "structuredData", "aeoReadiness", "eeatSignals", "contentFreshness", "entityClarity", "contentSpecificity", "llmsTxt"],
+      "additionalProperties": false,
       "properties": {
-        "technicalHealth": { "$ref": "#/definitions/criterion", "description": "Crawlability, HTTPS, robots.txt, sitemap, JS dependency, canonical URLs." },
-        "structuredData": { "$ref": "#/definitions/criterion", "description": "Schema markup, OG tags, schema relevance coverage." },
-        "aeoReadiness": { "$ref": "#/definitions/criterion", "description": "Answer Engine Optimization — FAQ, question headings, direct answers, answer capsules, title/meta question-match." },
-        "eeatSignals": { "$ref": "#/definitions/criterion", "description": "Experience, Expertise, Authoritativeness, Trustworthiness signals." },
-        "contentFreshness": { "$ref": "#/definitions/criterion", "description": "Copyright year, blog recency, date stamps, sitemap lastmod, per-page update recency." },
-        "entityClarity": { "$ref": "#/definitions/criterion", "description": "Named entity identification, primary focus specificity, geographic clarity." },
-        "contentSpecificity": { "$ref": "#/definitions/criterion", "description": "Named platforms, industries, outcomes, and passage extractability." },
-        "llmsTxt": { "$ref": "#/definitions/criterion", "description": "llms.txt and llms-full.txt presence and quality." }
+        "technicalHealth":    { "$ref": "#/definitions/technicalHealthCriterion",    "description": "Crawlability, HTTPS, robots.txt, sitemap, JS dependency, canonical URLs." },
+        "structuredData":     { "$ref": "#/definitions/structuredDataCriterion",     "description": "Schema markup, OG tags, schema relevance coverage." },
+        "aeoReadiness":       { "$ref": "#/definitions/aeoReadinessCriterion",       "description": "Answer Engine Optimization — FAQ, question headings, direct answers, answer capsules, title/meta question-match." },
+        "eeatSignals":        { "$ref": "#/definitions/eeatSignalsCriterion",        "description": "Experience, Expertise, Authoritativeness, Trustworthiness signals." },
+        "contentFreshness":   { "$ref": "#/definitions/contentFreshnessCriterion",   "description": "Copyright year, blog recency, date stamps, sitemap lastmod, per-page update recency." },
+        "entityClarity":      { "$ref": "#/definitions/entityClarityCriterion",      "description": "Named entity identification, primary focus specificity, geographic clarity." },
+        "contentSpecificity": { "$ref": "#/definitions/contentSpecificityCriterion", "description": "Named platforms, industries, outcomes, and passage extractability." },
+        "llmsTxt":            { "$ref": "#/definitions/llmsTxtCriterion",            "description": "llms.txt and llms-full.txt presence and quality." }
       }
     },
     "issues": {
@@ -128,14 +129,164 @@
     }
   },
   "definitions": {
-    "criterion": {
+    "technicalHealthCriterion": {
       "type": "object",
       "required": ["signals"],
+      "additionalProperties": false,
       "properties": {
         "signals": {
           "type": "object",
-          "description": "Object keyed by canonical signal key (see skills/aeo/references/signal-keys.md).",
-          "additionalProperties": { "$ref": "#/definitions/signal" }
+          "required": ["robotsAndCrawlerAccess", "noNoindex", "httpsNoMixedContent", "sitemapLastmod", "nojsAccessible", "canonicalUrls"],
+          "additionalProperties": false,
+          "properties": {
+            "robotsAndCrawlerAccess": { "$ref": "#/definitions/signal" },
+            "noNoindex":              { "$ref": "#/definitions/signal" },
+            "httpsNoMixedContent":    { "$ref": "#/definitions/signal" },
+            "sitemapLastmod":         { "$ref": "#/definitions/signal" },
+            "nojsAccessible":         { "$ref": "#/definitions/signal" },
+            "canonicalUrls":          { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "structuredDataCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["organizationSchema", "primaryEntitySchema", "faqSchema", "relevantSchemasApplied", "jsonLdFormat", "openGraphTags", "reviewSchema"],
+          "additionalProperties": false,
+          "properties": {
+            "organizationSchema":     { "$ref": "#/definitions/signal" },
+            "primaryEntitySchema":    { "$ref": "#/definitions/signal" },
+            "faqSchema":              { "$ref": "#/definitions/signal" },
+            "relevantSchemasApplied": { "$ref": "#/definitions/signal" },
+            "jsonLdFormat":           { "$ref": "#/definitions/signal" },
+            "openGraphTags":          { "$ref": "#/definitions/signal" },
+            "reviewSchema":           { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "aeoReadinessCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["directAnswers", "whoWhatWho", "featuredSnippetStructure", "answerCapsules", "faqSectionPresent", "faqSchemaApplied", "questionFramedHeadings", "titleAndMetaQuestionMatch"],
+          "additionalProperties": false,
+          "properties": {
+            "directAnswers":             { "$ref": "#/definitions/signal" },
+            "whoWhatWho":                { "$ref": "#/definitions/signal" },
+            "featuredSnippetStructure":  { "$ref": "#/definitions/signal" },
+            "answerCapsules":            { "$ref": "#/definitions/signal" },
+            "faqSectionPresent":         { "$ref": "#/definitions/signal" },
+            "faqSchemaApplied":          { "$ref": "#/definitions/signal" },
+            "questionFramedHeadings":    { "$ref": "#/definitions/signal" },
+            "titleAndMetaQuestionMatch": { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "eeatSignalsCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["namedTeamMembers", "authorCredentials", "authorBylines", "demonstratedExpertise", "externalCitations", "certificationBadges", "namedExternalRelationships", "tenureIndicators"],
+          "additionalProperties": false,
+          "properties": {
+            "namedTeamMembers":           { "$ref": "#/definitions/signal" },
+            "authorCredentials":          { "$ref": "#/definitions/signal" },
+            "authorBylines":              { "$ref": "#/definitions/signal" },
+            "demonstratedExpertise":      { "$ref": "#/definitions/signal" },
+            "externalCitations":          { "$ref": "#/definitions/signal" },
+            "certificationBadges":        { "$ref": "#/definitions/signal" },
+            "namedExternalRelationships": { "$ref": "#/definitions/signal" },
+            "tenureIndicators":           { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "contentFreshnessCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["copyrightYearCurrent", "blogNewsRecent", "dateStampsOnContent", "contentUpdateRecency", "sitemapLastmodRecent", "recentFeaturedWork", "currentDomainReferences"],
+          "additionalProperties": false,
+          "properties": {
+            "copyrightYearCurrent":    { "$ref": "#/definitions/signal" },
+            "blogNewsRecent":          { "$ref": "#/definitions/signal" },
+            "dateStampsOnContent":     { "$ref": "#/definitions/signal" },
+            "contentUpdateRecency":    { "$ref": "#/definitions/signal" },
+            "sitemapLastmodRecent":    { "$ref": "#/definitions/signal" },
+            "recentFeaturedWork":      { "$ref": "#/definitions/signal" },
+            "currentDomainReferences": { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "entityClarityCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["entityIdentifiable", "primaryFocusSpecificity", "socialProfileLinks", "geographicMarketClarity", "consistentIdentity"],
+          "additionalProperties": false,
+          "properties": {
+            "entityIdentifiable":      { "$ref": "#/definitions/signal" },
+            "primaryFocusSpecificity": { "$ref": "#/definitions/signal" },
+            "socialProfileLinks":      { "$ref": "#/definitions/signal" },
+            "geographicMarketClarity": { "$ref": "#/definitions/signal" },
+            "consistentIdentity":      { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "contentSpecificityCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["primaryOfferingDetail", "namedSpecificEntities", "namedSubjectAreas", "specificOutcomes", "passageExtractionQuality"],
+          "additionalProperties": false,
+          "properties": {
+            "primaryOfferingDetail":    { "$ref": "#/definitions/signal" },
+            "namedSpecificEntities":    { "$ref": "#/definitions/signal" },
+            "namedSubjectAreas":        { "$ref": "#/definitions/signal" },
+            "specificOutcomes":         { "$ref": "#/definitions/signal" },
+            "passageExtractionQuality": { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "llmsTxtCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["llmsTxtPresent", "llmsFullTxtPresent", "llmsTxtContent"],
+          "additionalProperties": false,
+          "properties": {
+            "llmsTxtPresent":     { "$ref": "#/definitions/signal" },
+            "llmsFullTxtPresent": { "$ref": "#/definitions/signal" },
+            "llmsTxtContent":     { "$ref": "#/definitions/signal" }
+          }
         }
       }
     },

@@ -48,6 +48,34 @@ const escHtml = (val) =>
 
 const escAttr = escHtml;
 
+// sanitizeHref returns the input only if it parses as a safe href:
+// - http:// or https:// schemes
+// - relative paths, fragments, no-scheme URLs (no colon-scheme prefix)
+// Anything else (javascript:, data:, vbscript:, file:, etc.) returns null.
+// Used by renderLink to render plain text when an href is unsafe so we never
+// produce an anchor that could execute script.
+const sanitizeHref = (value) => {
+  if (value == null) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  const schemeMatch = str.match(/^([a-z][a-z0-9+\-.]*):/i);
+  if (schemeMatch) {
+    const scheme = schemeMatch[1].toLowerCase();
+    return (scheme === 'http' || scheme === 'https') ? str : null;
+  }
+  return str; // relative path, fragment, or scheme-less — safe
+};
+
+// renderLink emits a safe <a> when the href passes the scheme whitelist,
+// or escaped plain text otherwise. Both arguments come from report data,
+// so we treat them as untrusted.
+const renderLink = (href, text) => {
+  const display = text != null ? text : href;
+  const safe = sanitizeHref(href);
+  if (!safe) return escHtml(display ?? '');
+  return `<a href="${escAttr(safe)}" target="_blank" rel="noopener noreferrer">${escHtml(display)}</a>`;
+};
+
 const getWebsiteName = (url) => {
   try {
     const urlObj = new URL(url);
@@ -59,7 +87,10 @@ const getWebsiteName = (url) => {
 };
 
 const websiteName = report.websiteName || getWebsiteName(report.url);
-const environment = report.environment || 'unspecified';
+// Default to 'production' to match the AEO schema's documented default and
+// the kosh skills' own behavior. The QA renderer also writes this through
+// the env-tag CSS; the .env-tag--production class exists for both paths.
+const environment = report.environment || 'production';
 const reportDate = report.timestamp ? new Date(report.timestamp).toLocaleString() : 'unknown';
 
 // ===== Dispatch =====
@@ -136,7 +167,12 @@ const renderScreenshots = (screenshots) => {
     .map((relPath) => {
       const safePath = escAttr(relPath);
       const filename = relPath.split('/').pop();
-      return `<figure class="screenshot"><a href="${safePath}" target="_blank" rel="noopener noreferrer"><img src="${safePath}" alt="${escAttr(filename)}" loading="lazy"></a><figcaption>${escHtml(filename)}</figcaption></figure>`;
+      const safeHref = sanitizeHref(relPath);
+      const imgTag = `<img src="${escAttr(safePath)}" alt="${escAttr(filename)}" loading="lazy">`;
+      const anchor = safeHref
+        ? `<a href="${escAttr(safeHref)}" target="_blank" rel="noopener noreferrer">${imgTag}</a>`
+        : imgTag;
+      return `<figure class="screenshot">${anchor}<figcaption>${escHtml(filename)}</figcaption></figure>`;
     })
     .join('');
   return `<div class="screenshots">${figures}</div>`;
@@ -145,7 +181,7 @@ const renderScreenshots = (screenshots) => {
 const renderPages = (pages) => {
   if (!Array.isArray(pages) || pages.length === 0) return '';
   const items = pages
-    .map((p) => `<li><a href="${escAttr(p)}" target="_blank" rel="noopener noreferrer">${escHtml(p)}</a></li>`)
+    .map((p) => `<li>${renderLink(p)}</li>`)
     .join('');
   return `<details class="pages"><summary>${pages.length} page${pages.length === 1 ? '' : 's'}</summary><ul>${items}</ul></details>`;
 };
@@ -202,7 +238,7 @@ const renderSeverityBlock = (sev) => {
 
 const visitedPages = Array.isArray(report.visitedPages) ? report.visitedPages : [];
 const visitedPagesList = visitedPages.length
-  ? `<ul>${visitedPages.map((p) => `<li><a href="${escAttr(p)}" target="_blank" rel="noopener noreferrer">${escHtml(p)}</a></li>`).join('')}</ul>`
+  ? `<ul>${visitedPages.map((p) => `<li>${renderLink(p)}</li>`).join('')}</ul>`
   : '<p class="muted">Not recorded.</p>';
 
 const TOKENS = {
@@ -520,7 +556,7 @@ const html = `<!doctype html>
 <div class="wrap">
   <header class="report-head">
     <h1>kosh ${escHtml(runTypesLabel)} QA report — ${escHtml(websiteName)}</h1>
-    <p class="site-url"><a href="${escAttr(report.url)}" target="_blank" rel="noopener noreferrer">${escHtml(report.url)}</a></p>
+    <p class="site-url">${renderLink(report.url)}</p>
     <dl class="meta">
       <dt>Environment</dt><dd>${envTag}</dd>
       <dt>Test date</dt><dd>${escHtml(reportDate)}</dd>
@@ -1023,7 +1059,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
     const sigLabel = signalLabel(issue.signal);
     const effortRationale = issue.effortRationale ? ` <span class="rationale">— ${escHtml(issue.effortRationale)}</span>` : '';
     const pagesList = (issue.pages && issue.pages.length)
-      ? `<details class="pages"><summary>${issue.pages.length} page${issue.pages.length === 1 ? '' : 's'}</summary><ul>${issue.pages.map((p) => `<li><a href="${escAttr(p)}" target="_blank" rel="noopener noreferrer">${escHtml(p)}</a></li>`).join('')}</ul></details>`
+      ? `<details class="pages"><summary>${issue.pages.length} page${issue.pages.length === 1 ? '' : 's'}</summary><ul>${issue.pages.map((p) => `<li>${renderLink(p)}</li>`).join('')}</ul></details>`
       : '';
     return `
       <article class="finding" id="aeo-finding-${index}">
@@ -1091,7 +1127,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
   // Visited pages list
   const visitedPages = Array.isArray(aeoReport.visitedPages) ? aeoReport.visitedPages : [];
   const visitedPagesList = visitedPages.length
-    ? `<ul>${visitedPages.map((p) => `<li><a href="${escAttr(p)}" target="_blank" rel="noopener noreferrer">${escHtml(p)}</a></li>`).join('')}</ul>`
+    ? `<ul>${visitedPages.map((p) => `<li>${renderLink(p)}</li>`).join('')}</ul>`
     : '<p class="muted">Not recorded.</p>';
 
   // Technical notes
@@ -1101,7 +1137,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
   if (typeof tn.mixedContentCount === 'number') technicalNotesItems.push(`<li>Mixed content count: ${tn.mixedContentCount}</li>`);
   if (typeof tn.javascriptRequired === 'boolean') technicalNotesItems.push(`<li>JavaScript required for core content: ${tn.javascriptRequired ? 'yes' : 'no'}</li>`);
   if (tn.robotsTxt) technicalNotesItems.push(`<li>robots.txt: ${escHtml(tn.robotsTxt)}</li>`);
-  if (tn.sitemapUrl) technicalNotesItems.push(`<li>Sitemap: <a href="${escAttr(tn.sitemapUrl)}" target="_blank" rel="noopener noreferrer">${escHtml(tn.sitemapUrl)}</a></li>`);
+  if (tn.sitemapUrl) technicalNotesItems.push(`<li>Sitemap: ${renderLink(tn.sitemapUrl)}</li>`);
   if (typeof tn.llmsTxtFound === 'boolean') technicalNotesItems.push(`<li>llms.txt found: ${tn.llmsTxtFound ? 'yes' : 'no'}</li>`);
   if (typeof tn.llmsFullTxtFound === 'boolean') technicalNotesItems.push(`<li>llms-full.txt found: ${tn.llmsFullTxtFound ? 'yes' : 'no'}</li>`);
   if (tn.cmsDetected) technicalNotesItems.push(`<li>CMS detected: ${escHtml(tn.cmsDetected)}</li>`);
@@ -1121,7 +1157,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
 <div class="wrap">
   <header class="report-head">
     <h1>kosh AEO report — ${escHtml(websiteName)}</h1>
-    <p class="site-url"><a href="${escAttr(aeoReport.url)}" target="_blank" rel="noopener noreferrer">${escHtml(aeoReport.url)}</a></p>
+    <p class="site-url">${renderLink(aeoReport.url)}</p>
     <dl class="meta">
       <dt>Environment</dt><dd>${envTag}</dd>
       <dt>Site type</dt><dd>${siteTypeTag}</dd>
