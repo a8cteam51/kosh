@@ -36,13 +36,7 @@ if (!fs.existsSync(inputFile)) {
 
 const report = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
 
-// AEO route — descored report shape (criteria/signals/applicableSchemas).
-// Detected automatically from `report.mode === "aeo"` or forced via --aeo.
-// renderAeoReport is a hoisted function declaration at the bottom of this file.
-if (report.mode === 'aeo' || args.includes('--aeo')) {
-  renderAeoReport(report, inputFile, testTypeLabel);
-  process.exit(0);
-}
+// ===== Shared helpers (used by both QA renderer and renderAeoReport) =====
 
 const escHtml = (val) =>
   String(val ?? '')
@@ -67,6 +61,47 @@ const getWebsiteName = (url) => {
 const websiteName = report.websiteName || getWebsiteName(report.url);
 const environment = report.environment || 'unspecified';
 const reportDate = report.timestamp ? new Date(report.timestamp).toLocaleString() : 'unknown';
+
+// ===== Dispatch =====
+//
+// AEO reports use a different data shape (criteria/signals/applicableSchemas,
+// no mobile/desktop blocks). Dispatch is explicit and validated:
+//   * `--aeo` forces the AEO renderer.
+//   * `report.mode === "aeo"` auto-routes to the AEO renderer.
+//   * An AEO-shaped report missing `mode` produces a loud error rather than
+//     silently rendering through the functional path.
+//   * Non-AEO flags on an AEO report (or vice versa) error.
+//
+// renderAeoReport is a hoisted function declaration at the bottom of this file.
+
+const aeoFlagSet = args.includes('--aeo');
+const qaFlagSet = args.some((a) => ['--functional', '--performance', '--accessibility'].includes(a));
+const modeIsAeo = report.mode === 'aeo';
+const looksLikeAeo =
+  modeIsAeo ||
+  (report.criteria && typeof report.criteria === 'object' &&
+   ['technicalHealth', 'structuredData', 'aeoReadiness'].every((k) => k in report.criteria));
+
+if (aeoFlagSet && qaFlagSet) {
+  console.error('Error: --aeo cannot be combined with --functional / --performance / --accessibility.');
+  process.exit(1);
+}
+if (aeoFlagSet && !looksLikeAeo) {
+  console.error('Error: --aeo flag set but the report shape is not AEO (no `mode: "aeo"` and no AEO-shaped `criteria` block). Refusing to produce a misleading empty report.');
+  process.exit(1);
+}
+if (looksLikeAeo && qaFlagSet) {
+  console.error('Error: report appears to be AEO-shaped, but a non-AEO flag was passed. Did you mean --aeo?');
+  process.exit(1);
+}
+if (looksLikeAeo && !modeIsAeo) {
+  console.error('Error: report has AEO-shaped `criteria` but is missing `mode: "aeo"`. Add the field or pass --aeo to force.');
+  process.exit(1);
+}
+if (modeIsAeo || aeoFlagSet) {
+  renderAeoReport(report, inputFile, testTypeLabel);
+  process.exit(0);
+}
 
 const severities = ['critical', 'high', 'medium', 'low'];
 const severityLabels = {
@@ -544,30 +579,8 @@ console.log(`HTML report generated: ${outputPath}`);
 // ============================================================
 
 function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
-  const escHtml = (val) =>
-    String(val ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  const escAttr = escHtml;
-
-  const getWebsiteName = (url) => {
-    try {
-      const urlObj = new URL(url);
-      const domain = urlObj.hostname.replace('www.', '');
-      return domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
-    } catch {
-      return 'Website';
-    }
-  };
-
-  const websiteName = aeoReport.websiteName || getWebsiteName(aeoReport.url);
-  const environment = aeoReport.environment || 'unspecified';
-  const reportDate = aeoReport.timestamp
-    ? new Date(aeoReport.timestamp).toLocaleString()
-    : 'unknown';
+  // escHtml, escAttr, getWebsiteName, websiteName, environment, reportDate are
+  // module-level closures hoisted above the dispatch — see top of file.
 
   const CRITERION_ORDER = [
     ['technicalHealth',    'Technical Health'],
@@ -791,6 +804,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
     .status-pill--partial { background: ${T.statusPartial}; color: #1a1a1a; }
     .status-pill--fail    { background: ${T.statusFail}; }
     .status-pill--na      { background: ${T.statusNa}; }
+    .status-pill--unknown { background: ${T.statusNa}; }
 
     .schema-relevance { margin: 1rem 0 2rem; }
     .schema-relevance h2 { font-size: 1.125rem; margin: 0 0 0.5rem; }
@@ -912,7 +926,6 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
   const severityCounts = Object.fromEntries(
     severities.map((s) => [s, (aeoReport.issues?.[s] || []).length])
   );
-  const totalFindings = severities.reduce((sum, s) => sum + severityCounts[s], 0);
   const sevCards = severities.map((s) => `
     <div class="sev-card sev-card--${s}">
       <span class="sev-card__count">${severityCounts[s]}</span>
@@ -927,7 +940,10 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
     const signals = c.signals || {};
     const signalKeys = Object.keys(signals);
     const counts = { pass: 0, partial: 0, fail: 0, na: 0 };
-    signalKeys.forEach((k) => { if (counts[signals[k].status] !== undefined) counts[signals[k].status]++; });
+    signalKeys.forEach((k) => {
+      const st = signals[k] && signals[k].status;
+      if (counts[st] !== undefined) counts[st]++;
+    });
 
     const headerCounts = `
       <span class="criterion__counts">
@@ -950,9 +966,10 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
       `;
     }
 
+    const VALID_STATUSES = new Set(['pass', 'partial', 'fail', 'na']);
     const rows = signalKeys.map((sk) => {
-      const sig = signals[sk];
-      const status = sig.status || 'unknown';
+      const sig = signals[sk] || {};
+      const status = VALID_STATUSES.has(sig.status) ? sig.status : 'unknown';
       return `
         <tr>
           <td class="signal-name">${escHtml(signalLabel(sk))}</td>
@@ -1109,7 +1126,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
       <dt>Environment</dt><dd>${envTag}</dd>
       <dt>Site type</dt><dd>${siteTypeTag}</dd>
       <dt>Test date</dt><dd>${escHtml(reportDate)}</dd>
-      <dt>Pages tested</dt><dd>${visitedPages.length || '—'}</dd>
+      <dt>Pages tested</dt><dd>${visitedPages.length ?? '—'}</dd>
       <dt>Rubric version</dt><dd>${escHtml(aeoReport.aeoRubricVersion || '—')}</dd>
     </dl>
   </header>
@@ -1117,7 +1134,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
   <section class="summary">
     <h2>Signal evaluation</h2>
     <div class="status-grid">${statusCards}</div>
-    <p class="muted">Across all ${summary.totalSignals || '—'} signals.</p>
+    <p class="muted">Across all ${summary.totalSignals ?? '—'} signals.</p>
     <h2 style="margin-top:1.5rem;">Findings summary</h2>
     <div class="severity-grid">${sevCards}</div>
   </section>
@@ -1160,7 +1177,16 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
   const aeoTimestamp = (parsedTimestamp && !Number.isNaN(parsedTimestamp.getTime()))
     ? parsedTimestamp.toISOString().split('T')[0]
     : new Date().toISOString().split('T')[0];
-  const safeName = String(websiteName).toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_.-]/g, '');
+  let safeName = String(websiteName).toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_.-]/g, '');
+  if (!safeName) {
+    // Non-ASCII websiteName (e.g. CJK characters) — derive a slug from the URL hostname so the file is identifiable.
+    try {
+      const host = new URL(aeoReport.url || '').hostname.replace(/^www\./, '');
+      safeName = host.toUpperCase().replace(/[^A-Z0-9_.-]/g, '_') || 'SITE';
+    } catch {
+      safeName = 'SITE';
+    }
+  }
   const filenameTag = cliTestTypeLabel || 'AEO';
   const aeoOutputFilename = `${safeName}_${filenameTag}_QA_REPORT_${aeoTimestamp}.html`;
   const aeoReportsDir = path.join(__dirname, '../reports');

@@ -1880,8 +1880,8 @@ Top issues:
 - [Top 3 critical/high issues by severity and CMS-adjusted effort]
 
 Full report saved to:
-  JSON:     reports/data/qa-report-aeo.json
-  Markdown: reports/[SITENAME]_AEO_QA_REPORT_[YYYY-MM-DD].md
+  JSON: reports/data/qa-report-aeo.json
+  HTML: reports/[SITENAME]_AEO_QA_REPORT_[YYYY-MM-DD].html
 ```
 
 ---
