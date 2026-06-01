@@ -1,16 +1,11 @@
 const fs = require('fs');
+const path = require('path');
 
 // Parse command line arguments
-// Usage: node generate-report.js <json-file> [--functional] [--performance] [--accessibility]
-// Default (no flags): includes all available data
-const inputFile = process.argv[2] || require('path').join(__dirname, '../reports/data/qa-report.json');
+// Usage: node generate-report.js <json-file> [--functional] [--performance] [--accessibility] [--aeo]
+// Default (no flags): includes all available data for the detected report type
+const inputFile = process.argv[2] || path.join(__dirname, '../reports/data/qa-report.json');
 const args = process.argv.slice(3);
-
-// Determine which sections to include
-const includeAll = args.length === 0;
-const includeFunctional = includeAll || args.includes('--functional');
-const includePerformance = includeAll || args.includes('--performance');
-const includeAccessibility = includeAll || args.includes('--accessibility');
 
 // Validate that the input file exists
 if (!fs.existsSync(inputFile)) {
@@ -21,6 +16,20 @@ if (!fs.existsSync(inputFile)) {
 const report = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
 
 const esc = (val) => String(val ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r?\n/g, ' ').replace(/\|/g, '&#124;');
+
+// Route AEO reports to the AEO-specific renderer (different report shape, no scoring).
+// Detected automatically when report.mode === 'aeo', or forced via --aeo.
+const isAeoReport = report.mode === 'aeo' || args.includes('--aeo');
+if (isAeoReport) {
+  renderAeoReport(report, inputFile);
+  process.exit(0);
+}
+
+// Determine which sections to include (functional / performance / a11y reports below)
+const includeAll = args.length === 0;
+const includeFunctional = includeAll || args.includes('--functional');
+const includePerformance = includeAll || args.includes('--performance');
+const includeAccessibility = includeAll || args.includes('--accessibility');
 
 // Determine test type based on what data is available
 const hasPerformanceData = report.mobile?.console || report.desktop?.console || report.mobile?.network || report.desktop?.network;
@@ -663,3 +672,335 @@ const outputPath = reportsDir + '/' + outputFilename;
 
 fs.writeFileSync(outputPath, markdown);
 console.log(`Markdown report generated: ${outputPath}`);
+
+// ============================================================
+// AEO renderer
+// Status-based evaluation report (no scoring). See skills/aeo/SKILL.md
+// and schemas/qa-report-aeo-schema.json for the report contract.
+// ============================================================
+
+function renderAeoReport(report, inputFile) {
+  const getWebsiteName = (url) => {
+    try {
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname.replace('www.', '');
+      return domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
+    } catch {
+      return 'Website';
+    }
+  };
+  const websiteName = report.websiteName || getWebsiteName(report.url);
+
+  const CRITERION_ORDER = [
+    ['technicalHealth',    'Technical Health'],
+    ['structuredData',     'Structured Data'],
+    ['aeoReadiness',       'AEO Readiness'],
+    ['eeatSignals',        'E-E-A-T Signals'],
+    ['contentFreshness',   'Content Freshness'],
+    ['entityClarity',      'Entity Clarity'],
+    ['contentSpecificity', 'Content Specificity'],
+    ['llmsTxt',            'llms.txt'],
+  ];
+
+  const SIGNAL_LABELS = {
+    robotsAndCrawlerAccess: 'robots.txt and AI crawler access',
+    noNoindex: 'No noindex on homepage',
+    httpsNoMixedContent: 'HTTPS, no mixed content',
+    sitemapLastmod: 'Sitemap with valid lastmod dates',
+    nojsAccessible: 'Core content accessible without JavaScript',
+    canonicalUrls: 'Canonical URLs on homepage and inner pages',
+    organizationSchema: 'Organization schema',
+    primaryEntitySchema: 'Primary entity schema (content-driven)',
+    relevantSchemasApplied: 'Relevant schemas applied (coverage of detected content types)',
+    faqSchema: 'FAQ schema',
+    jsonLdFormat: 'Structured-data format used (JSON-LD / microdata / RDFa)',
+    openGraphTags: 'Open Graph tags complete',
+    reviewSchema: 'Review or AggregateRating schema',
+    directAnswers: 'Direct answers after headings',
+    whoWhatWho: 'Who / what / who content',
+    featuredSnippetStructure: 'Featured snippet structure',
+    answerCapsules: 'Answer capsules (40–60 words under H2/H3)',
+    faqSectionPresent: 'FAQ section present',
+    faqSchemaApplied: 'FAQ schema applied',
+    questionFramedHeadings: 'Question-framed headings',
+    titleAndMetaQuestionMatch: 'Title and meta description question-match',
+    namedTeamMembers: 'Named individuals with roles',
+    authorCredentials: 'Author / staff credentials',
+    authorBylines: 'Author bylines with Person schema',
+    demonstratedExpertise: 'Demonstrated expertise',
+    externalCitations: 'External citations or press',
+    certificationBadges: 'Credentialing badges',
+    namedExternalRelationships: 'Named external relationships',
+    tenureIndicators: 'Tenure indicators (founded / since)',
+    copyrightYearCurrent: 'Copyright year current',
+    blogNewsRecent: 'Blog / news / featured content (last 6 months)',
+    dateStampsOnContent: 'Date stamps on posts or featured items',
+    contentUpdateRecency: 'Per-page "Last updated" stamps (last 12 months)',
+    sitemapLastmodRecent: 'Sitemap lastmod dates recent',
+    recentFeaturedWork: 'Recent featured work',
+    currentDomainReferences: 'Current domain references',
+    entityIdentifiable: 'Named entity identifiable in one sentence',
+    primaryFocusSpecificity: 'Primary focus specificity',
+    socialProfileLinks: 'Social profile links in footer',
+    geographicMarketClarity: 'Geographic or market clarity',
+    consistentIdentity: 'Consistent identity signals',
+    primaryOfferingDetail: 'Primary offering detail (what, who, outcome)',
+    namedSpecificEntities: 'Named specific entities',
+    namedSubjectAreas: 'Named subject areas',
+    specificOutcomes: 'Specific outcomes or quantified results',
+    passageExtractionQuality: 'Passage extraction quality',
+    llmsTxtPresent: 'llms.txt present',
+    llmsFullTxtPresent: 'llms-full.txt present',
+    llmsTxtContent: 'llms.txt content accurate and specific',
+  };
+
+  const SITE_TYPE_LABELS = {
+    agency: 'Agency / Service Business',
+    ecommerce: 'Ecommerce',
+    mediaBlog: 'Media / Blog',
+    saas: 'SaaS / Software',
+    education: 'Education',
+    localBusiness: 'Local Business',
+    nonprofit: 'Nonprofit',
+    community: 'Community',
+    other: 'Other / Unknown',
+  };
+
+  const signalLabel = (key) => SIGNAL_LABELS[key] || key;
+  const statusIcon = (status) => {
+    if (status === 'pass') return '✅';
+    if (status === 'partial') return '⚠️';
+    if (status === 'fail') return '❌';
+    if (status === 'na') return '—';
+    return '?';
+  };
+
+  const siteTypeLabel = SITE_TYPE_LABELS[report.siteType] || report.siteType || 'Other / Unknown';
+  const summary = report.summary || { totalSignals: 0, pass: 0, partial: 0, fail: 0, na: 0 };
+
+  let md = `# Kosh AEO Report - ${websiteName}
+
+**URL:** ${esc(report.url)}
+**Test Date:** ${new Date(report.timestamp).toLocaleString()}
+**Tester:** Kosh
+**Test Type:** AEO / AI Mode
+**Site Type:** ${esc(siteTypeLabel)}${report.siteTypeConfidence ? ` (confidence: ${esc(report.siteTypeConfidence)})` : ''}${report.siteTypeRationale ? ` — *${esc(report.siteTypeRationale)}*` : ''}
+**Environment:** ${esc(report.environment || 'production')}
+**Rubric Version:** ${esc(report.aeoRubricVersion)}
+
+---
+
+## Executive Summary
+
+This report evaluates ${websiteName} for AEO (Answer Engine Optimization) — how AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews discover, parse, understand, and cite the site.
+
+### Signal Evaluation
+
+✅ **${summary.pass} pass** · ⚠️ **${summary.partial} partial** · ❌ **${summary.fail} fail** · — **${summary.na} N/A** &nbsp; (of ${summary.totalSignals} total)
+
+### Pages Tested
+
+${(report.visitedPages || []).map(p => `- ${esc(p)}`).join('\n') || '- (none recorded)'}
+
+### Issues Summary
+
+- **Critical:** ${report.issues.critical.length}
+- **High:** ${report.issues.high.length}
+- **Medium:** ${report.issues.medium.length}
+- **Low:** ${report.issues.low.length}
+
+---
+
+## Detailed Findings
+
+`;
+
+  for (const [key, label] of CRITERION_ORDER) {
+    const c = report.criteria?.[key];
+    if (!c) continue;
+
+    const signals = c.signals || {};
+    const signalKeys = Object.keys(signals);
+    const passCount = signalKeys.filter(k => signals[k].status === 'pass').length;
+    const partialCount = signalKeys.filter(k => signals[k].status === 'partial').length;
+    const failCount = signalKeys.filter(k => signals[k].status === 'fail').length;
+    const naCount = signalKeys.filter(k => signals[k].status === 'na').length;
+
+    md += `### ${label} — ${passCount} pass · ${partialCount} partial · ${failCount} fail${naCount ? ` · ${naCount} N/A` : ''}\n\n`;
+
+    if (signalKeys.length === 0) {
+      md += `*(No signal data recorded for this criterion.)*\n\n`;
+      continue;
+    }
+
+    md += `| Signal | Status | Notes |\n`;
+    md += `|---|---|---|\n`;
+
+    for (const sigKey of signalKeys) {
+      const sig = signals[sigKey];
+      md += `| ${statusIcon(sig.status)} ${esc(signalLabel(sigKey))} | \`${esc(sig.status || '?')}\` | ${esc(sig.notes || '—')} |\n`;
+    }
+    md += `\n`;
+  }
+
+  md += `---
+
+## Technical Notes
+
+`;
+
+  const tn = report.technicalNotes || {};
+  md += `- **HTTPS active:** ${tn.httpsActive ? '✅ Yes' : '❌ No'}\n`;
+  if (typeof tn.mixedContentCount === 'number') {
+    md += `- **Mixed content count:** ${tn.mixedContentCount}\n`;
+  }
+  md += `- **JavaScript required for core content:** ${tn.javascriptRequired ? '⚠️ Yes' : '✅ No'}\n`;
+  if (tn.robotsTxt) md += `- **robots.txt:** ${esc(tn.robotsTxt)}\n`;
+  if (tn.sitemapUrl) md += `- **Sitemap URL:** ${esc(tn.sitemapUrl)}\n`;
+  md += `- **llms.txt found:** ${tn.llmsTxtFound ? '✅ Yes' : '❌ No'}\n`;
+  md += `- **llms-full.txt found:** ${tn.llmsFullTxtFound ? '✅ Yes' : '❌ No'}\n`;
+  if (tn.cmsDetected) md += `- **CMS detected:** ${esc(tn.cmsDetected)}\n`;
+
+  if (tn.applicableSchemas && Object.keys(tn.applicableSchemas).length > 0) {
+    md += `\n### Schema Relevance (Phase 0.4)\n\n`;
+    md += `What schema types this site's content suggests, and the relevance level the skill detected. Drives the \`primaryEntitySchema\` and \`relevantSchemasApplied\` evaluation.\n\n`;
+    md += `| Schema | Relevance |\n|---|---|\n`;
+    const relevanceOrder = { high: 0, medium: 1, low: 2, absent: 3 };
+    const relevanceLabel = { high: '🟢 High', medium: '🟡 Medium', low: '⚪ Low', absent: '— Absent' };
+    Object.entries(tn.applicableSchemas)
+      .sort((a, b) => (relevanceOrder[a[1]] ?? 9) - (relevanceOrder[b[1]] ?? 9))
+      .forEach(([schema, rel]) => {
+        md += `| ${esc(schema)} | ${relevanceLabel[rel] || esc(rel)} |\n`;
+      });
+    md += `\n`;
+  }
+
+  md += `
+---
+
+## Issues by Priority
+
+`;
+
+  const renderIssueSection = (title, issues, emptyText) => {
+    let out = `### ${title} (${issues.length})\n\n`;
+    if (issues.length === 0) {
+      out += `${emptyText}\n\n`;
+      return out;
+    }
+    issues.forEach((issue, i) => {
+      const sigLabel = signalLabel(issue.signal);
+      out += `${i + 1}. **${esc(sigLabel)}** *(criterion: ${esc(issue.criterion)})*\n`;
+      out += `   - **Issue:** ${esc(issue.issue)}\n`;
+      out += `   - **Impact:** ${esc(issue.impact)}\n`;
+      out += `   - **Effort:** ${esc(issue.effort)}`;
+      if (issue.effortRationale) out += ` — *${esc(issue.effortRationale)}*`;
+      out += `\n`;
+      if (issue.pages && issue.pages.length) {
+        out += `   - **Pages:** ${issue.pages.map(p => esc(p)).join(', ')}\n`;
+      }
+      out += `\n`;
+    });
+    return out;
+  };
+
+  md += renderIssueSection('Critical Issues', report.issues.critical, '✅ No critical issues found.');
+  md += renderIssueSection('High Priority Issues', report.issues.high, '✅ No high priority issues found.');
+  md += renderIssueSection('Medium Priority Issues', report.issues.medium, '✅ No medium priority issues found.');
+  md += renderIssueSection('Low Priority Issues', report.issues.low, '✅ No low priority issues found.');
+
+  md += `---
+
+## Actionable Claude Prompts
+
+Each signal at status \`fail\` or \`partial\` has a ready-to-use prompt the site owner can paste into Claude to start fixing the gap.
+
+`;
+
+  const prompts = report.actionablePrompts || [];
+  if (prompts.length === 0) {
+    md += `*(All signals at status pass or N/A — no actionable prompts to surface.)*\n\n`;
+  } else {
+    prompts.forEach((p, i) => {
+      md += `### ${i + 1}. ${esc(signalLabel(p.signal))}\n\n`;
+      md += `*Criterion: ${esc(p.criterion)}*\n\n`;
+      md += `**Issue:** ${esc(p.issue)}\n\n`;
+      md += `**Impact:** ${esc(p.impact)}\n\n`;
+      md += `**Prompt:**\n\n`;
+      md += '```\n';
+      md += p.prompt;
+      md += '\n```\n\n';
+    });
+  }
+
+  md += `---
+
+## Quick Wins (Low Effort)
+
+`;
+
+  const allIssues = [
+    ...report.issues.critical,
+    ...report.issues.high,
+    ...report.issues.medium,
+    ...report.issues.low,
+  ];
+  const lowEffortIssues = allIssues.filter(i => i.effort === 'low');
+  if (lowEffortIssues.length === 0) {
+    md += `*(No low-effort issues identified.)*\n\n`;
+  } else {
+    lowEffortIssues.slice(0, 10).forEach((issue, i) => {
+      md += `${i + 1}. **${esc(signalLabel(issue.signal))}** — ${esc(issue.issue)}\n`;
+    });
+    md += `\n`;
+  }
+
+  md += `---
+
+## Testing Notes
+
+### Test Environment
+
+- **Tool:** Playwright MCP
+- **Browser:** Chromium (headless)
+- **Test Date:** ${new Date(report.timestamp).toLocaleString()}
+- **Viewport:** Desktop (1920×1080)
+- **Pages tested:** ${(report.visitedPages || []).length}
+- **Rubric:** AEO ${esc(report.aeoRubricVersion)} — 49 signals across 8 criteria, status-based evaluation (no scoring), site-type-aware
+
+### Raw Data
+
+- Full JSON report: \`${inputFile}\`
+
+---
+
+## Summary
+
+${websiteName} was evaluated across 8 criteria and ${summary.totalSignals} AEO signals. ${summary.pass} signals passed, ${summary.partial} were partial, ${summary.fail} failed${summary.na ? `, and ${summary.na} were N/A` : ''}.
+
+**Issue Counts:**
+
+- ${report.issues.critical.length} critical issues blocking AI discoverability
+- ${report.issues.high.length} high priority issues weakening AI understanding
+- ${report.issues.medium.length} medium priority improvements
+- ${report.issues.low.length} low priority polish
+
+---
+
+*Report generated by Kosh, an automated testing tool.*
+*Test Type: AEO / AI Mode (rubric ${esc(report.aeoRubricVersion)})*
+`;
+
+  const parsedTimestamp = new Date(report.timestamp);
+  const aeoTimestamp = Number.isNaN(parsedTimestamp.getTime())
+    ? new Date().toISOString().split('T')[0]
+    : parsedTimestamp.toISOString().split('T')[0];
+  const slug = websiteName.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_-]/g, '');
+  const aeoOutputFilename = `${slug}_AEO_QA_REPORT_${aeoTimestamp}.md`;
+  const aeoReportsDir = path.join(__dirname, '../reports');
+  if (!fs.existsSync(aeoReportsDir)) fs.mkdirSync(aeoReportsDir, { recursive: true });
+
+  const aeoOutputPath = path.join(aeoReportsDir, aeoOutputFilename);
+  fs.writeFileSync(aeoOutputPath, md);
+  console.log(`Markdown report generated: ${aeoOutputPath}`);
+}

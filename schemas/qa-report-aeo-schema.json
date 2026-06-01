@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Kosh AEO Report",
-  "description": "Schema for the kosh AEO (Answer Engine Optimization) / AI Mode analysis report. Evaluates a WordPress site the way AI tools do — crawling, parsing structure, extracting entities, and deciding whether to cite it in a generated answer.",
+  "description": "Schema for the kosh AEO (Answer Engine Optimization) / AI Mode analysis report. Evaluates a WordPress site the way AI tools do — crawling, parsing structure, extracting entities, and deciding whether to cite it in a generated answer. Evaluation-based (pass/partial/fail/na per signal), no numerical scoring.",
   "type": "object",
-  "required": ["url", "websiteName", "timestamp", "mode", "aeoRubricVersion", "siteType", "score", "threshold", "visitedPages", "criteria", "issues", "actionablePrompts", "technicalNotes"],
+  "required": ["url", "websiteName", "timestamp", "mode", "aeoRubricVersion", "siteType", "siteTypeConfidence", "siteTypeRationale", "visitedPages", "summary", "criteria", "issues", "actionablePrompts", "technicalNotes"],
   "properties": {
     "url": {
       "type": "string",
@@ -27,7 +27,7 @@
     "aeoRubricVersion": {
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+$",
-      "description": "Version of the AEO scoring rubric used for this analysis. Format: major.minor (e.g. 1.0). Major bumps when point values or criteria change; minor bumps when signals are added or removed within a criterion."
+      "description": "Version of the AEO evaluation rubric used for this analysis. Format: major.minor (e.g. 1.0). Major bumps when signals are added, removed, or have their evaluation criteria fundamentally changed; minor bumps when tier definitions or rationale are refined within an existing signal."
     },
     "environment": {
       "type": "string",
@@ -37,7 +37,7 @@
     "siteType": {
       "type": "string",
       "enum": ["agency", "ecommerce", "mediaBlog", "saas", "education", "localBusiness", "nonprofit", "community", "other"],
-      "description": "Detected site type, set in Phase 0. Drives how the generalized signals are evaluated — e.g. primaryEntitySchema scores Service for agencies, Product for ecommerce, Article/BlogPosting for media, Course for education, LocalBusiness for retail. Default is 'other' when detection is ambiguous."
+      "description": "Detected site type, set in Phase 0. Drives how the generalized content-quality signals are evaluated (whoWhatWho, primaryFocusSpecificity, primaryOfferingDetail, namedSpecificEntities, namedSubjectAreas, recentFeaturedWork). Schema-related signals are evaluated against the content-driven applicableSchemas map, not the siteType. Default is 'other' when detection is ambiguous."
     },
     "siteTypeConfidence": {
       "type": "string",
@@ -48,51 +48,52 @@
       "type": "string",
       "description": "Short explanation of the evidence used to determine the site type (e.g., 'WooCommerce shop schema + 47 Product pages in sitemap')."
     },
-    "score": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 100,
-      "description": "Total AEO score out of 100."
-    },
-    "threshold": {
-      "type": "string",
-      "enum": ["strong", "needs-work", "at-risk"],
-      "description": "Score threshold label. strong = 80-100, needs-work = 50-79, at-risk = 0-49."
-    },
     "visitedPages": {
       "type": "array",
-      "minItems": 4,
+      "minItems": 1,
       "items": { "type": "string", "format": "uri" },
-      "description": "URLs of every page visited during the analysis. The homepage is the primary scoring target; inner pages provide supporting evidence (named team, blog freshness, FAQ structure, etc.). Minimum 4 entries."
+      "description": "URLs of every page visited during the analysis. The homepage is the primary evaluation target; inner pages provide supporting evidence (named team, blog freshness, FAQ structure, canonical URLs, content update recency, author bylines, archive-page quality). Typically 4-6 entries; single-page sites are an allowed exception (cap at the homepage URL only, recorded in technicalNotes)."
+    },
+    "summary": {
+      "type": "object",
+      "description": "Top-level counts of signal evaluation results across all 49 signals.",
+      "required": ["totalSignals", "pass", "partial", "fail", "na"],
+      "properties": {
+        "totalSignals": { "type": "integer", "minimum": 0, "description": "Total number of signals evaluated. Expected: 49 with rubric 1.0." },
+        "pass": { "type": "integer", "minimum": 0, "description": "Signals meeting the highest tier of their evaluation criteria." },
+        "partial": { "type": "integer", "minimum": 0, "description": "Signals meeting a middle tier — present but incomplete, or correct but sparse." },
+        "fail": { "type": "integer", "minimum": 0, "description": "Signals not meeting any tier — absent, broken, or fundamentally wrong." },
+        "na": { "type": "integer", "minimum": 0, "description": "Signals not applicable to this site (e.g., authorBylines on a pure-ecommerce site with no editorial content). Recorded as N/A with rationale in notes." }
+      }
     },
     "criteria": {
       "type": "object",
       "required": ["technicalHealth", "structuredData", "aeoReadiness", "eeatSignals", "contentFreshness", "entityClarity", "contentSpecificity", "llmsTxt"],
       "properties": {
-        "technicalHealth": { "$ref": "#/definitions/criterion", "description": "Max 20pts. Crawlability, HTTPS, robots.txt, sitemap, JS dependency." },
-        "structuredData": { "$ref": "#/definitions/criterion", "description": "Max 18pts. Schema markup, OG tags, Twitter Cards." },
-        "aeoReadiness": { "$ref": "#/definitions/criterion", "description": "Max 16pts. Answer Engine Optimization — FAQ, question headings, direct answers." },
-        "eeatSignals": { "$ref": "#/definitions/criterion", "description": "Max 14pts. Experience, Expertise, Authoritativeness, Trustworthiness signals." },
-        "contentFreshness": { "$ref": "#/definitions/criterion", "description": "Max 12pts. Copyright year, blog recency, date stamps, sitemap lastmod." },
-        "entityClarity": { "$ref": "#/definitions/criterion", "description": "Max 10pts. Named entity identification, service specificity, geographic clarity." },
-        "contentSpecificity": { "$ref": "#/definitions/criterion", "description": "Max 7pts. Named platforms, industries, outcomes, and passage extractability." },
-        "llmsTxt": { "$ref": "#/definitions/criterion", "description": "Max 3pts. llms.txt and llms-full.txt presence and quality." }
+        "technicalHealth": { "$ref": "#/definitions/criterion", "description": "Crawlability, HTTPS, robots.txt, sitemap, JS dependency, canonical URLs." },
+        "structuredData": { "$ref": "#/definitions/criterion", "description": "Schema markup, OG tags, schema relevance coverage." },
+        "aeoReadiness": { "$ref": "#/definitions/criterion", "description": "Answer Engine Optimization — FAQ, question headings, direct answers, answer capsules, title/meta question-match." },
+        "eeatSignals": { "$ref": "#/definitions/criterion", "description": "Experience, Expertise, Authoritativeness, Trustworthiness signals." },
+        "contentFreshness": { "$ref": "#/definitions/criterion", "description": "Copyright year, blog recency, date stamps, sitemap lastmod, per-page update recency." },
+        "entityClarity": { "$ref": "#/definitions/criterion", "description": "Named entity identification, primary focus specificity, geographic clarity." },
+        "contentSpecificity": { "$ref": "#/definitions/criterion", "description": "Named platforms, industries, outcomes, and passage extractability." },
+        "llmsTxt": { "$ref": "#/definitions/criterion", "description": "llms.txt and llms-full.txt presence and quality." }
       }
     },
     "issues": {
       "type": "object",
       "required": ["critical", "high", "medium", "low"],
       "properties": {
-        "critical": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Signal scores 0 where max is 3pts or more. Blocking AI discoverability or citation." },
-        "high": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Signal scores 0 or 1 where max is 2pts. Significantly weakens AI understanding." },
-        "medium": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Signal scores below max but not zero. Improvement opportunity." },
+        "critical": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Foundational signals at status 'fail'. Blocking AI discoverability or citation." },
+        "high": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Important signals at status 'fail', or foundational signals at status 'partial'. Significantly weakens AI understanding." },
+        "medium": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Signals at status 'partial' on non-foundational signals. Improvement opportunity." },
         "low": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Minor gaps. Worth noting but low priority." }
       }
     },
     "actionablePrompts": {
       "type": "array",
       "items": { "$ref": "#/definitions/actionablePrompt" },
-      "description": "One entry per signal scoring below maximum. Each includes a ready-to-use Claude prompt the site owner can paste directly."
+      "description": "One entry per signal at status 'fail' or 'partial'. Each includes a ready-to-use Claude prompt the site owner can paste directly."
     },
     "technicalNotes": {
       "type": "object",
@@ -117,7 +118,7 @@
         },
         "applicableSchemas": {
           "type": "object",
-          "description": "Phase 0.4 schema relevance map. Keys are schema.org type names; values describe how relevant that schema is to the site's actual content. Drives primaryEntitySchema and relevantSchemasApplied scoring.",
+          "description": "Phase 0.4 schema relevance map. Keys are schema.org type names; values describe how relevant that schema is to the site's actual content. Drives primaryEntitySchema and relevantSchemasApplied evaluation.",
           "additionalProperties": {
             "type": "string",
             "enum": ["high", "medium", "low", "absent"]
@@ -129,22 +130,27 @@
   "definitions": {
     "criterion": {
       "type": "object",
-      "required": ["score", "maxScore", "signals"],
+      "required": ["signals"],
       "properties": {
-        "score": { "type": "number", "minimum": 0 },
-        "maxScore": { "type": "number", "minimum": 0 },
         "signals": {
           "type": "object",
           "description": "Object keyed by canonical signal key (see skills/aeo/references/signal-keys.md).",
-          "additionalProperties": {
-            "type": "object",
-            "required": ["score", "maxScore"],
-            "properties": {
-              "score": { "type": "number", "minimum": 0 },
-              "maxScore": { "type": "number", "minimum": 0 },
-              "notes": { "type": "string", "description": "Short evidence sentence describing what was found and why this score was awarded." }
-            }
-          }
+          "additionalProperties": { "$ref": "#/definitions/signal" }
+        }
+      }
+    },
+    "signal": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "partial", "fail", "na"],
+          "description": "Evaluation status. pass = meets the highest tier of the signal's criteria. partial = meets a middle tier (present but incomplete, or correct but sparse). fail = meets the bottom tier (absent, broken, or fundamentally wrong). na = signal does not apply to this site (e.g., authorBylines on a pure-ecommerce site)."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Short evidence sentence describing what was found and why this status was assigned."
         }
       }
     },

@@ -23,11 +23,11 @@ Include this exact value in the `aeoRubricVersion` field of every report you gen
 
 - ✅ You MUST use `browser_navigate` and `browser_evaluate` to inspect DOM, schema, and meta tags on each page
 - ✅ You MUST use `browser_navigate` to fetch `robots.txt`, `sitemap.xml`, `llms.txt`, and `llms-full.txt` as separate top-level requests
-- ✅ You MUST visit **at least 4–6 pages**: the homepage is the primary scoring target; inner pages provide evidence for E-E-A-T, freshness, and AEO readiness checks
+- ✅ You MUST visit **at least 4–6 pages**: the homepage is the primary evaluation target; inner pages provide evidence for E-E-A-T, freshness, and AEO readiness checks
 - ✅ You MUST take a desktop screenshot (1920×1080) of the homepage for visual E-E-A-T confirmation
 - ✅ You MUST complete all five phases before generating the JSON report
-- ✅ You MUST score every signal. Do not skip signals or leave scores blank
-- ✅ You MUST include an actionable Claude prompt for every signal that scores below maximum
+- ✅ You MUST evaluate every signal to one of `pass` / `partial` / `fail` / `na`. Do not skip signals or leave status blank
+- ✅ You MUST include an actionable Claude prompt for every signal at status `fail` or `partial`
 - ✅ You MUST include an `effort` field on every issue object. Valid values: `low`, `medium`, `high`, `unknown`. Do not omit it
 - ✅ You MUST save the final report to `reports/data/qa-report-aeo.json`
 - ✅ You MUST only refer to the site being analyzed by the name found on the site at the provided URL. Never use names from prior analyses in this session. If unsure of the site name, derive it from the homepage `<title>`, `og:site_name`, or the WordPress site title in the header
@@ -38,9 +38,28 @@ If you cannot perform these actions, explicitly state that the Playwright MCP is
 
 ## Standards Reference
 
-**The rubric in this skill is the standard.** Eight criteria, 49 signals, 100 points total. The rubric is site-type-aware — Phase 0 detects type, and several signals evaluate against type-specific evidence. The full rubric and signal definitions live in:
+**The rubric in this skill is the standard.** Eight criteria, 49 signals, each evaluated to one of `pass` / `partial` / `fail` / `na`. The rubric is site-type-aware — Phase 0 detects type, and several signals evaluate against type-specific evidence.
 
-- `skills/aeo/references/scoring-rubric.md` — per-criterion signal list with max points
+## How signals are evaluated
+
+Every signal in this skill is assigned one of four status values. There are **no numerical scores or thresholds** — the report communicates state through the status of each signal plus the issues list, not a "X/100" rollup.
+
+| Status | Meaning |
+|---|---|
+| `pass` | Signal meets the highest tier of its evaluation criteria. The thing the rubric is checking for is present and well-formed. |
+| `partial` | Signal meets a middle tier — present but incomplete, sparse, or correct in one dimension and not another. |
+| `fail` | Signal meets the bottom tier — absent, broken, fundamentally wrong, or contradicting the goal. |
+| `na` | Signal does not apply to this site. Used sparingly — see per-signal N/A guidance. Record rationale in `notes`. |
+
+Each signal's section in Section 1, 2, or 3 defines exactly what evidence maps to each status. The `references/evaluation-rubric.md` reference file is the quick-lookup index.
+
+After Phase 4 evaluation, every signal at status `fail` or `partial` produces:
+- An entry in the appropriate severity bucket of `issues` (see "Issue severity guide" in Phase 5)
+- An entry in `actionablePrompts` with a paste-ready Claude prompt
+
+The top-level `summary` block carries the counts: `{ totalSignals: 49, pass, partial, fail, na }`. The full rubric and signal definitions live in:
+
+- `skills/aeo/references/evaluation-rubric.md` — per-criterion signal list with pass/partial/fail tier definitions
 - `skills/aeo/references/signal-keys.md` — canonical signal keys for the JSON report
 
 Underlying frameworks the rubric draws on:
@@ -75,7 +94,7 @@ If you detect signs of a non-production environment that wasn't explicitly speci
 - ✅ Confirm E-E-A-T anchors on About / Team pages where present
 - ✅ Confirm content freshness on blog / news / case study listing pages
 - ✅ Document all visited pages in the `visitedPages` array
-- ✅ Score every signal in Phase 4 (49 signals across 8 criteria)
+- ✅ Evaluate every signal in Phase 4 (49 signals across 8 criteria) to pass / partial / fail / na
 - ✅ Write an actionable Claude prompt for every below-max signal
 
 **If you skip any of these steps, the test is incomplete and will not be accepted.**
@@ -87,7 +106,7 @@ If you detect signs of a non-production environment that wasn't explicitly speci
 ### Phase 0: Site Type Detection + Schema Relevance Scan
 1. Launch browser at desktop (1920×1080), navigate to homepage
 2. Detect the site type (agency / ecommerce / mediaBlog / saas / education / localBusiness / nonprofit / community / other) — drives content-quality signals
-3. Run the schema relevance scan (Section 0.4) — drives schema scoring independently of siteType
+3. Run the schema relevance scan (Section 0.4) — drives schema evaluation independently of siteType
 4. Record both: siteType + confidence + rationale, and applicableSchemas relevance map
 
 ### Phase 1: Programmatic Analysis (homepage + ancillary files)
@@ -105,8 +124,8 @@ If you detect signs of a non-production environment that wasn't explicitly speci
 12. Extract homepage text and evaluate AEO content quality, E-E-A-T language, entity clarity, content specificity, llms.txt quality
 13. If Section 0.4 found ambiguous schema relevance, confirm or adjust based on content read
 
-### Phase 4: Scoring
-14. Map every finding to the rubric; sum to criterion totals; sum criteria to a final score out of 100
+### Phase 4: Evaluation
+14. Map every finding to the rubric; assign each signal a status (pass / partial / fail / na); count totals into the summary block
 
 ### Phase 5: Reporting
 15. Generate `reports/data/qa-report-aeo.json` matching `schemas/qa-report-aeo-schema.json`
@@ -116,7 +135,7 @@ If you detect signs of a non-production environment that wasn't explicitly speci
 
 ## SECTION 0: Site Type Detection
 
-The rubric scores 49 signals that apply to any website, but several signals — `whoWhatWho`, `primaryFocusSpecificity`, `primaryOfferingDetail`, `namedSpecificEntities`, `namedSubjectAreas`, `recentFeaturedWork` — are evaluated against type-specific evidence, and schema signals (`primaryEntitySchema`, `relevantSchemasApplied`) are evaluated against content relevance detected in Section 0.4 rather than the siteType label. Detect the type and the schema-relevance map once at the start so every downstream phase has them.
+The rubric evaluates 49 signals that apply to any website, but several signals — `whoWhatWho`, `primaryFocusSpecificity`, `primaryOfferingDetail`, `namedSpecificEntities`, `namedSubjectAreas`, `recentFeaturedWork` — are assessed against type-specific evidence, and schema signals (`primaryEntitySchema`, `relevantSchemasApplied`) are assessed against content relevance detected in Section 0.4 rather than the siteType label. Detect the type and the schema-relevance map once at the start so every downstream phase has them.
 
 ### 0.1 Quick detection signals
 
@@ -186,7 +205,7 @@ return {
 };
 ```
 
-The decision tree below treats `schemaTypes` as a format-agnostic union — sites using microdata or RDFa are detected the same as JSON-LD sites for typing purposes. The per-format breakdown in `schemaFormats` is preserved for `technicalNotes` and the `jsonLdFormat` scoring in Section 1.3.
+The decision tree below treats `schemaTypes` as a format-agnostic union — sites using microdata or RDFa are detected the same as JSON-LD sites for typing purposes. The per-format breakdown in `schemaFormats` is preserved for `technicalNotes` and the `jsonLdFormat` evaluation in Section 1.3.
 
 ### 0.2 Site type decision tree
 
@@ -206,7 +225,7 @@ If two categories tie (e.g. a SaaS company with a heavy blog), pick the one matc
 
 ### 0.3 What the site type controls
 
-The site type changes what evidence counts for these **content-quality** signals — point values and the underlying question stay constant. Schema-related signals are NOT in this list; schema scoring is content-driven via Section 0.4, not siteType-driven.
+The site type changes what evidence counts for these **content-quality** signals — the evaluation criteria and the underlying question stay constant. Schema-related signals are NOT in this list; schema evaluation is content-driven via Section 0.4, not siteType-driven.
 
 | Signal | Site-type-specific evidence |
 |---|---|
@@ -221,7 +240,7 @@ All other signals are evaluated the same regardless of site type. Schema signals
 
 ### 0.4 Schema Relevance Scan
 
-Schema scoring is content-driven, not siteType-driven. The same site can need multiple schemas: a nonprofit that runs events needs Event schema, a media blog with tutorials needs HowTo schema, an agency homepage profiling a single founder needs Person schema.
+Schema evaluation is content-driven, not siteType-driven. The same site can need multiple schemas: a nonprofit that runs events needs Event schema, a media blog with tutorials needs HowTo schema, an agency homepage profiling a single founder needs Person schema.
 
 For each schema type below, observe whether the site's content actually warrants it, and record a relevance level: `high` (clearly applicable, the content pattern is prominent), `medium` (some applicable content but secondary to the dominant type), `low` (one-off mention or weak pattern), or `absent` (no content the schema would describe).
 
@@ -314,10 +333,10 @@ For ambiguous sites — for example, an editorial publication that also runs an 
 
 Persist the result as `technicalNotes.applicableSchemas`. It drives two signals downstream:
 
-- **`primaryEntitySchema`** (Section 1.3) — the dominant schema type for this site is the one with the most prominent relevance signal. Score against its presence and completeness.
+- **`primaryEntitySchema`** (Section 1.3) — the dominant schema type for this site is the one with the most prominent relevance signal. Evaluate against its presence and completeness.
 - **`relevantSchemasApplied`** (Section 1.3) — coverage ratio across every schema with relevance `high` or `medium`.
 
-> Note: `Organization` is always `high`, but it's scored under its own standalone signal (`organizationSchema`, 5pts) — not double-counted in `primaryEntitySchema` or `relevantSchemasApplied`. Similarly, `FAQPage` and `Review` have their own standalone signals and aren't double-counted.
+> Note: `Organization` is always `high`, but it's evaluated under its own standalone signal (`organizationSchema`) — not double-counted in `primaryEntitySchema` or `relevantSchemasApplied`. Similarly, `FAQPage` and `Review` have their own standalone signals and aren't double-counted.
 
 ---
 
@@ -329,13 +348,13 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 - Confirm desktop viewport (1920×1080) via `browser_resize` if needed
 - `browser_take_screenshot` saved to `reports/screenshots/homepage-aeo-desktop.png` (full page)
 
-### 1.2 Technical Health — 20 pts
+### 1.2 Technical Health
 
-#### robots.txt and AI crawler access (max 6pts) — training-vs-retrieval aware
+#### robots.txt and AI crawler access — training-vs-retrieval aware
 
 `browser_navigate` to `[baseURL]/robots.txt`. Capture the body text. Then `browser_navigate` back to the homepage.
 
-The 2026 consensus posture is **block training scrapers, allow live-retrieval bots**. Score against the live-retrieval allowlist; treat training blocks as neutral (intentional, not a failure).
+The 2026 consensus posture is **block training scrapers, allow live-retrieval bots**. Evaluate against the live-retrieval allowlist; treat training blocks as neutral (intentional, not a failure).
 
 **Live-retrieval bots — should be ALLOWED:**
 
@@ -355,19 +374,17 @@ The 2026 consensus posture is **block training scrapers, allow live-retrieval bo
 - `CCBot` — Common Crawl
 - `Meta-ExternalAgent`, `FacebookBot` — Meta training
 
-**Scoring:**
+**Evaluation:**
 
-- 6pts — All live-retrieval bots above are allowed (or no explicit `Disallow` blocks them under `User-agent: *` or named user-agents). Training scrapers may be allowed or blocked — no penalty either way.
-- 4pts — One live-retrieval bot is blocked (e.g. a stale rule blocks `PerplexityBot`) but the rest are fine.
-- 2pts — Multiple live-retrieval bots blocked, OR a blanket `Disallow: /` under `User-agent: *` blocks everything.
-- 1pt — Present but severely misconfigured (e.g. broken syntax, redirects).
-- 0pts — robots.txt absent.
+- `pass` — All live-retrieval bots above are allowed (or no explicit `Disallow` blocks them under `User-agent: *` or named user-agents). Training scrapers may be allowed or blocked — no penalty either way.
+- `partial` — One live-retrieval bot is blocked (e.g. a stale rule blocks `PerplexityBot`) but the rest are fine.
+- `fail` — Multiple live-retrieval bots blocked, OR a blanket `Disallow: /` under `User-agent: *` blocks everything, OR robots.txt is absent, OR present but severely misconfigured (broken syntax, redirects).
 
 > **Do NOT penalize** blocking `GPTBot`, `ClaudeBot`, `Google-Extended`, `CCBot`. These are training scrapers, not retrieval bots, and blocking them does not affect citation visibility. If the site blocks training but allows retrieval, record this in `notes` as `"Training scrapers blocked, retrieval bots allowed — modern 2026 posture."`
 >
-> Environment note: on `local` / `development`, treat any robots.txt config as neutral. On `staging`, a blanket Disallow is expected and not a finding.
+> Environment note: on `local` / `development`, treat any robots.txt config as neutral — record `pass` with a note about the environment. On `staging`, a blanket Disallow is expected and not a finding — record `pass`.
 
-#### No noindex on homepage (max 4pts)
+#### No noindex on homepage
 
 ```javascript
 const robotsMeta = document.querySelector('meta[name="robots"]');
@@ -379,11 +396,13 @@ return {
 };
 ```
 
-**Scoring:** 4pts if no noindex. 0pts if noindex is present.
+**Evaluation:**
+- `pass` — No noindex on the homepage.
+- `fail` — A noindex meta tag is present on the homepage.
 
-> Environment note: on `local` or `development`, noindex is correct and not a finding. Award full 4pts and record the environment in `technicalNotes`. On `staging`, noindex is expected but flag as a reminder if the staging URL was provided for AEO review.
+> Environment note: on `local` or `development`, noindex is correct and not a finding. Record status as `pass` with a note about the environment in `technicalNotes`. On `staging`, noindex is expected — record `pass` but flag as a reminder if the staging URL was provided for AEO review.
 
-#### HTTPS and mixed content (max 4pts)
+#### HTTPS and mixed content
 
 ```javascript
 const isHTTPS = window.location.protocol === 'https:';
@@ -395,17 +414,23 @@ return {
 };
 ```
 
-**Scoring:** 4pts if HTTPS active and no mixed content. 2pts if HTTPS but mixed content present. 0pts if HTTP only.
+**Evaluation:**
+- `pass` — HTTPS active and no mixed content.
+- `partial` — HTTPS but mixed content (HTTP-served images, scripts, or stylesheets) present.
+- `fail` — HTTP only.
 
-#### Sitemap with valid lastmod dates (max 3pts)
+#### Sitemap with valid lastmod dates
 
 `browser_navigate` to `[baseURL]/sitemap.xml`. If 404, check robots.txt for a `Sitemap:` directive and navigate there. (Yoast and RankMath typically emit `/sitemap_index.xml`; follow the first child sitemap.) Capture the first ~3000 characters.
 
 Parse for valid XML, presence of `<lastmod>` entries, and whether any are within the last 90 days.
 
-**Scoring:** 3pts if present with recent lastmod (within 90 days). 2pts if present but no lastmod. 1pt if all dates stale (over 1 year). 0pts if absent.
+**Evaluation:**
+- `pass` — Sitemap present with recent lastmod entries (within 90 days).
+- `partial` — Sitemap present but without `<lastmod>` entries, OR all dates stale (over 1 year old).
+- `fail` — Sitemap absent.
 
-#### Core content accessible without JavaScript (max 2pts)
+#### Core content accessible without JavaScript
 
 Open a new browser context with JavaScript disabled, navigate to the homepage, and check whether the H1 and substantial body copy are visible in the static HTML.
 
@@ -420,11 +445,14 @@ return {
 
 Save a screenshot to `reports/screenshots/homepage-no-js.png`. Close the no-JS context and resume the normal session.
 
-**Scoring:** 2pts if H1 and 500+ chars of body copy visible without JS. 1pt if some content visible but significantly degraded. 0pts if page is blank or nearly empty.
+**Evaluation:**
+- `pass` — H1 and 500+ chars of body copy visible without JS.
+- `partial` — Some content visible but significantly degraded.
+- `fail` — Page is blank or nearly empty without JS.
 
 > WordPress note: standard themes render server-side and pass this check easily. Headless WordPress with a Next.js frontend may fail; record the framework in `technicalNotes.cmsDetected`.
 
-#### Canonical URLs (max 1pt)
+#### Canonical URLs
 
 AI engines explicitly use `<link rel="canonical">` to dedupe pages and pick the source-of-truth URL when synthesizing answers. Missing or wrong canonical tags cause the AI to weight signals across duplicate URLs, dropping citation weight on the page you actually want cited.
 
@@ -440,15 +468,15 @@ return {
 };
 ```
 
-**Scoring:**
+**Evaluation:**
 
-- 1pt — Homepage has `<link rel="canonical">` AND at least 2 inner pages have self-referential canonical tags (the canonical points to the page itself, not somewhere else).
-- 0.5pt — Homepage canonical present but inner pages missing canonical, OR canonical present everywhere but points to the wrong URL on some pages (common Yoast/RankMath misconfiguration).
-- 0pts — No canonical tag on the homepage.
+- `pass` — Homepage has `<link rel="canonical">` AND at least 2 inner pages have self-referential canonical tags (the canonical points to the page itself, not somewhere else).
+- `partial` — Homepage canonical present but inner pages missing canonical, OR canonical present everywhere but points to the wrong URL on some pages (common Yoast/RankMath misconfiguration).
+- `fail` — No canonical tag on the homepage.
 
 > WordPress note: Yoast and RankMath emit self-referential canonicals automatically — most WordPress sites pass this signal. SPAs and headless implementations frequently miss it; flag in `effortRationale`.
 
-### 1.3 Structured Data — 18 pts
+### 1.3 Structured Data
 
 #### JSON-LD inventory
 
@@ -467,7 +495,7 @@ return { count: scripts.length, schemas };
 
 Record which schema types are present. Invalid (unparseable) JSON-LD counts as absent.
 
-#### Organization schema (max 5pts)
+#### Organization schema
 
 Check JSON-LD for `@type: "Organization"` or `@type: "LocalBusiness"`. If present, verify: `name`, `url`, `logo`, `description`, `sameAs`. Also check microdata:
 
@@ -476,11 +504,14 @@ const microdataOrg = document.querySelector('[itemscope][itemtype*="schema.org/O
 return { microdataOrg: !!microdataOrg };
 ```
 
-**Scoring:** 5pts if JSON-LD Organization present with name, url, logo, and at least one sameAs. 3pts if JSON-LD present but sparse. 2pts if microdata-only (no JSON-LD). 0pts if absent.
+**Evaluation:**
+- `pass` — JSON-LD Organization present with name, url, logo, and at least one sameAs.
+- `partial` — JSON-LD present but sparse (key fields missing), OR microdata-only (no JSON-LD).
+- `fail` — Absent.
 
-#### Primary entity schema (max 3pts) — content-driven
+#### Primary entity schema — content-driven
 
-The "primary entity" for a site is the **dominant content type** identified in Section 0.4's relevance scan — not a lookup by siteType. A site's primary entity is whichever schema has the strongest relevance signal among the type-defining schemas (Person, Article, Product, Event, HowTo, LocalBusiness, Course, Recipe, SoftwareApplication). Organization, FAQPage, and Review are scored separately and don't compete for the "primary" slot.
+The "primary entity" for a site is the **dominant content type** identified in Section 0.4's relevance scan — not a lookup by siteType. A site's primary entity is whichever schema has the strongest relevance signal among the type-defining schemas (Person, Article, Product, Event, HowTo, LocalBusiness, Course, Recipe, SoftwareApplication). Organization, FAQPage, and Review are evaluated separately and don't compete for the "primary" slot.
 
 If multiple schemas tie at `high` relevance, prefer the one matching the most-prominent homepage content area. Record the determination in `notes`.
 
@@ -526,18 +557,17 @@ return {
 };
 ```
 
-**Scoring:**
+**Evaluation:**
 
-- 3pts — JSON-LD primary entity schema present, type matches `expectedPrimary` from the relevance scan, AND the required fields for that type are populated.
-- 2pts — JSON-LD present with the correct type but sparse (key required fields missing), OR microdata / RDFa-only with required fields.
-- 1pt — A schema of the correct type is present but in microdata/RDFa only and sparse.
-- 0pts — No schema matches the expected primary type for this site's content.
+- `pass` — JSON-LD primary entity schema present, type matches `expectedPrimary` from the relevance scan, AND the required fields for that type are populated.
+- `partial` — JSON-LD present with the correct type but sparse (key required fields missing), OR microdata / RDFa-only (with or without all required fields).
+- `fail` — No schema matches the expected primary type for this site's content.
 
-> Edge case — no high-relevance primary candidate detected: if Section 0.4 finds no primary schema with `high` relevance (e.g. a pure portfolio site with no Articles, Events, Products, or HowTos), Organization schema becomes the de facto primary entity for scoring purposes. Award 3pts if Organization is well-formed; otherwise score against the highest-relevance candidate even if it's `medium`. Record the determination in `notes`.
+> Edge case — no high-relevance primary candidate detected: if Section 0.4 finds no primary schema with `high` relevance (e.g. a pure portfolio site with no Articles, Events, Products, or HowTos), Organization schema becomes the de facto primary entity for evaluation purposes. Record `pass` if Organization is well-formed; otherwise evaluate against the highest-relevance candidate even if it's `medium`. Record the determination in `notes`.
 >
-> Edge case — ecommerce: Product schema typically lives on PDPs, not the homepage. If `Product` is the expected primary type, sample at least one product page during Phase 2 and score the combined evidence — homepage `Store` / `OfferCatalog` plus PDP Product schema both earn credit toward the 3pts.
+> Edge case — ecommerce: Product schema typically lives on PDPs, not the homepage. If `Product` is the expected primary type, sample at least one product page during Phase 2 and evaluate the combined evidence — homepage `Store` / `OfferCatalog` plus PDP Product schema together can satisfy `pass`.
 
-#### Relevant schemas applied (max 3pts) — `relevantSchemasApplied`
+#### Relevant schemas applied — `relevantSchemasApplied`
 
 The coverage signal. Of every schema type with relevance `high` or `medium` from Section 0.4, what percent are backed by actual schema markup (in any format — JSON-LD, microdata, or RDFa)?
 
@@ -580,18 +610,17 @@ const coverage = inScope.length === 0 ? 1 : matched.length / inScope.length;
 return { inScopeCount: inScope.length, matchedCount: matched.length, coveragePercent: Math.round(coverage * 100), gaps: inScope.filter(x => !matched.includes(x)).map(([k]) => k) };
 ```
 
-**Scoring:**
+**Evaluation:**
 
-- 3pts — Coverage ≥ 90% (every high/medium-relevance schema is backed by matching markup; or only one minor gap on a `medium`-relevance schema).
-- 2pts — Coverage 60–89% (most relevant schemas present; one or two gaps including up to one on a `high`-relevance schema).
-- 1pt — Coverage 30–59% (significant gaps; the dominant primary schema may be present but several relevant secondary schemas are missing).
-- 0pts — Coverage < 30%, OR no schemas of any kind present.
+- `pass` — Coverage ≥ 90% (every high/medium-relevance schema is backed by matching markup; or only one minor gap on a `medium`-relevance schema).
+- `partial` — Coverage 30–89% (some relevant schemas present but significant gaps remain; the dominant primary schema may be present but secondary schemas are missing).
+- `fail` — Coverage < 30%, OR no schemas of any kind present.
 
-> If `Section 0.4` found no schemas with `high` or `medium` relevance (rare — Organization is always at least `high`, so this should never be empty), award 3pts by default and note in `notes` as `"N/A — no content patterns matched any schema-eligible type beyond Organization."`
+> If `Section 0.4` found no schemas with `high` or `medium` relevance (rare — Organization is always at least `high`, so this should never be empty), record `na` and note in `notes` as `"N/A — no content patterns matched any schema-eligible type beyond Organization."`
 >
 > Record the specific gap list in `notes` — e.g. `"Coverage 60% — gaps: Event (annual conference visible on homepage), HowTo (3 tutorial pages observed)."` Each gap also produces an entry in `actionablePrompts` with a paste-ready Claude prompt to generate the missing schema.
 
-#### FAQ schema (max 3pts)
+#### FAQ schema
 
 JSON-LD `@type: "FAQPage"` with `mainEntity` containing Q&A pairs. Microdata check:
 
@@ -600,9 +629,12 @@ const microdataFaq = document.querySelector('[itemscope][itemtype*="schema.org/F
 return { microdataFaq: !!microdataFaq };
 ```
 
-**Scoring:** 3pts if JSON-LD FAQPage with 2+ valid Q&A pairs. 1pt if malformed JSON-LD or microdata-only. 0pts if absent.
+**Evaluation:**
+- `pass` — JSON-LD FAQPage with 2+ valid Q&A pairs.
+- `partial` — Malformed JSON-LD, OR microdata-only FAQ markup.
+- `fail` — Absent.
 
-#### JSON-LD format used (max 2pts) — `jsonLdFormat`
+#### JSON-LD format used — `jsonLdFormat`
 
 The signal name reflects what AI engines prefer, but the check enumerates all three structured-data formats the rubric supports: JSON-LD, microdata, and RDFa.
 
@@ -621,18 +653,18 @@ const rdfa = Array.from(document.querySelectorAll('[typeof]')).filter(el => {
 return { jsonLd, microdata, rdfa };
 ```
 
-**Scoring:**
+**Evaluation:**
 
-- 2pts — JSON-LD present (any blocks). Microdata and/or RDFa may also be present — no penalty for mixed formats.
-- 1pt — No JSON-LD, but microdata OR RDFa present. The finding text must say so explicitly:
+- `pass` — JSON-LD present (any blocks). Microdata and/or RDFa may also be present — no penalty for mixed formats.
+- `partial` — No JSON-LD, but microdata OR RDFa present. The finding text must say so explicitly:
   - Microdata-only: `"Zero JSON-LD blocks; [N] microdata itemscope elements present — JSON-LD is preferred for reliable AI parsing."`
   - RDFa-only: `"Zero JSON-LD blocks; [N] RDFa typed elements present — JSON-LD is preferred for reliable AI parsing; RDFa adoption is low and AI parsing support is uneven."`
   - Both microdata and RDFa but no JSON-LD: list both counts and call out JSON-LD as the recommendation.
-- 0pts — None of JSON-LD, microdata, or RDFa present.
+- `fail` — None of JSON-LD, microdata, or RDFa present.
 
 Always record all three counts in `notes` and in `technicalNotes.schemaFormats` ({ jsonLd, microdata, rdfa }) so downstream consumers can see what was found.
 
-#### Open Graph tags complete (max 1pt) — `openGraphTags`
+#### Open Graph tags complete — `openGraphTags`
 
 ```javascript
 const ogTags = ['og:title', 'og:description', 'og:image', 'og:url', 'og:type'];
@@ -644,9 +676,12 @@ ogTags.forEach(tag => {
 return result;
 ```
 
-**Scoring:** 1pt if og:title, og:description, and og:image all present. 0.5pt if partial. 0pts if none. (Reduced from 2pts in the content-driven refactor — OG tags are still the AI-relevant social-metadata layer, but the additional weight was reallocated to `relevantSchemasApplied`.)
+**Evaluation:**
+- `pass` — og:title, og:description, and og:image all present.
+- `partial` — Some OG tags present but not the full og:title + og:description + og:image trio.
+- `fail` — No Open Graph tags present.
 
-#### Review or AggregateRating schema (max 1pt)
+#### Review or AggregateRating schema
 
 JSON-LD `@type: "Review"` or `@type: "AggregateRating"`. Microdata check:
 
@@ -655,13 +690,15 @@ const microdataReview = document.querySelector('[itemscope][itemtype*="schema.or
 return { microdataReview: !!microdataReview };
 ```
 
-**Scoring:** 1pt if present in either format. 0pts if absent.
+**Evaluation:**
+- `pass` — Review or AggregateRating schema present in either JSON-LD or microdata.
+- `fail` — Absent.
 
 ### 1.4 AEO Readiness — Programmatic checks (4 of 8 signals here)
 
-`faqSectionPresent`, `faqSchemaApplied`, `questionFramedHeadings`, and `titleAndMetaQuestionMatch` are programmatic and scored below. `directAnswers`, `whoWhatWho`, `featuredSnippetStructure`, and `answerCapsules` are content checks scored in Phase 3.
+`faqSectionPresent`, `faqSchemaApplied`, `questionFramedHeadings`, and `titleAndMetaQuestionMatch` are programmatic and evaluated below. `directAnswers`, `whoWhatWho`, `featuredSnippetStructure`, and `answerCapsules` are content checks evaluated in Phase 3.
 
-#### FAQ section present (max 3pts)
+#### FAQ section present
 
 ```javascript
 const faqIndicators = [
@@ -682,17 +719,23 @@ return {
 
 If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit during Phase 2).
 
-**Scoring:** 3pts if a FAQ section is found (homepage or dedicated FAQ page) with 2+ Q&A pairs. 1pt if partial (accordion present but only 1 item). 0pts if absent.
+**Evaluation:**
+- `pass` — FAQ section found (homepage or dedicated FAQ page) with 2+ Q&A pairs.
+- `partial` — Accordion or FAQ pattern present but only 1 item, or very thin.
+- `fail` — Absent.
 
-#### FAQ schema applied to visible FAQ content (max 1pt) — `faqSchemaApplied`
+#### FAQ schema applied to visible FAQ content — `faqSchemaApplied`
 
 Cross-reference: if a FAQ section was found AND FAQ JSON-LD schema was found in 1.3.
 
-**Scoring:** 1pt if both present. 0.5pt if FAQ schema present but no visible FAQ content (or vice versa). 0pts if neither.
+**Evaluation:**
+- `pass` — Both visible FAQ content and FAQ schema present.
+- `partial` — FAQ schema present but no visible FAQ content, OR visible FAQ content present but no FAQ schema.
+- `fail` — Neither visible FAQ content nor FAQ schema present.
 
-(Reduced from 2pts in the title-and-meta refactor — the FAQ alignment is already partially measured by `faqSchema` (3pts) and `faqSectionPresent` (3pts); the additional weight was reallocated to `titleAndMetaQuestionMatch`.)
+This signal exists alongside `faqSchema` and `faqSectionPresent` to verify that the schema and the visible content are applied together — the alignment, not the presence of either alone.
 
-#### Question-framed headings (max 2pts)
+#### Question-framed headings
 
 ```javascript
 const headings = Array.from(document.querySelectorAll('h2, h3'));
@@ -704,9 +747,12 @@ return {
 };
 ```
 
-**Scoring:** 2pts if 2+ H2/H3 phrased as questions. 1pt if one. 0pts if none.
+**Evaluation:**
+- `pass` — 2+ H2/H3 phrased as questions.
+- `partial` — Exactly one H2/H3 phrased as a question.
+- `fail` — No question-framed H2/H3 headings.
 
-#### Title and meta description question-match (max 1pt) — `titleAndMetaQuestionMatch`
+#### Title and meta description question-match — `titleAndMetaQuestionMatch`
 
 For pages targeting a specific question, AI engines weight the page's `<title>` and `<meta name="description">` as signals about what question the page is answering. The post explicitly recommends: *"For pages targeting specific questions (e.g., a services page answering 'what does X company do?'), it helps to include the question or a close variant in the title tag or meta description."*
 
@@ -756,23 +802,23 @@ return {
 };
 ```
 
-**Scoring:**
+**Evaluation:**
 
-- 1pt — Question-targeting pages on this site have a `<title>` OR `<meta name="description">` that either (a) contains question phrasing, or (b) reaches ≥50% token overlap with the page's H1. Score across the homepage plus all inner pages visited; at least 50% of question-targeting pages must clear this bar.
-- 0.5pt — Title and meta exist on all sampled pages but show low alignment with H1 / question framing (between 20% and 50% of question-targeting pages clear the bar). OR the homepage is fine but inner pages are not.
-- 0pts — Title and meta are present-but-generic on every sampled page (e.g. `<title>` is the site name only; meta description is boilerplate from theme defaults), with no question framing or H1 alignment anywhere.
+- `pass` — Question-targeting pages on this site have a `<title>` OR `<meta name="description">` that either (a) contains question phrasing, or (b) reaches ≥50% token overlap with the page's H1. Evaluate across the homepage plus all inner pages visited; at least 50% of question-targeting pages must clear this bar.
+- `partial` — Title and meta exist on all sampled pages but show low alignment with H1 / question framing (between 20% and 50% of question-targeting pages clear the bar). OR the homepage is fine but inner pages are not.
+- `fail` — Title and meta are present-but-generic on every sampled page (e.g. `<title>` is the site name only; meta description is boilerplate from theme defaults), with no question framing or H1 alignment anywhere.
 
-> N/A exemption: if zero pages visited are question-targeting (a pure-portfolio site with one-word page titles like "Work", "Studio", "Contact"), award 1pt by default and note in `notes` as `"N/A — no question-targeting pages observed."`
+> N/A exemption: if zero pages visited are question-targeting (a pure-portfolio site with one-word page titles like "Work", "Studio", "Contact"), record `na` and note in `notes` as `"N/A — no question-targeting pages observed."`
 >
 > Record the per-page results in `notes` so the report can show which pages passed and which failed. The fix is a content edit (one-field change in Yoast/RankMath for most WordPress sites) — `effort` is almost always `low`.
 
-`directAnswers`, `whoWhatWho`, `featuredSnippetStructure`, and `answerCapsules` are scored in Phase 3 (content).
+`directAnswers`, `whoWhatWho`, `featuredSnippetStructure`, and `answerCapsules` are evaluated in Phase 3 (content).
 
 ### 1.5 E-E-A-T Signals — Programmatic checks (3 of 8 signals here)
 
-The remaining 5 are scored in Phase 3 (content). `aboutTeamPageLinked` as a standalone signal was retired — the "is there an About/Team/Authors page" check is now embedded in `namedTeamMembers` (you must visit it to verify named individuals).
+The remaining 5 are evaluated in Phase 3 (content). `aboutTeamPageLinked` as a standalone signal was retired — the "is there an About/Team/Authors page" check is now embedded in `namedTeamMembers` (you must visit it to verify named individuals).
 
-#### Named individuals with roles (max 3pts) — `namedTeamMembers`
+#### Named individuals with roles — `namedTeamMembers`
 
 The check is "are there real named human beings with identifiable roles tied to this site?" The evidence varies by site type:
 
@@ -818,13 +864,13 @@ Person can appear in JSON-LD, microdata, or RDFa — all three count toward the 
 
 If an About/Team/Authors page is linked, visit it in Phase 2 to confirm named individuals are present.
 
-**Scoring:**
+**Evaluation:**
 
-- 3pts — Named individuals with type-appropriate roles visible (homepage or About/Team/Authors page).
-- 1pt — Site is referenced through anonymous language only ("our team", "our editors", "the staff") — no names anywhere accessible from the homepage.
-- 0pts — No team / author / staff signals at all.
+- `pass` — Named individuals with type-appropriate roles visible (homepage or About/Team/Authors page).
+- `partial` — Site is referenced through anonymous language only ("our team", "our editors", "the staff") — no names anywhere accessible from the homepage.
+- `fail` — No team / author / staff signals at all.
 
-#### Credentialing badges (max 2pts) — `certificationBadges`
+#### Credentialing badges — `certificationBadges`
 
 The check is "are there visible third-party credentials backing this site?" The evidence varies by site type:
 
@@ -845,13 +891,13 @@ return { count: badgeIndicators.length, hasTrustWidget: trustWidgets };
 
 DOM presence alone is not sufficient — confirm visually via the homepage screenshot that the badges are legible (the failure mode is small-text or visually-unrecognizable images that match the selectors but aren't real credentials).
 
-**Scoring:**
+**Evaluation:**
 
-- 2pts — Credentialing badges present AND visually confirmed as legible/recognizable, matched to the site type.
-- 1pt — DOM indicators found but visual confirmation unclear, or only weak credentials (e.g. SSL-vendor badges).
-- 0pts — Absent.
+- `pass` — Credentialing badges present AND visually confirmed as legible/recognizable, matched to the site type.
+- `partial` — DOM indicators found but visual confirmation unclear, or only weak credentials (e.g. SSL-vendor badges).
+- `fail` — Absent.
 
-#### Tenure indicators (max 1pt) — `tenureIndicators`
+#### Tenure indicators — `tenureIndicators`
 
 The check is "does the site signal how long it has been operating?" — a recognized AI-trust signal across all types. The phrasing varies:
 
@@ -878,11 +924,13 @@ const matches = yearPatterns.map(p => bodyText.match(p)).filter(Boolean);
 return { found: matches.length > 0, matches: matches.map(m => m[0]).slice(0,2) };
 ```
 
-**Scoring:** 1pt if any tenure indicator is found. 0pts if absent.
+**Evaluation:**
+- `pass` — Any tenure indicator is found.
+- `fail` — Absent.
 
-#### Author bylines linked to Person schema (max 1pt) — `authorBylines`
+#### Author bylines linked to Person schema — `authorBylines`
 
-**This signal applies primarily to `mediaBlog`, `education`, `nonprofit`, and any other site that publishes articles or posts.** For sites with no editorial content (e.g. pure ecommerce, single-page SaaS), award the full 1pt by default and record in `notes` as `"N/A — site has no editorial articles to byline."`
+**This signal applies primarily to `mediaBlog`, `education`, `nonprofit`, and any other site that publishes articles or posts.** For sites with no editorial content (e.g. pure ecommerce, single-page SaaS), record `na` by default and note in `notes` as `"N/A — site has no editorial articles to byline."`
 
 Visit at least one editorial / blog / news / post page during Phase 2 and check:
 
@@ -924,15 +972,15 @@ return {
 };
 ```
 
-**Scoring:**
+**Evaluation:**
 
-- 1pt — Visible byline AND author name linked to an author page AND article schema (any format) has a populated `author` property.
-- 0.5pt — Visible byline AND linked author page, but no `author` on any schema format, OR `author` present in microdata/RDFa only (JSON-LD preferred for AI parsing).
-- 0pts — Anonymous publication: no byline, or byline with no link, or no Article/BlogPosting schema in any format.
+- `pass` — Visible byline AND author name linked to an author page AND article schema (any format) has a populated `author` property.
+- `partial` — Visible byline AND linked author page, but no `author` on any schema format, OR `author` present in microdata/RDFa only (JSON-LD preferred for AI parsing).
+- `fail` — Anonymous publication: no byline, or byline with no link, or no Article/BlogPosting schema in any format.
 
 ### 1.6 Content Freshness — Programmatic checks (5 of 7 signals here)
 
-#### Copyright year (max 3pts)
+#### Copyright year
 
 ```javascript
 const footerText = document.querySelector('footer') ? document.querySelector('footer').innerText : document.body.innerText;
@@ -945,9 +993,12 @@ return {
 };
 ```
 
-**Scoring:** 3pts if copyright year matches current year. 1pt if one year behind. 0pts if two or more years stale, or absent.
+**Evaluation:**
+- `pass` — Copyright year matches current year.
+- `partial` — Copyright year is one year behind.
+- `fail` — Two or more years stale, or absent entirely.
 
-#### Blog or news section detection (max 3pts — visit blog page in Phase 2)
+#### Blog or news section detection — visit blog page in Phase 2
 
 ```javascript
 const blogIndicators = Array.from(document.querySelectorAll('[class*="blog"], [class*="news"], [class*="post"], [class*="article"], [id*="blog"], [id*="news"]'));
@@ -958,9 +1009,12 @@ return { blogSectionFound: blogIndicators.length > 0, datesFound: dates.slice(0,
 
 Confirm in Phase 2 by visiting the blog/news listing page. Most-recent post date determines freshness.
 
-**Scoring:** 3pts if blog/news section present with content dated within last 6 months. 1pt if section present but content older than 6 months. 0pts if no blog section found.
+**Evaluation:**
+- `pass` — Blog/news section present with content dated within last 6 months.
+- `partial` — Section present but content older than 6 months.
+- `fail` — No blog/news section found.
 
-#### Date stamps on posts or case studies (max 2pts)
+#### Date stamps on posts or case studies
 
 ```javascript
 const dateTags = Array.from(document.querySelectorAll('time[datetime], [class*="date"], [class*="published"]'));
@@ -969,15 +1023,19 @@ return { count: dateTags.length, examples: dateTags.slice(0,3).map(el => el.inne
 
 Confirm by visiting at least one blog post in Phase 2 — the post page should display a published date.
 
-**Scoring:** 2pts if date stamps visible on posts or case studies. 0pts if absent.
+**Evaluation:**
+- `pass` — Date stamps visible on posts or case studies.
+- `fail` — Absent.
 
-#### Sitemap lastmod dates recent (max 1pt) — `sitemapLastmodRecent`
+#### Sitemap lastmod dates recent — `sitemapLastmodRecent`
 
 Cross-reference 1.2 sitemap analysis. Were lastmod dates present and within 90 days?
 
-**Scoring:** 1pt if sitemap has lastmod dates within 90 days. 0pts if absent or all stale.
+**Evaluation:**
+- `pass` — Sitemap has lastmod dates within 90 days.
+- `fail` — Absent or all stale.
 
-#### Per-page "Last updated" stamps (max 1pt) — `contentUpdateRecency`
+#### Per-page "Last updated" stamps — `contentUpdateRecency`
 
 Distinct from `dateStampsOnContent` (which checks for any visible date on posts). This signal checks whether individual pages — especially evergreen reference pages — carry a visible "Last updated" / "Updated on" / "Revised YYYY" stamp within the last 12 months.
 
@@ -1018,18 +1076,18 @@ return {
 };
 ```
 
-**Scoring:**
+**Evaluation:**
 
-- 1pt — Visible "Last updated" stamp within the last 12 months on at least one sampled inner page. Article schema `dateModified` alone also counts if it is within the last 12 months and the page is editorial.
-- 0pts — No visible update stamps anywhere, OR stamps present but all >12 months old.
+- `pass` — Visible "Last updated" stamp within the last 12 months on at least one sampled inner page. Article schema `dateModified` alone also counts if it is within the last 12 months and the page is editorial.
+- `fail` — No visible update stamps anywhere, OR stamps present but all >12 months old.
 
-> Pure-ecommerce / single-page SaaS exemption: if there is no editorial content to bear "last updated" stamps, award 1pt by default and note in `notes` as `"N/A — site has no editorial content requiring update stamps."`
+> Pure-ecommerce / single-page SaaS exemption: if there is no editorial content to bear "last updated" stamps, record `na` and note in `notes` as `"N/A — site has no editorial content requiring update stamps."`
 
-`recentFeaturedWork` and `currentDomainReferences` are scored in Phase 3.
+`recentFeaturedWork` and `currentDomainReferences` are evaluated in Phase 3.
 
 ### 1.7 Entity Clarity — Programmatic check (1 of 5 signals here)
 
-#### Social profile links in footer (max 2pts)
+#### Social profile links in footer
 
 ```javascript
 const socialDomains = ['linkedin.com', 'twitter.com', 'x.com', 'facebook.com', 'instagram.com', 'youtube.com'];
@@ -1038,11 +1096,14 @@ const socialLinks = links.filter(a => socialDomains.some(d => a.href.includes(d)
 return { count: socialLinks.length, platforms: [...new Set(socialLinks.map(a => a.href.split('/')[2]))] };
 ```
 
-**Scoring:** 2pts if LinkedIn and at least one other professional profile linked from footer. 1pt if only one social link. 0pts if none.
+**Evaluation:**
+- `pass` — LinkedIn and at least one other professional profile linked from footer.
+- `partial` — Only one social profile linked.
+- `fail` — No social profile links in footer.
 
-`entityIdentifiable`, `primaryFocusSpecificity`, `geographicMarketClarity`, and `consistentIdentity` are all scored in Phase 3.
+`entityIdentifiable`, `primaryFocusSpecificity`, `geographicMarketClarity`, and `consistentIdentity` are all evaluated in Phase 3.
 
-### 1.8 llms.txt — 3 pts
+### 1.8 llms.txt
 
 `browser_navigate` to `[baseURL]/llms.txt`. Record whether it loads (status 200 vs 404) and capture body text. Then `browser_navigate` to `[baseURL]/llms-full.txt` and record presence. Return to homepage.
 
@@ -1050,16 +1111,16 @@ return { count: socialLinks.length, platforms: [...new Set(socialLinks.map(a => 
 return { found: document.body.innerText.trim().length > 10, content: document.body.innerText.substring(0, 1000) };
 ```
 
-**Scoring:**
-- `llmsTxtPresent` (max 2pts) — 2pts if present and non-empty. 0pts if absent.
-- `llmsFullTxtPresent` (max 0.5pts) — 0.5pts if present. 0pts if absent.
-- `llmsTxtContent` (max 0.5pts) — scored in Phase 3 based on accuracy and specificity.
+**Evaluation:**
+- `llmsTxtPresent` — `pass` if present and non-empty. `fail` if absent.
+- `llmsFullTxtPresent` — `pass` if present. `fail` if absent.
+- `llmsTxtContent` — evaluated in Phase 3 based on accuracy and specificity.
 
 ---
 
 ## SECTION 2: Multi-Page Evidence Collection
 
-The homepage is the primary scoring target, but several signals require inner-page confirmation. Visit **at least 3 additional pages** beyond the homepage. Record every URL visited in `visitedPages`.
+The homepage is the primary evaluation target, but several signals require inner-page confirmation. Visit **at least 3 additional pages** beyond the homepage. Record every URL visited in `visitedPages`.
 
 ### Pages to visit (in priority order, by site type)
 
@@ -1090,11 +1151,11 @@ Always start with the **homepage** (already visited in Phase 0/1). Then pick inn
 
 **Mediablog-specific 5th visit — archive page quality check.** For mediaBlog sites, visit at least one category or tag archive page (`/category/<slug>/`, `/tag/<slug>/`, `/topics/<slug>/`, or whatever the routing convention is). Run the `archivePageQuality` check from Section 2.1.
 
-If a page type doesn't exist (e.g. ecommerce site with no editorial content), record the absence — it may change the score on the related signal, or trigger the type-specific exemption rule.
+If a page type doesn't exist (e.g. ecommerce site with no editorial content), record the absence — it may change the status of the related signal, or trigger the type-specific exemption rule.
 
 ### 2.1 Type-specific functional page checks
 
-These checks feed into existing scoring signals rather than introducing new ones — they sharpen the evidence Phase 1 collected by checking the pages where the post's recommendations land most concretely.
+These checks feed into existing evaluated signals rather than introducing new ones — they sharpen the evidence Phase 1 collected by checking the pages where the post's recommendations land most concretely.
 
 #### FAQ schema on functional pages — `nonprofit`, `mediaBlog`, `community`
 
@@ -1115,9 +1176,9 @@ return { hasFaqSchema, visibleFaq, url: window.location.href };
 
 The post's argument: donation, subscribe, and join/membership pages are exactly the pages where AI tools land users with concrete intent-bearing queries ("how do I donate to X?", "how do I subscribe to Y?", "what does a Z membership include?"). FAQ schema on these specific pages is high-leverage.
 
-How the result feeds into scoring:
+How the result feeds into evaluation:
 
-- **Visible FAQ content present but no FAQ schema** on the functional page → drops `faqSchemaApplied` toward 0.5pt (was on track for 1pt) and creates a `medium`-severity issue with effort `low` and a paste-ready Claude prompt for the FAQ schema.
+- **Visible FAQ content present but no FAQ schema** on the functional page → drops `faqSchemaApplied` to `partial` and creates a `medium`-severity issue with effort `low` and a paste-ready Claude prompt for the FAQ schema.
 - **Both visible FAQ and FAQ schema present** → confirms `faqSchemaApplied` at full credit.
 - **No FAQ content visible at all** on the functional page → not penalized (the page may genuinely not need FAQ format), but record in `notes` as a missed AEO opportunity since these pages are high-intent.
 
@@ -1125,10 +1186,10 @@ How the result feeds into scoring:
 
 Per the post: *"Category and tag pages need descriptive text — a list of posts alone gives AI nothing to work with."* WordPress archive pages typically emit an empty `<meta name="description">` and zero copy beyond the post list.
 
-This check **does not introduce a new scored signal**. It feeds findings into two existing signals:
+This check **does not introduce a new evaluated signal**. It feeds findings into two existing signals:
 
-1. `passageExtractionQuality` (Content Specificity, 1pt) — an archive page with no descriptive text fails the "could a clean 1–2 sentence summary be pulled from each major section" test, since the archive page IS a major section and yields nothing extractable.
-2. `primaryFocusSpecificity` (Entity Clarity, 3pts) — an archive page with no topic-area description weakens the site's overall focus signal for the dominant vertical.
+1. `passageExtractionQuality` (Content Specificity) — an archive page with no descriptive text fails the "could a clean 1–2 sentence summary be pulled from each major section" test, since the archive page IS a major section and yields nothing extractable.
+2. `primaryFocusSpecificity` (Entity Clarity) — an archive page with no topic-area description weakens the site's overall focus signal for the dominant vertical.
 
 Programmatic check:
 
@@ -1259,21 +1320,20 @@ Also extract:
 - First paragraph after each H2 (for direct-answer assessment)
 - Footer text
 
-Use this content to score the remaining signals.
+Use this content to evaluate the remaining signals.
 
 ### 3.1 AEO Readiness — Content (4 signals)
 
-#### Direct answers after headings (max 3pts) — `directAnswers`
+#### Direct answers after headings — `directAnswers`
 
 For each H2/H3, read the paragraph immediately following it. Count what fraction of those headings are followed by a direct first-sentence answer (not a preamble or build-up).
 
-**Scoring:**
-- 70%+ of headings answered directly: 3pts
-- 40–69%: 2pts
-- 10–39%: 1pt
-- Less than 10%, OR content not structured in heading/answer format (no H2s/H3s): 0pts
+**Evaluation:**
+- `pass` — 70%+ of headings answered directly.
+- `partial` — 10–69% of headings answered directly.
+- `fail` — Less than 10%, OR content not structured in heading/answer format (no H2s/H3s).
 
-#### Who / what / who content (max 2pts) — `whoWhatWho`
+#### Who / what / who content — `whoWhatWho`
 
 The question is site-type-agnostic but the framing differs:
 
@@ -1289,15 +1349,21 @@ The question is site-type-agnostic but the framing differs:
 
 Can you clearly answer all three from the homepage text alone, within the first scroll?
 
-**Scoring:** 2pts if all three answerable. 1pt if two of three. 0pts if one or fewer.
+**Evaluation:**
+- `pass` — All three elements answerable from the homepage text alone within the first scroll.
+- `partial` — Two of three answerable.
+- `fail` — One or zero answerable.
 
-#### Featured snippet structure (max 2pts) — `featuredSnippetStructure`
+#### Featured snippet structure — `featuredSnippetStructure`
 
 Count "extractable" sentences across the homepage: a sentence that defines a term, states a number with context, gives a step, or answers a question — and stands alone without surrounding context. Definition lists, numbered steps, and FAQ answers each count as one.
 
-**Scoring:** 5+ extractable sentences: 2pts. 2–4: 1pt. 0–1: 0pts.
+**Evaluation:**
+- `pass` — 5+ extractable sentences.
+- `partial` — 2–4 extractable sentences.
+- `fail` — 0–1 extractable sentences.
 
-#### Answer capsules (max 2pts) — `answerCapsules`
+#### Answer capsules — `answerCapsules`
 
 Distinct from `featuredSnippetStructure`. An answer capsule is a **40–60 word self-contained answer placed directly under an H2 or H3**. This is the specific structural pattern AI engines extract verbatim — 72.4% of ChatGPT-cited pages have one. The capsule must be:
 
@@ -1324,15 +1390,15 @@ document.querySelectorAll('h2, h3').forEach(h => {
 return { capsuleCount: result.length, examples: result.slice(0,5) };
 ```
 
-**Scoring:**
+**Evaluation:**
 
-- 2pts — 3 or more answer capsules across the analyzed pages.
-- 1pt — 1–2 answer capsules.
-- 0pts — No qualifying capsules: every H2/H3 either has no text directly under it, has a preamble before the answer, or has text outside the 40–60 word band.
+- `pass` — 3 or more answer capsules across the analyzed pages.
+- `partial` — 1–2 answer capsules.
+- `fail` — No qualifying capsules: every H2/H3 either has no text directly under it, has a preamble before the answer, or has text outside the 40–60 word band.
 
 ### 3.2 E-E-A-T Signals — Content (4 signals)
 
-#### Author / staff credentials (max 2pts) — `authorCredentials`
+#### Author / staff credentials — `authorCredentials`
 
 Do the named individuals identified in `namedTeamMembers` carry specific, verifiable credentials? "Verifiable" means a fact a third party could check: published works, named past clients/employers, named degrees or institutions, recognized certifications, prior press appearances.
 
@@ -1347,9 +1413,12 @@ The evidence varies by site type:
 | `nonprofit` | Board affiliations, prior nonprofit leadership, named expertise areas |
 | `community` | Prior community-building / topic-area credentials |
 
-**Scoring:** 2pts if specific verifiable credentials. 1pt if generic "years of experience" / "industry leader" without specifics. 0pts if no credentials.
+**Evaluation:**
+- `pass` — Specific, third-party-verifiable credentials present.
+- `partial` — Generic credentials only ("years of experience", "industry leader") without specifics.
+- `fail` — No credentials at all.
 
-#### Demonstrated expertise (max 2pts) — `demonstratedExpertise`
+#### Demonstrated expertise — `demonstratedExpertise`
 
 Count "specifics" across the homepage and visited pages. A specific is concrete, third-party-verifiable evidence — one of:
 
@@ -1360,15 +1429,21 @@ Count "specifics" across the homepage and visited pages. A specific is concrete,
 - A named primary source for a claim (study, paper, dataset, report)
 - A subject-area technical term used correctly in context
 
-**Scoring:** 3+ specifics: 2pts. 1–2 specifics with the rest of the copy claiming expertise without evidence: 1pt. 0 specifics (only generic claims like "award-winning", "expert", "leading"): 0pts.
+**Evaluation:**
+- `pass` — 3 or more specifics observed across homepage and visited pages.
+- `partial` — 1–2 specifics with the rest of the copy claiming expertise without evidence.
+- `fail` — Zero specifics (only generic claims like "award-winning", "expert", "leading").
 
-#### External citations or press (max 2pts) — `externalCitations`
+#### External citations or press — `externalCitations`
 
 Third-party validation: publications that have cited or covered the site, podcasts the site has appeared on, industry awards with named bodies, conference talks, press mentions, peer recognition.
 
-**Scoring:** 2pts if named external validation present. 1pt if vague "featured in" / "as seen on" without named outlets. 0pts if absent.
+**Evaluation:**
+- `pass` — Named external validation present (named publications, podcasts, awards bodies, etc.).
+- `partial` — Vague "featured in" / "as seen on" without named outlets.
+- `fail` — Absent.
 
-#### Named external relationships (max 1pt) — `namedExternalRelationships`
+#### Named external relationships — `namedExternalRelationships`
 
 Generalized from "named clients." The check is "are external entities the site relates to named explicitly, not just shown as anonymous logos?" The relevant relationships vary by site type:
 
@@ -1382,11 +1457,13 @@ Generalized from "named clients." The check is "are external entities the site r
 | `localBusiness` | Named suppliers, named professional affiliations, named recurring partner businesses |
 | `community` | Named affiliated organizations, named sponsors, named partner communities |
 
-**Scoring:** 1pt if at least one named external relationship appears in copy (not just a logo). 0pts if all relationships are anonymous, generic ("our clients", "our sources"), or logo-only.
+**Evaluation:**
+- `pass` — At least one named external relationship appears in copy (not just a logo).
+- `fail` — All relationships are anonymous, generic ("our clients", "our sources"), or logo-only.
 
 ### 3.3 Content Freshness — Content (2 signals)
 
-#### Recent featured work (max 1pt) — `recentFeaturedWork`
+#### Recent featured work — `recentFeaturedWork`
 
 Generalized from "recent portfolio." The check varies by site type:
 
@@ -1401,9 +1478,11 @@ Generalized from "recent portfolio." The check varies by site type:
 | `nonprofit` | Recent campaigns, recent impact reports, recent program launches |
 | `community` | Recent featured discussions, recent contributor spotlights, recent events |
 
-**Scoring:** 1pt if recent featured work (last 12 months) is visible. 0pts if work appears dated, references deprecated tools/platforms, or no featured work exists.
+**Evaluation:**
+- `pass` — Recent featured work (last 12 months) is visible.
+- `fail` — Work appears dated, references deprecated tools/platforms, or no featured work exists.
 
-#### Current domain references (max 1pt) — `currentDomainReferences`
+#### Current domain references — `currentDomainReferences`
 
 Generalized from "current tech references." The check is "do the named entities and references in the content reflect what is current in the site's domain?" — deprecated tools, retired standards, stale research, or outdated regulations signal abandonment.
 
@@ -1417,11 +1496,13 @@ Generalized from "current tech references." The check is "do the named entities 
 | `nonprofit` | Current programs, current policy references, current statistics |
 | `community` | Current platform conventions, current topic-area developments |
 
-**Scoring:** 1pt if domain references appear current. 0pts if deprecated/retired/superseded references are cited as current.
+**Evaluation:**
+- `pass` — Domain references appear current.
+- `fail` — Deprecated/retired/superseded references are cited as current.
 
 ### 3.4 Entity Clarity — Content (4 signals)
 
-#### Named entity identifiable in one sentence (max 3pts) — `entityIdentifiable`
+#### Named entity identifiable in one sentence — `entityIdentifiable`
 
 Can you write a single sentence identifying this site from the homepage text alone? It must include three elements appropriate to the site type:
 
@@ -1442,9 +1523,12 @@ Example one-sentence identifications by type:
 - saas: "Linear is a project management SaaS built for product-led software teams."
 - education: "Lambda School is an online coding bootcamp training career-changers in full-stack web development."
 
-**Scoring:** 3pts if a single clear identifying sentence is constructable. 2pts if partially identifiable (2 of 3 elements). 1pt if only 1 element clear. 0pts if cannot identify.
+**Evaluation:**
+- `pass` — A single clear identifying sentence containing all three required elements is constructable from the homepage.
+- `partial` — Partially identifiable (1 or 2 of 3 elements clear).
+- `fail` — Cannot identify the site from the homepage text.
 
-#### Primary focus specificity (max 3pts) — `primaryFocusSpecificity`
+#### Primary focus specificity — `primaryFocusSpecificity`
 
 Generalized from "service specificity." How specific is the site's primary focus, as stated in the homepage copy?
 
@@ -1457,23 +1541,30 @@ Generalized from "service specificity." How specific is the site's primary focus
 | `education` | "Online tax-law CLE courses for practicing attorneys" / "professional development courses" / "online learning" |
 | `nonprofit` | "Free legal aid for tenants facing eviction in NYC" / "housing rights advocacy" / "social justice" |
 
-**Scoring:** 3pts if highly specific. 2pts if moderately specific. 1pt if generic. 0pts if no clear focus described.
+**Evaluation:**
+- `pass` — Highly specific primary focus stated.
+- `partial` — Moderately specific or generic focus.
+- `fail` — No clear focus described.
 
-#### Geographic or market clarity (max 1pt)
+#### Geographic or market clarity
 
 Is a location, timezone, or market focus stated anywhere on the homepage?
 
-**Scoring:** 1pt if stated. 0pts if absent.
+**Evaluation:**
+- `pass` — Location, timezone, or market focus is stated.
+- `fail` — Absent.
 
-#### Consistent identity signals (max 1pt)
+#### Consistent identity signals
 
 Does the site describe itself consistently across the hero, about section, and footer? Or does the specialty/positioning shift between zones?
 
-**Scoring:** 1pt if consistent across all zones. 0pts if contradictory.
+**Evaluation:**
+- `pass` — Consistent identity across all zones.
+- `fail` — Contradictory identity signals between zones.
 
 ### 3.5 Content Specificity — Content (5 signals)
 
-#### Primary offering detail — what, who, outcome (max 2pts) — `primaryOfferingDetail`
+#### Primary offering detail — what, who, outcome — `primaryOfferingDetail`
 
 For each primary offering described, can you answer: what is it, who is it for, what outcome does it deliver? The "offering" varies by site type:
 
@@ -1486,9 +1577,12 @@ For each primary offering described, can you answer: what is it, who is it for, 
 | `nonprofit` | Each program, cause area, or initiative |
 | `community` | Each major activity or sub-community |
 
-**Scoring:** 2pts if all three (what / who / outcome) answered for most offerings. 1pt if partially answered. 0pts if offerings listed by category label only with no detail.
+**Evaluation:**
+- `pass` — All three (what / who / outcome) answered for most offerings.
+- `partial` — Partially answered (some offerings have detail, others don't, or 1–2 of the three elements addressed).
+- `fail` — Offerings listed by category label only with no detail.
 
-#### Named specific entities (max 2pts) — `namedSpecificEntities`
+#### Named specific entities — `namedSpecificEntities`
 
 Generalized from "named platforms and technologies." Are specific entities relevant to the site's domain named explicitly rather than referred to abstractly?
 
@@ -1502,9 +1596,12 @@ Generalized from "named platforms and technologies." Are specific entities relev
 | `localBusiness` | Named suppliers, named professional certifications, named local landmarks |
 | `community` | Named upstream/sibling communities, named featured tools |
 
-**Scoring:** 2pts if 2+ named specific entities relevant to the domain. 1pt if 1. 0pts if none (generic abstractions only).
+**Evaluation:**
+- `pass` — 2 or more named specific entities relevant to the domain.
+- `partial` — Exactly one named specific entity.
+- `fail` — None (generic abstractions only).
 
-#### Named subject areas (max 1pt) — `namedSubjectAreas`
+#### Named subject areas — `namedSubjectAreas`
 
 Generalized from "named industries." Are the site's subject areas named specifically?
 
@@ -1519,9 +1616,11 @@ Generalized from "named industries." Are the site's subject areas named specific
 | `localBusiness` | Service specialties (italian cuisine, sports medicine, residential plumbing) |
 | `community` | Topic focus (mechanical keyboards, woodworking, climate policy) |
 
-**Scoring:** 1pt if specific subject areas named. 0pts if generic ("businesses", "people", "everyone").
+**Evaluation:**
+- `pass` — Specific subject areas named.
+- `fail` — Generic only ("businesses", "people", "everyone").
 
-#### Specific outcomes (max 1pt) — `specificOutcomes`
+#### Specific outcomes — `specificOutcomes`
 
 Generalized from "client wins with numbers." Are quantified results or named achievements present?
 
@@ -1535,15 +1634,19 @@ Generalized from "client wins with numbers." Are quantified results or named ach
 | `localBusiness` | Named tenure metrics (servicing X area since YYYY, named reviewed ratings) |
 | `community` | Named member/contributor counts, named published outputs |
 
-**Scoring:** 1pt if specific quantified outcomes or named achievements. 0pts if vague claims only ("we get results", "great quality", "trusted").
+**Evaluation:**
+- `pass` — Specific quantified outcomes or named achievements present.
+- `fail` — Vague claims only ("we get results", "great quality", "trusted").
 
-#### Passage extraction quality (max 1pt) — `passageExtractionQuality`
+#### Passage extraction quality — `passageExtractionQuality`
 
 Could a clean, accurate 1–2 sentence summary be pulled from each major section without needing surrounding context?
 
-**Scoring:** 1pt if most sections yield clean extractable summaries. 0pts if sections require surrounding context to make sense.
+**Evaluation:**
+- `pass` — Most sections yield clean extractable summaries.
+- `fail` — Sections require surrounding context to make sense.
 
-### 3.6 llms.txt content quality (max 0.5pts)
+### 3.6 llms.txt content quality
 
 If llms.txt was found in 1.8, evaluate the recorded content:
 
@@ -1551,23 +1654,20 @@ If llms.txt was found in 1.8, evaluate the recorded content:
 - Does it mention specific services, target audiences, or platforms?
 - Is it specific or generic boilerplate?
 
-**Scoring:** 0.5pts if specific and accurate. 0pts if vague boilerplate.
+**Evaluation:**
+- `pass` — Specific and accurate; describes site name, type, specialty, and mentions specific services / audiences / platforms.
+- `fail` — Vague boilerplate.
+- `na` — llms.txt is absent (covered by the `llmsTxtPresent` signal; record `na` here with note `"N/A — llms.txt not present."`).
 
 ---
 
-## SECTION 4: Scoring & Verification
+## SECTION 4: Evaluation & Verification
 
-1. Map all findings from Sections 1–3 to the rubric in `references/scoring-rubric.md`.
-2. Calculate a score for each signal.
-3. Sum to criterion totals. Verify each criterion total matches the rubric max (20, 18, 16, 14, 12, 10, 7, 3).
-4. Sum criteria to a final AEO score out of 100.
-5. Assign threshold label:
-
-| Score | Status |
-|---|---|
-| 80 – 100 | strong |
-| 50 – 79 | needs-work |
-| 0 – 49 | at-risk |
+1. Map all findings from Sections 1–3 to the rubric in `references/evaluation-rubric.md`.
+2. Assign each signal a status (`pass` / `partial` / `fail` / `na`).
+3. Verify each criterion's `signals` block contains every signal from the canonical signal-keys list. No signal may be omitted; use `na` with rationale when the signal genuinely does not apply.
+4. Count totals into the `summary` block: `{ totalSignals: 49, pass, partial, fail, na }`. Confirm `pass + partial + fail + na === 49`.
+5. There is **no top-level score and no threshold label** — the summary counts plus the issues list communicate state.
 
 ---
 
@@ -1591,12 +1691,10 @@ Complete all items before generating the JSON report.
 - [ ] All Section 1 programmatic checks completed
 - [ ] All Section 2 inner-page checks completed
 - [ ] All Section 3 content checks completed
-- [ ] All 49 signals scored across 8 criteria
-- [ ] Criterion subtotals verified to match signal sums and rubric maximums
-- [ ] Final score calculated (sum of all 8 criterion subtotals, max 100)
-- [ ] Threshold label assigned (strong / needs-work / at-risk)
-- [ ] **Every below-max signal has a corresponding entry in `issues.critical|high|medium|low[]`**
-- [ ] Actionable Claude prompt written for every signal scoring below maximum
+- [ ] All 49 signals evaluated across 8 criteria — every signal has a `status` of `pass`, `partial`, `fail`, or `na`
+- [ ] `summary` block populated with `totalSignals`, `pass`, `partial`, `fail`, `na` counts; the four buckets sum to `totalSignals`
+- [ ] **Every signal at status `fail` or `partial` has a corresponding entry in `issues.critical|high|medium|low[]`**
+- [ ] Actionable Claude prompt written for every signal at status `fail` or `partial`
 - [ ] Every issue object includes an `effort` field (`low` / `medium` / `high` / `unknown`)
 
 **If any item above is unchecked, do NOT generate the report. Return to the relevant section and complete it.**
@@ -1613,7 +1711,7 @@ Save the report to `reports/data/qa-report-aeo.json`. This is the fixed filename
 
 The full structure is defined in `schemas/qa-report-aeo-schema.json`. Use canonical signal keys from `references/signal-keys.md` — do not invent variants (`robotsAndCrawlerAccess`, not `robotsTxt`; `noNoindex`, not `noindex`).
 
-Each criterion follows `{score, maxScore, signals: {key: {score, maxScore, notes}, ...}}`.
+Each criterion follows `{signals: {key: {status, notes}, ...}}` where `status` is one of `pass` / `partial` / `fail` / `na`.
 
 Minimal top-level shape:
 
@@ -1627,29 +1725,30 @@ Minimal top-level shape:
   "siteType": "mediaBlog",
   "siteTypeConfidence": "high",
   "siteTypeRationale": "BlogPosting JSON-LD on 3 of 5 sampled pages; /blog/ route with 40+ dated entries.",
-  "applicableSchemas": {
-    "Person": "medium",
-    "Article": "high",
-    "Organization": "high",
-    "LocalBusiness": "absent",
-    "Event": "high",
-    "FAQPage": "high",
-    "HowTo": "medium",
-    "Product": "absent",
-    "Course": "absent",
-    "Recipe": "absent",
-    "Review": "absent"
-  },
   "environment": "production",
-  "score": 0,
-  "threshold": "strong|needs-work|at-risk",
   "visitedPages": [
     "https://example.com/",
     "https://example.com/about/",
     "https://example.com/category/climate/",
     "https://example.com/articles/recent-piece/"
   ],
-  "criteria": { /* 8 criterion blocks per schema, 49 signals total */ },
+  "summary": {
+    "totalSignals": 49,
+    "pass": 38,
+    "partial": 6,
+    "fail": 4,
+    "na": 1
+  },
+  "criteria": {
+    "technicalHealth": {
+      "signals": {
+        "robotsAndCrawlerAccess": { "status": "pass", "notes": "All live-retrieval bots allowed." },
+        "noNoindex": { "status": "pass", "notes": "No noindex." }
+        /* ...remaining technicalHealth signals per schema... */
+      }
+    }
+    /* ...7 more criterion blocks, 49 signals total per references/signal-keys.md... */
+  },
   "issues": {
     "critical": [
       {
@@ -1664,7 +1763,7 @@ Minimal top-level shape:
     "medium": [],
     "low": []
   },
-  "actionablePrompts": [ /* one entry per below-max signal */ ],
+  "actionablePrompts": [ /* one entry per signal at status fail or partial */ ],
   "technicalNotes": {
     "robotsTxt": "Allowed: OAI-SearchBot, ChatGPT-User, Claude-User, PerplexityBot. Blocked: GPTBot, ClaudeBot, Google-Extended, CCBot — modern training/retrieval split.",
     "sitemapUrl": "https://example.com/sitemap_index.xml",
@@ -1673,16 +1772,29 @@ Minimal top-level shape:
     "javascriptRequired": false,
     "httpsActive": true,
     "mixedContentCount": 0,
-    "cmsDetected": "WordPress + Yoast"
+    "cmsDetected": "WordPress + Yoast",
+    "applicableSchemas": {
+      "Person": "medium",
+      "Article": "high",
+      "Organization": "high",
+      "LocalBusiness": "absent",
+      "Event": "high",
+      "FAQPage": "high",
+      "HowTo": "medium",
+      "Product": "absent",
+      "Course": "absent",
+      "Recipe": "absent",
+      "Review": "absent"
+    }
   }
 }
 ```
 
 ### Issue severity guide
 
-- **critical** — Signal scores 0 where maximum is 3pts or more. Blocking AI discoverability or citation.
-- **high** — Signal scores 0 or 1 where maximum is 2pts. Significantly weakens AI understanding or trust signals.
-- **medium** — Signal scores below maximum but not zero. Improvement opportunity.
+- **critical** — Signal at `fail` for a high-impact rubric area (Technical Health, Structured Data, AEO Readiness). Blocking AI discoverability or citation.
+- **high** — Signal at `fail` for any other criterion, or `partial` where the gap is substantial. Significantly weakens AI understanding or trust signals.
+- **medium** — Signal at `partial` where the gap is moderate. Improvement opportunity.
 - **low** — Minor gap. Worth noting but low priority.
 
 ### Issue effort guide
@@ -1723,7 +1835,7 @@ Only write `effortRationale` when site context meaningfully changes the baseline
 
 ### Actionable prompt guide
 
-Every signal scoring below maximum must have an entry in `actionablePrompts`. Each prompt must:
+Every signal at status `fail` or `partial` must have an entry in `actionablePrompts`. Each prompt must:
 
 1. Describe the specific issue found on this site (not a generic description)
 2. Explain the impact on AI discoverability or citation in one sentence
@@ -1748,10 +1860,10 @@ Example — ✅ "Write a complete JSON-LD Organization schema block for a Toront
 Once `reports/data/qa-report-aeo.json` is saved, run:
 
 ```bash
-node scripts/generate-aeo-report.js reports/data/qa-report-aeo.json
+node scripts/generate-report.js reports/data/qa-report-aeo.json
 ```
 
-The script writes a Markdown report to `reports/` and prints the output path.
+The AEO branch is auto-detected from `report.mode === "aeo"`. The script writes a Markdown report to `reports/` and prints the output path. `--aeo` can be passed explicitly to force the AEO branch.
 
 ### Terminal summary
 
@@ -1760,11 +1872,12 @@ After saving the JSON and running the report script, print a brief summary:
 ```
 Kosh AEO Analysis — [Website Name]
 URL: [URL]
+Site type: [siteType] ([confidence])
 Environment: [environment]
-Score: [X]/100 ([threshold label])
+Signals: [pass] pass · [partial] partial · [fail] fail · [na] N/A (of [totalSignals])
 
 Top issues:
-- [Top 3 issues by severity and points impact]
+- [Top 3 critical/high issues by severity and CMS-adjusted effort]
 
 Full report saved to:
   JSON:     reports/data/qa-report-aeo.json
@@ -1783,7 +1896,7 @@ When you detect WordPress (look for `/wp-content/`, `/wp-json/`, `meta[name="gen
 - **All in One SEO** — Organization + WebPage; check explicitly because some sites disable schema output.
 - **Site Kit / Google plugins** — do not emit schema, but may emit additional meta. Don't mistake meta tags for schema markup.
 - **Yoast and RankMath both emit `/sitemap_index.xml`** rather than a flat `/sitemap.xml`. If `/sitemap.xml` 404s, follow the `Sitemap:` line in robots.txt.
-- **WooCommerce sites** typically have Product schema on product pages but not on the homepage. AEO scoring is on the homepage — a WooCommerce site with no Service or Organization schema on the homepage still loses points even if product schema is plentiful elsewhere.
+- **WooCommerce sites** typically have Product schema on product pages but not on the homepage. AEO evaluation is anchored on the homepage — a WooCommerce site with no Store, OfferCatalog, or Organization schema on the homepage still fails its `primaryEntitySchema` signal even if Product schema is plentiful on PDPs (those are confirmed during the Phase 2 sample).
 - **The WordPress comments JSON-LD block** (`@type: "Comment"`) does not count toward Service / Organization / FAQ tallies.
 - **REST API exposure (`/wp-json/`)** is a separate signal not in the rubric, but record its presence in `technicalNotes.cmsDetected` — it affects effort estimates for some fixes.
 - **llms.txt** — there is no widely adopted WordPress plugin for llms.txt as of this rubric version. Effort to create it is always `low` (paste a text file into the WordPress root via SFTP or use a "raw file" plugin), but it does require server access.
@@ -1792,11 +1905,11 @@ When you detect WordPress (look for `/wp-content/`, `/wp-json/`, `meta[name="gen
 
 ## AEO Testing Notes
 
-### Why homepage-anchored, multi-page scoring?
+### Why homepage-anchored, multi-page evaluation?
 
-The rubric is anchored to the homepage as the primary scoring target, with Phase 2 inner-page checks providing **confirmation and evidence-gathering** for signals that don't always show fully on the homepage. The homepage anchor matters because AI tools tend to treat the homepage as the canonical entity-defining page when synthesizing a one-paragraph answer about a site.
+The rubric is anchored to the homepage as the primary evaluation target, with Phase 2 inner-page checks providing **confirmation and evidence-gathering** for signals that don't always show fully on the homepage. The homepage anchor matters because AI tools tend to treat the homepage as the canonical entity-defining page when synthesizing a one-paragraph answer about a site.
 
-Several signals (canonical URLs, contentUpdateRecency, authorBylines) genuinely require multi-page evidence and are scored against the inner-page findings. The site-type detection from Phase 0 determines which inner pages are most useful to visit.
+Several signals (canonical URLs, contentUpdateRecency, authorBylines) genuinely require multi-page evidence and are evaluated against the inner-page findings. The site-type detection from Phase 0 determines which inner pages are most useful to visit.
 
 ### What passes vs. fails AEO testing
 
@@ -1806,7 +1919,7 @@ Several signals (canonical URLs, contentUpdateRecency, authorBylines) genuinely 
 
 ### Edge cases
 
-- **Single-page sites** — score Phase 2 inner-page signals based on the same homepage, noting in `notes` that no separate inner pages exist. Cap `visitedPages` at the homepage URL only and record the constraint in `technicalNotes`.
-- **Sites behind a paywall or login** — score what's accessible. Note in `technicalNotes` that crawler-accessible content is limited.
-- **Sites with locale routing** — score the locale you landed on. If a `hreflang` is present and the English version is reachable, prefer it.
-- **Sites with cookie/consent walls that block content** — score the post-consent state. Accept consent in the browser session before scoring.
+- **Single-page sites** — evaluate Phase 2 inner-page signals based on the same homepage, noting in `notes` that no separate inner pages exist. Cap `visitedPages` at the homepage URL only and record the constraint in `technicalNotes`.
+- **Sites behind a paywall or login** — evaluate what's accessible. Note in `technicalNotes` that crawler-accessible content is limited.
+- **Sites with locale routing** — evaluate the locale you landed on. If a `hreflang` is present and the English version is reachable, prefer it.
+- **Sites with cookie/consent walls that block content** — evaluate the post-consent state. Accept consent in the browser session before evaluating.
