@@ -3,7 +3,7 @@
   "title": "Kosh AEO Report",
   "description": "Schema for the kosh AEO (Answer Engine Optimization) / AI Mode analysis report. Evaluates a WordPress site the way AI tools do — crawling, parsing structure, extracting entities, and deciding whether to cite it in a generated answer. Evaluation-based (pass/partial/fail/na per signal), no numerical scoring.",
   "type": "object",
-  "required": ["url", "websiteName", "timestamp", "mode", "aeoRubricVersion", "siteType", "siteTypeConfidence", "siteTypeRationale", "visitedPages", "summary", "criteria", "issues", "actionablePrompts", "technicalNotes"],
+  "required": ["url", "websiteName", "timestamp", "mode", "aeoRubricVersion", "environment", "siteType", "siteTypeConfidence", "siteTypeRationale", "visitedPages", "summary", "criteria", "issues", "actionablePrompts", "technicalNotes"],
   "properties": {
     "url": {
       "type": "string",
@@ -59,7 +59,7 @@
       "description": "Top-level counts of signal evaluation results across all 49 signals.",
       "required": ["totalSignals", "pass", "partial", "fail", "na"],
       "properties": {
-        "totalSignals": { "type": "integer", "minimum": 0, "description": "Total number of signals evaluated. Expected: 49 with rubric 1.0." },
+        "totalSignals": { "type": "integer", "const": 49, "description": "Total number of signals evaluated. Locked to 49 by rubric 1.0 — every signal in the canonical key list must be present in the `criteria` block, so this rolls up to a fixed value. If the rubric version changes, update this const alongside." },
         "pass": { "type": "integer", "minimum": 0, "description": "Signals meeting the highest tier of their evaluation criteria." },
         "partial": { "type": "integer", "minimum": 0, "description": "Signals meeting a middle tier — present but incomplete, or correct but sparse." },
         "fail": { "type": "integer", "minimum": 0, "description": "Signals not meeting any tier — absent, broken, or fundamentally wrong." },
@@ -119,10 +119,21 @@
         },
         "applicableSchemas": {
           "type": "object",
-          "description": "Phase 0.4 schema relevance map. Keys are schema.org type names; values describe how relevant that schema is to the site's actual content. Drives primaryEntitySchema and relevantSchemasApplied evaluation.",
-          "additionalProperties": {
-            "type": "string",
-            "enum": ["high", "medium", "low", "absent"]
+          "description": "Phase 0.4 schema relevance map. Keys are the 11 schema.org type names the AEO skill evaluates; values describe how relevant each schema is to the site's actual content. Drives primaryEntitySchema and relevantSchemasApplied evaluation.",
+          "required": ["Person", "Article", "Organization", "LocalBusiness", "Event", "FAQPage", "HowTo", "Product", "Course", "Recipe", "Review"],
+          "additionalProperties": false,
+          "properties": {
+            "Person":        { "$ref": "#/definitions/schemaRelevance" },
+            "Article":       { "$ref": "#/definitions/schemaRelevance" },
+            "Organization":  { "$ref": "#/definitions/schemaRelevance" },
+            "LocalBusiness": { "$ref": "#/definitions/schemaRelevance" },
+            "Event":         { "$ref": "#/definitions/schemaRelevance" },
+            "FAQPage":       { "$ref": "#/definitions/schemaRelevance" },
+            "HowTo":         { "$ref": "#/definitions/schemaRelevance" },
+            "Product":       { "$ref": "#/definitions/schemaRelevance" },
+            "Course":        { "$ref": "#/definitions/schemaRelevance" },
+            "Recipe":        { "$ref": "#/definitions/schemaRelevance" },
+            "Review":        { "$ref": "#/definitions/schemaRelevance" }
           }
         }
       }
@@ -305,12 +316,36 @@
         }
       }
     },
+    "schemaRelevance": {
+      "type": "string",
+      "enum": ["high", "medium", "low", "absent"],
+      "description": "How relevant this schema.org type is to the site's actual content (Phase 0.4 detection). high = clearly applicable + content pattern is prominent. medium = some applicable content but secondary. low = one-off mention or weak pattern. absent = no content the schema would describe."
+    },
+    "criterionKey": {
+      "type": "string",
+      "enum": ["technicalHealth", "structuredData", "aeoReadiness", "eeatSignals", "contentFreshness", "entityClarity", "contentSpecificity", "llmsTxt"],
+      "description": "Canonical criterion key — the 8 keys the criteria block uses. Issue and actionablePrompt entries reference this enum to keep findings keyed on the same names criterionLabel() looks up."
+    },
+    "signalKey": {
+      "type": "string",
+      "enum": [
+        "robotsAndCrawlerAccess", "noNoindex", "httpsNoMixedContent", "sitemapLastmod", "nojsAccessible", "canonicalUrls",
+        "organizationSchema", "primaryEntitySchema", "faqSchema", "relevantSchemasApplied", "jsonLdFormat", "openGraphTags", "reviewSchema",
+        "directAnswers", "whoWhatWho", "featuredSnippetStructure", "answerCapsules", "faqSectionPresent", "faqSchemaApplied", "questionFramedHeadings", "titleAndMetaQuestionMatch",
+        "namedTeamMembers", "authorCredentials", "authorBylines", "demonstratedExpertise", "externalCitations", "certificationBadges", "namedExternalRelationships", "tenureIndicators",
+        "copyrightYearCurrent", "blogNewsRecent", "dateStampsOnContent", "contentUpdateRecency", "sitemapLastmodRecent", "recentFeaturedWork", "currentDomainReferences",
+        "entityIdentifiable", "primaryFocusSpecificity", "socialProfileLinks", "geographicMarketClarity", "consistentIdentity",
+        "primaryOfferingDetail", "namedSpecificEntities", "namedSubjectAreas", "specificOutcomes", "passageExtractionQuality",
+        "llmsTxtPresent", "llmsFullTxtPresent", "llmsTxtContent"
+      ],
+      "description": "Canonical signal key — one of the 49 keys listed in skills/aeo/references/signal-keys.md. Issue and actionablePrompt entries reference this enum so typos fail validation instead of rendering as raw keys via signalLabel()'s fallback."
+    },
     "issue": {
       "type": "object",
       "required": ["criterion", "signal", "issue", "impact", "effort"],
       "properties": {
-        "criterion": { "type": "string", "description": "Criterion key, e.g. 'structuredData'." },
-        "signal": { "type": "string", "description": "Canonical signal key from skills/aeo/references/signal-keys.md." },
+        "criterion": { "$ref": "#/definitions/criterionKey", "description": "Canonical criterion key (one of the 8 enum values)." },
+        "signal":    { "$ref": "#/definitions/signalKey",    "description": "Canonical signal key (one of the 49 enum values)." },
         "issue": { "type": "string", "description": "One sentence describing the specific gap found on this site." },
         "impact": { "type": "string", "description": "One sentence explaining the consequence for AI discoverability or citation." },
         "effort": {
@@ -333,8 +368,8 @@
       "type": "object",
       "required": ["criterion", "signal", "issue", "impact", "prompt"],
       "properties": {
-        "criterion": { "type": "string", "description": "Criterion key, e.g. 'structuredData'." },
-        "signal": { "type": "string", "description": "Signal key, e.g. 'organizationSchema'." },
+        "criterion": { "$ref": "#/definitions/criterionKey", "description": "Canonical criterion key (one of the 8 enum values)." },
+        "signal":    { "$ref": "#/definitions/signalKey",    "description": "Canonical signal key (one of the 49 enum values)." },
         "issue": { "type": "string", "description": "Specific issue found on this site." },
         "impact": { "type": "string", "description": "One sentence explaining the impact on AI discoverability or citation." },
         "prompt": { "type": "string", "description": "Ready-to-use Claude prompt the site owner can paste directly." }
