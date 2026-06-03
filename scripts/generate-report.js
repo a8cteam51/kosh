@@ -629,6 +629,12 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
     ['llmsTxt',            'llms.txt'],
   ];
 
+  // Lookup so the issue badges + actionable-prompts summaries render the same
+  // pretty label the criterion section header uses (e.g. "Structured Data"
+  // instead of the raw camelCase "structuredData" key).
+  const criterionLabelMap = Object.fromEntries(CRITERION_ORDER);
+  const criterionLabel = (key) => criterionLabelMap[key] || key;
+
   const SIGNAL_LABELS = {
     robotsAndCrawlerAccess: 'robots.txt and AI crawler access',
     noNoindex: 'No noindex on homepage',
@@ -709,7 +715,11 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
     bg: '#F8FAFC', surface: '#ffffff', border: '#E2E8F0',
     text: '#0F172A', muted: '#64748B', accent: '#7C3AED',
     sevCritical: '#E11D48', sevHigh: '#F97316', sevMedium: '#FBBF24', sevLow: '#0EA5E9',
-    statusPass: '#16A34A', statusPartial: '#FBBF24', statusFail: '#E11D48', statusNa: '#94A3B8',
+    // Status colors are tuned to meet WCAG AA contrast (≥4.5:1) in BOTH
+    // contexts: white text on the pill background, and the same value used as
+    // text on the light .criterion__counts chip background (T.bg). See the
+    // contrast table in the PR description for the verified ratios.
+    statusPass: '#15803D', statusPartial: '#B45309', statusFail: '#BE123C', statusNa: '#475569',
     envProdBg: '#FECDD3', envProdFg: '#9F1239',
     envStagingBg: '#FDE68A', envStagingFg: '#854D0E',
     envDevBg: '#BAE6FD', envDevFg: '#075985',
@@ -717,7 +727,8 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
     relevanceHighBg: '#DCFCE7', relevanceHighFg: '#166534',
     relevanceMediumBg: '#FEF9C3', relevanceMediumFg: '#854D0E',
     relevanceLowBg: '#E2E8F0', relevanceLowFg: '#475569',
-    relevanceAbsentBg: '#F1F5F9', relevanceAbsentFg: '#94A3B8',
+    // relevanceAbsentFg darkened from '#94A3B8' (2.62:1 on absent bg) to meet AA.
+    relevanceAbsentBg: '#F1F5F9', relevanceAbsentFg: '#475569',
     fontBody: '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     fontHeading: 'inherit',
   };
@@ -836,8 +847,9 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
       font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
       color: #fff;
     }
+    /* White text on each darker palette token; AA contrast verified for all four. */
     .status-pill--pass    { background: ${T.statusPass}; }
-    .status-pill--partial { background: ${T.statusPartial}; color: #1a1a1a; }
+    .status-pill--partial { background: ${T.statusPartial}; }
     .status-pill--fail    { background: ${T.statusFail}; }
     .status-pill--na      { background: ${T.statusNa}; }
     .status-pill--unknown { background: ${T.statusNa}; }
@@ -1065,7 +1077,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
       <article class="finding" id="aeo-finding-${index}">
         <header class="finding__header">
           <h4 class="finding__signal">${escHtml(sigLabel)}</h4>
-          <span class="finding__criterion">${escHtml(issue.criterion || '')}</span>
+          <span class="finding__criterion">${escHtml(criterionLabel(issue.criterion || ''))}</span>
         </header>
         <p class="finding__issue">${escHtml(issue.issue)}</p>
         <p class="finding__impact"><strong>Impact:</strong> ${escHtml(issue.impact)}</p>
@@ -1113,7 +1125,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
       <p class="muted">Each signal at status <code>fail</code> or <code>partial</code> has a ready-to-use prompt the site owner can paste into Claude to start fixing the gap.</p>
       ${prompts.map((p, i) => `
         <details class="prompt-block" ${i === 0 ? 'open' : ''}>
-          <summary>${i + 1}. ${escHtml(signalLabel(p.signal))} <span class="muted">(${escHtml(p.criterion)})</span></summary>
+          <summary>${i + 1}. ${escHtml(signalLabel(p.signal))} <span class="muted">(${escHtml(criterionLabel(p.criterion))})</span></summary>
           <div class="prompt-block__body">
             <p><strong>Issue:</strong> ${escHtml(p.issue)}</p>
             <p><strong>Impact:</strong> ${escHtml(p.impact)}</p>

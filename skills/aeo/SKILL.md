@@ -147,7 +147,9 @@ const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld
   .map(s => { try { return JSON.parse(s.innerText); } catch(e) { return null; }})
   .filter(Boolean)
   .flatMap(s => Array.isArray(s) ? s : (s['@graph'] || [s]));
-const jsonLdTypes = new Set(jsonLd.map(s => s['@type']).filter(Boolean));
+// Flatten array `@type` values (e.g. Yoast's `@type: ['Person','Organization']`)
+// so the resulting Set contains strings, not nested arrays — matches Phase 0.4.
+const jsonLdTypes = new Set(jsonLd.map(s => s['@type']).filter(Boolean).flat());
 
 // Microdata types (treat as equivalent format-of-the-same-truth)
 const microdataTypes = new Set(
