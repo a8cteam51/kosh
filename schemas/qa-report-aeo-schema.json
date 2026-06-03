@@ -84,6 +84,7 @@
     "issues": {
       "type": "object",
       "required": ["critical", "high", "medium", "low"],
+      "additionalProperties": false,
       "properties": {
         "critical": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Foundational signals at status 'fail'. Blocking AI discoverability or citation." },
         "high": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Important signals at status 'fail', or foundational signals at status 'partial'. Significantly weakens AI understanding." },
@@ -99,6 +100,7 @@
     "technicalNotes": {
       "type": "object",
       "description": "Technical findings from HTTP fetches and browser inspection.",
+      "required": ["applicableSchemas"],
       "properties": {
         "robotsTxt": { "type": "string", "description": "URL fetched and short summary of AI crawler access rules found." },
         "sitemapUrl": { "type": "string", "description": "Sitemap URL found, or empty/'not found'." },
@@ -340,12 +342,49 @@
       ],
       "description": "Canonical signal key — one of the 49 keys listed in skills/aeo/references/signal-keys.md. Issue and actionablePrompt entries reference this enum so typos fail validation instead of rendering as raw keys via signalLabel()'s fallback."
     },
+    "criterionSignalPairing": {
+      "description": "Discriminated union enforcing that the criterion + signal pair belongs together. Each variant fixes the criterion key and restricts the signal to that criterion's canonical subset, so `{ criterion: 'llmsTxt', signal: 'canonicalUrls' }` fails validation instead of rendering as a nonsense finding. Used by both `issue` and `actionablePrompt` via `allOf`.",
+      "oneOf": [
+        { "properties": {
+            "criterion": { "const": "technicalHealth" },
+            "signal":    { "enum": ["robotsAndCrawlerAccess", "noNoindex", "httpsNoMixedContent", "sitemapLastmod", "nojsAccessible", "canonicalUrls"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "structuredData" },
+            "signal":    { "enum": ["organizationSchema", "primaryEntitySchema", "faqSchema", "relevantSchemasApplied", "jsonLdFormat", "openGraphTags", "reviewSchema"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "aeoReadiness" },
+            "signal":    { "enum": ["directAnswers", "whoWhatWho", "featuredSnippetStructure", "answerCapsules", "faqSectionPresent", "faqSchemaApplied", "questionFramedHeadings", "titleAndMetaQuestionMatch"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "eeatSignals" },
+            "signal":    { "enum": ["namedTeamMembers", "authorCredentials", "authorBylines", "demonstratedExpertise", "externalCitations", "certificationBadges", "namedExternalRelationships", "tenureIndicators"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "contentFreshness" },
+            "signal":    { "enum": ["copyrightYearCurrent", "blogNewsRecent", "dateStampsOnContent", "contentUpdateRecency", "sitemapLastmodRecent", "recentFeaturedWork", "currentDomainReferences"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "entityClarity" },
+            "signal":    { "enum": ["entityIdentifiable", "primaryFocusSpecificity", "socialProfileLinks", "geographicMarketClarity", "consistentIdentity"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "contentSpecificity" },
+            "signal":    { "enum": ["primaryOfferingDetail", "namedSpecificEntities", "namedSubjectAreas", "specificOutcomes", "passageExtractionQuality"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "llmsTxt" },
+            "signal":    { "enum": ["llmsTxtPresent", "llmsFullTxtPresent", "llmsTxtContent"] }
+        } }
+      ]
+    },
     "issue": {
       "type": "object",
       "required": ["criterion", "signal", "issue", "impact", "effort"],
       "properties": {
         "criterion": { "$ref": "#/definitions/criterionKey", "description": "Canonical criterion key (one of the 8 enum values)." },
-        "signal":    { "$ref": "#/definitions/signalKey",    "description": "Canonical signal key (one of the 49 enum values)." },
+        "signal":    { "$ref": "#/definitions/signalKey",    "description": "Canonical signal key (one of the 49 enum values). Must belong to the criterion above — see `criterionSignalPairing`." },
         "issue": { "type": "string", "description": "One sentence describing the specific gap found on this site." },
         "impact": { "type": "string", "description": "One sentence explaining the consequence for AI discoverability or citation." },
         "effort": {
@@ -362,18 +401,20 @@
           "items": { "type": "string", "format": "uri" },
           "description": "Optional. URLs of pages where this issue was observed. Used for inner-page findings (FAQ structure, dated posts, etc.)."
         }
-      }
+      },
+      "allOf": [{ "$ref": "#/definitions/criterionSignalPairing" }]
     },
     "actionablePrompt": {
       "type": "object",
       "required": ["criterion", "signal", "issue", "impact", "prompt"],
       "properties": {
         "criterion": { "$ref": "#/definitions/criterionKey", "description": "Canonical criterion key (one of the 8 enum values)." },
-        "signal":    { "$ref": "#/definitions/signalKey",    "description": "Canonical signal key (one of the 49 enum values)." },
+        "signal":    { "$ref": "#/definitions/signalKey",    "description": "Canonical signal key (one of the 49 enum values). Must belong to the criterion above — see `criterionSignalPairing`." },
         "issue": { "type": "string", "description": "Specific issue found on this site." },
         "impact": { "type": "string", "description": "One sentence explaining the impact on AI discoverability or citation." },
         "prompt": { "type": "string", "description": "Ready-to-use Claude prompt the site owner can paste directly." }
-      }
+      },
+      "allOf": [{ "$ref": "#/definitions/criterionSignalPairing" }]
     }
   }
 }
