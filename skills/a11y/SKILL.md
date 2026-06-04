@@ -428,21 +428,23 @@ If the site has significant animation, note whether this media query is handled.
 WCAG 2.2 AA (2.5.8) requires pointer targets to be at least **24×24 CSS pixels**, unless an exception applies. Measure interactive elements:
 
 ```javascript
-Array.from(document.querySelectorAll('a, button, input:not([type="hidden"]), select, [role="button"], [role="link"], [onclick]'))
+Array.from(document.querySelectorAll('a, button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [role="link"], [tabindex], [contenteditable]:not([contenteditable="false"]), [onclick]'))
   .map(el => {
     const r = el.getBoundingClientRect();
     return {
       tag: el.tagName.toLowerCase(),
       text: (el.textContent || el.getAttribute('aria-label') || '').trim().substring(0, 40),
-      width: Math.round(r.width),
-      height: Math.round(r.height)
+      width: r.width,
+      height: r.height
     };
   })
-  .filter(el => el.width > 0 && el.height > 0 && (el.width < 24 || el.height < 24));
+  .filter(el => el.width > 0 && el.height > 0 && (el.width < 24 || el.height < 24))
+  .map(el => ({ ...el, width: Math.round(el.width), height: Math.round(el.height) }));
 ```
 
 **Exceptions — do NOT flag if any apply:**
 - **Spacing:** a 24px-diameter circle centred on the target does not overlap any adjacent target's circle (enough clear space around it)
+- **Equivalent:** the same function is provided by another control on the same page that does meet 24×24 (e.g. a small icon toggle that duplicates a full-size text link)
 - **Inline:** the target is a link inside a sentence or block of text
 - **Essential:** the small size is legally required or essential to the information conveyed (e.g. a pin on a map at a precise location)
 - **User-agent controlled:** the size is the browser default and not modified by the author's CSS
@@ -677,6 +679,7 @@ Use these standardised type values in the `a11y` array:
 | `multiple-h1` | Page has more than one H1 tag |
 | `low-contrast` | Text/background contrast ratio below WCAG AA threshold |
 | `no-focus-indicator` | Interactive element has no visible focus indicator |
+| `not-keyboard-accessible` | Interactive element cannot be reached or operated by keyboard |
 | `keyboard-trap` | Keyboard focus cannot escape an area |
 | `missing-skip-link` | Page has no skip navigation link |
 | `missing-landmark` | Page missing expected landmark region (main, nav, etc.) |
@@ -714,6 +717,7 @@ A finding's `wcag_criterion` is determined by its `type` — look it up in this 
 | `low-contrast` | 1.4.3 Contrast (Minimum) for text; 1.4.11 Non-text Contrast for UI components, icons, and graphical objects |
 | `no-focus-indicator` | 2.4.7 Focus Visible |
 | `focus-obscured` | 2.4.11 Focus Not Obscured (Minimum) |
+| `not-keyboard-accessible` | 2.1.1 Keyboard |
 | `keyboard-trap` | 2.1.2 No Keyboard Trap |
 | `missing-skip-link` | 2.4.1 Bypass Blocks |
 | `target-too-small` | 2.5.8 Target Size (Minimum) |
@@ -721,8 +725,6 @@ A finding's `wcag_criterion` is determined by its `type` — look it up in this 
 | `auth-cognitive-test` | 3.3.8 Accessible Authentication (Minimum) |
 | `inconsistent-help` | 3.2.6 Consistent Help |
 | `redundant-entry` | 3.3.7 Redundant Entry |
-
-For an element that cannot be operated by keyboard at all, cite 2.1.1 Keyboard.
 
 ---
 
