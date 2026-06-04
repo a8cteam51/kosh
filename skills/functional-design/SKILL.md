@@ -261,9 +261,11 @@ Sanity checks before writing any of this into the report:
 - Document: Any text overlaid on images or gradients (the script cannot measure these — assess visually)
 
 WCAG 2.2 AA contrast thresholds:
-- Normal text (< 18pt regular or < 14pt bold): **4.5:1 minimum**
-- Large text (≥ 18pt regular or ≥ 14pt bold): **3:1 minimum**
-- UI components (buttons, form borders, icons): **3:1 minimum**
+- Normal text (< 18pt regular or < 14pt bold): **4.5:1 minimum** — WCAG 1.4.3 Contrast (Minimum)
+- Large text (≥ 18pt regular or ≥ 14pt bold): **3:1 minimum** — WCAG 1.4.3 Contrast (Minimum)
+- UI components (buttons, form borders, icons): **3:1 minimum** — WCAG 1.4.11 Non-text Contrast
+
+> **WCAG citations in this skill:** Cite a WCAG criterion only for contrast findings — `1.4.3 Contrast (Minimum)` for text and `1.4.11 Non-text Contrast` for UI components — because contrast is the only accessibility criterion this skill actually measures. For any other accessibility observation (missing alt text, heading structure, keyboard operability, form labels, focus indicators), describe what you see but do **not** cite a WCAG criterion or claim conformance — recommend running `/kosh:a11y` for a full audit. This skill is not an accessibility audit; citing WCAG beyond contrast implies coverage that did not happen.
 
 Run this script on every page to programmatically detect contrast failures on text against resolved backgrounds. Many elements use `rgba()` or `transparent` backgrounds, meaning the visible background is actually inherited from an ancestor — the script walks up the DOM to find the first opaque background and composites any semi-transparent layers on top of it. The script cannot measure text overlaid on images or gradients; assess those visually.
 
@@ -950,6 +952,9 @@ scripts/merge-qa-reports.sh reports/data/qa-report-functional.json reports/data/
 - Take natural pauses (1-2 seconds) between interactions
 
 ### Common Issues to Watch For:
+
+For accessibility items below (missing alt text, forms without labels, missing H1), describe the issue but don't cite a WCAG criterion — see the WCAG-citation guardrail in §1.5; cite WCAG only for contrast.
+
 - ❌ Broken image links (404 errors in network tab)
 - ❌ Inconsistent button styling across pages
 - ❌ Missing alt text on images

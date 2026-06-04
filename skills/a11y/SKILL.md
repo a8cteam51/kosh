@@ -52,9 +52,12 @@ If you detect signs of a non-production environment that wasn't explicitly speci
 - ✅ Test **keyboard navigation** (Tab, Enter, Escape) on at least 2-3 pages
 - ✅ Verify **focus indicators** are visible on all tested pages
 - ✅ Run **contrast extraction script** on every visited page and report all failures
+- ✅ Measure **interactive target sizes** (24×24px minimum) on every visited page
+- ✅ Verify **focused elements are not fully obscured** by sticky/overlapping content during keyboard testing
+- ✅ Run the **conditional tests** (dragging, authentication, consistent help, redundant entry) on any page where the relevant feature is present
 - ✅ Document all visited pages in the JSON `visitedPages` array
 
-**If you skip any of these steps, the test is incomplete and will not be accepted.**
+**If you skip any of these steps, the test is incomplete and will not be accepted.** (Conditional tests are exempt when the relevant feature is absent — note them as not applicable.)
 
 ---
 
@@ -420,6 +423,34 @@ window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 If the site has significant animation, note whether this media query is handled.
 
+### H. Target Size (Minimum)
+
+WCAG 2.2 AA (2.5.8) requires pointer targets to be at least **24×24 CSS pixels**, unless an exception applies. Measure interactive elements:
+
+```javascript
+Array.from(document.querySelectorAll('a, button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [role="link"], [tabindex], [contenteditable]:not([contenteditable="false"]), [onclick]'))
+  .map(el => {
+    const r = el.getBoundingClientRect();
+    return {
+      tag: el.tagName.toLowerCase(),
+      text: (el.textContent || el.getAttribute('aria-label') || '').trim().substring(0, 40),
+      width: r.width,
+      height: r.height
+    };
+  })
+  .filter(el => el.width > 0 && el.height > 0 && (el.width < 24 || el.height < 24))
+  .map(el => ({ ...el, width: Math.round(el.width), height: Math.round(el.height) }));
+```
+
+**Exceptions — do NOT flag if any apply:**
+- **Spacing:** a 24px-diameter circle centred on the target does not overlap any adjacent target's circle (enough clear space around it)
+- **Equivalent:** the same function is provided by another control on the same page that does meet 24×24 (e.g. a small icon toggle that duplicates a full-size text link)
+- **Inline:** the target is a link inside a sentence or block of text
+- **Essential:** the small size is legally required or essential to the information conveyed (e.g. a pin on a map at a precise location)
+- **User-agent controlled:** the size is the browser default and not modified by the author's CSS
+
+**Flag if** an interactive target is under 24×24 CSS px and no exception applies → report as `target-too-small`. Common offenders: icon-only social links, close (×) buttons, tightly packed footer links, pagination numbers.
+
 ---
 
 ## SECTION 3: Keyboard Navigation Deep Dive
@@ -459,6 +490,52 @@ If the site has dropdown navigation:
 3. Press `Enter` — verify focus jumps to the main content area, bypassing navigation
 
 If no skip link exists: flag as high priority.
+
+### Focus Not Obscured
+
+As you Tab through each page — especially with sticky or fixed headers, footers, or cookie banners present:
+
+- ✅ When an element receives focus, at least part of it remains visible — it is not entirely hidden behind a sticky header, sticky footer, cookie bar, or other overlapping layer.
+- ❌ A focused element is completely covered by fixed/overlapping content → report as `focus-obscured` (2.4.11 Focus Not Obscured (Minimum)).
+
+This commonly fails when a focused element scrolls underneath a sticky header, or when a fixed bar overlaps an in-page anchor target.
+
+---
+
+## SECTION 3.5: Conditional Tests — Run Only If the Feature Is Present
+
+These criteria apply only when the site has the relevant feature. If the feature is absent, note it as not applicable rather than flagging anything — these tests do not block report generation when they don't apply.
+
+### Dragging Movements (2.5.7)
+
+**Applies if** the site has any interaction that requires dragging — range sliders, drag-and-drop, draggable maps, reorderable lists, image-comparison sliders.
+
+- ✅ Every drag operation has a single-pointer alternative (tap/click, arrow buttons, +/− controls) that achieves the same result without dragging.
+- ❌ A function can only be operated by dragging → report as `drag-no-alternative` (2.5.7 Dragging Movements).
+
+### Accessible Authentication (3.3.8)
+
+**Applies if** the site has a login, account, or other authentication step.
+
+- ✅ Authentication does not require a cognitive function test (memorising or transcribing a value, solving a puzzle, identifying images) unless an alternative method or assistance mechanism exists.
+- ✅ The password field allows paste, and password managers / browser autofill are not blocked.
+- ❌ Auth relies on a cognitive function test with no accessible alternative, or blocks paste / password managers → report as `auth-cognitive-test` (3.3.8 Accessible Authentication (Minimum)).
+
+Standard username + password (with paste allowed) passes. A CAPTCHA requiring a puzzle solve with no alternative fails.
+
+### Consistent Help (3.2.6)
+
+**Applies if** the site offers a help mechanism that appears across multiple pages — a contact link, help link, phone number, chat widget, or self-help/FAQ link.
+
+- ✅ The help mechanism appears in the same relative order/location across the pages that include it (e.g. always in the header, or always bottom-right).
+- ❌ Help is placed inconsistently across pages → report as `inconsistent-help` (3.2.6 Consistent Help).
+
+### Redundant Entry (3.3.7)
+
+**Applies if** the site has a multi-step process — checkout, multi-page form, multi-stage signup.
+
+- ✅ Information already entered earlier in the same process is auto-populated or available to select, not required to be re-entered (except where re-entry is essential, e.g. confirming a password).
+- ❌ The user must manually re-enter information they already provided in the same process → report as `redundant-entry` (3.3.7 Redundant Entry).
 
 ---
 
@@ -501,6 +578,7 @@ After testing all pages, confirm:
 - [ ] Forms checked for labels on all pages with forms
 - [ ] Contrast extraction script run on all pages
 - [ ] Landmark regions checked on all pages
+- [ ] Interactive target sizes measured (24×24px) on all pages
 
 ### Keyboard Navigation
 - [ ] Full Tab walk-through completed on at least 2 pages
@@ -508,6 +586,13 @@ After testing all pages, confirm:
 - [ ] No keyboard traps encountered
 - [ ] Skip navigation link tested (or absence documented)
 - [ ] Navigation menu keyboard behavior tested
+- [ ] Focus not obscured by sticky/overlapping content confirmed
+
+### Conditional Tests (mark N/A if the feature is absent)
+- [ ] Dragging movements: single-pointer alternative verified
+- [ ] Accessible authentication tested on login/auth flows
+- [ ] Consistent help placement verified across pages
+- [ ] Redundant entry checked in multi-step flows
 
 ### Ready for JSON Report
 - [ ] All pages listed in `visitedPages` array
@@ -594,33 +679,52 @@ Use these standardised type values in the `a11y` array:
 | `multiple-h1` | Page has more than one H1 tag |
 | `low-contrast` | Text/background contrast ratio below WCAG AA threshold |
 | `no-focus-indicator` | Interactive element has no visible focus indicator |
+| `not-keyboard-accessible` | Interactive element cannot be reached or operated by keyboard |
 | `keyboard-trap` | Keyboard focus cannot escape an area |
 | `missing-skip-link` | Page has no skip navigation link |
 | `missing-landmark` | Page missing expected landmark region (main, nav, etc.) |
 | `aria-hidden-interactive` | `aria-hidden` applied to a focusable element |
 | `placeholder-only-label` | Form input relies solely on placeholder for identification |
+| `target-too-small` | Interactive target smaller than 24×24 CSS px with no qualifying exception |
+| `focus-obscured` | Focused element is fully hidden by sticky or overlapping content |
+| `drag-no-alternative` | A drag operation has no single-pointer alternative |
+| `auth-cognitive-test` | Authentication requires a cognitive function test with no accessible alternative |
+| `inconsistent-help` | Help mechanism not in a consistent location across pages that include it |
+| `redundant-entry` | User must re-enter information already provided earlier in the same process |
 
 ### Issue Priority Guide
 
-- **Critical** — completely blocks a screen reader or keyboard user (missing form labels, keyboard traps, `aria-hidden` on interactive elements)
-- **High** — significantly impacts the experience (missing alt on informational images, missing skip link, no focus indicator, buttons without text)
-- **Medium** — reduces quality but workarounds exist (low contrast, skipped heading levels, generic link text)
+- **Critical** — completely blocks a screen reader or keyboard user (missing form labels, keyboard traps, `aria-hidden` on interactive elements, authentication that can't be completed without a cognitive function test)
+- **High** — significantly impacts the experience (missing alt on informational images, missing skip link, no focus indicator, buttons without text, focused element fully obscured, a function operable only by dragging)
+- **Medium** — reduces quality but workarounds exist (low contrast, skipped heading levels, generic link text, targets below 24×24px, inconsistent help placement, redundant entry in multi-step flows)
 - **Low** — best practice violations with minor impact (decorative images missing empty alt, minor ARIA improvements)
 
 ### WCAG 2.2 Criteria Reference
 
-| Issue Type | WCAG Criterion |
-|------------|----------------|
-| Missing alt text | 1.1.1 Non-text Content |
-| Missing form labels | 1.3.1 Info and Relationships |
-| Color contrast | 1.4.3 Contrast (Minimum) |
-| Keyboard accessible | 2.1.1 Keyboard |
-| Keyboard trap | 2.1.2 No Keyboard Trap |
-| Focus visible | 2.4.7 Focus Visible |
-| Skip navigation | 2.4.1 Bypass Blocks |
-| Heading structure | 1.3.1 Info and Relationships |
-| Button accessible name | 4.1.2 Name, Role, Value |
-| Form labels | 3.3.2 Labels or Instructions |
+A finding's `wcag_criterion` is determined by its `type` — look it up in this table, do not generate it from memory. **Cite only a criterion that appears below, using the exact title shown. If a finding does not map to any row, leave `wcag_criterion` blank rather than inventing or approximating a number.**
+
+| `type` | WCAG 2.2 Criterion |
+|--------|--------------------|
+| `missing-alt` | 1.1.1 Non-text Content |
+| `missing-label` | 1.3.1 Info and Relationships |
+| `placeholder-only-label` | 3.3.2 Labels or Instructions |
+| `button-no-text` | 4.1.2 Name, Role, Value |
+| `aria-hidden-interactive` | 4.1.2 Name, Role, Value |
+| `heading-skip` | 1.3.1 Info and Relationships |
+| `missing-h1` | 1.3.1 Info and Relationships |
+| `multiple-h1` | 1.3.1 Info and Relationships |
+| `missing-landmark` | 1.3.1 Info and Relationships |
+| `low-contrast` | 1.4.3 Contrast (Minimum) for text; 1.4.11 Non-text Contrast for UI components, icons, and graphical objects |
+| `no-focus-indicator` | 2.4.7 Focus Visible |
+| `focus-obscured` | 2.4.11 Focus Not Obscured (Minimum) |
+| `not-keyboard-accessible` | 2.1.1 Keyboard |
+| `keyboard-trap` | 2.1.2 No Keyboard Trap |
+| `missing-skip-link` | 2.4.1 Bypass Blocks |
+| `target-too-small` | 2.5.8 Target Size (Minimum) |
+| `drag-no-alternative` | 2.5.7 Dragging Movements |
+| `auth-cognitive-test` | 3.3.8 Accessible Authentication (Minimum) |
+| `inconsistent-help` | 3.2.6 Consistent Help |
+| `redundant-entry` | 3.3.7 Redundant Entry |
 
 ---
 
