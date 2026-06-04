@@ -952,6 +952,9 @@ scripts/merge-qa-reports.sh reports/data/qa-report-functional.json reports/data/
 - Take natural pauses (1-2 seconds) between interactions
 
 ### Common Issues to Watch For:
+
+For accessibility items below (missing alt text, forms without labels, missing H1), describe the issue but don't cite a WCAG criterion — see the WCAG-citation guardrail in §1.5; cite WCAG only for contrast.
+
 - ❌ Broken image links (404 errors in network tab)
 - ❌ Inconsistent button styling across pages
 - ❌ Missing alt text on images
