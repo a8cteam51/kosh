@@ -1,0 +1,420 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kosh AEO Report",
+  "description": "Schema for the kosh AEO (Answer Engine Optimization) / AI Mode analysis report. Evaluates a WordPress site the way AI tools do — crawling, parsing structure, extracting entities, and deciding whether to cite it in a generated answer. Evaluation-based (pass/partial/fail/na per signal), no numerical scoring.",
+  "type": "object",
+  "required": ["url", "websiteName", "timestamp", "mode", "aeoRubricVersion", "environment", "siteType", "siteTypeConfidence", "siteTypeRationale", "visitedPages", "summary", "criteria", "issues", "actionablePrompts", "technicalNotes"],
+  "properties": {
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "The homepage URL that was analyzed."
+    },
+    "websiteName": {
+      "type": "string",
+      "description": "Site name extracted from Organization schema, og:site_name, the WordPress site title, or page title."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the analysis was run."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["aeo"],
+      "description": "Analysis mode identifier."
+    },
+    "aeoRubricVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "Version of the AEO evaluation rubric used for this analysis. Format: major.minor (e.g. 1.0). Major bumps when signals are added, removed, or have their evaluation criteria fundamentally changed; minor bumps when tier definitions or rationale are refined within an existing signal."
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["local", "development", "staging", "production"],
+      "description": "Environment the site was running in during the test. Determined from $ARGUMENTS or inferred from the URL. Defaults to production."
+    },
+    "siteType": {
+      "type": "string",
+      "enum": ["agency", "ecommerce", "mediaBlog", "saas", "education", "localBusiness", "nonprofit", "community", "other"],
+      "description": "Detected site type, set in Phase 0. Drives how the generalized content-quality signals are evaluated (whoWhatWho, primaryFocusSpecificity, primaryOfferingDetail, namedSpecificEntities, namedSubjectAreas, recentFeaturedWork). Schema-related signals are evaluated against the content-driven applicableSchemas map, not the siteType. Default is 'other' when detection is ambiguous."
+    },
+    "siteTypeConfidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Confidence in the site type detection. high = unambiguous (schema markup explicitly identifies the type or content overwhelmingly matches); medium = strong but mixed signals; low = ambiguous, scored against the 'other' default-by-evidence path."
+    },
+    "siteTypeRationale": {
+      "type": "string",
+      "description": "Short explanation of the evidence used to determine the site type (e.g., 'WooCommerce shop schema + 47 Product pages in sitemap')."
+    },
+    "visitedPages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "format": "uri" },
+      "description": "URLs of every page visited during the analysis. The homepage is the primary evaluation target; inner pages provide supporting evidence (named team, blog freshness, FAQ structure, canonical URLs, content update recency, author bylines, archive-page quality). Typically 4-6 entries. Single-page sites are an allowed exception — cap at the homepage URL only; the per-signal `notes` field on `recentFeaturedWork`, `currentDomainReferences`, etc. captures the N/A rationale."
+    },
+    "summary": {
+      "type": "object",
+      "description": "Top-level counts of signal evaluation results across all 49 signals.",
+      "required": ["totalSignals", "pass", "partial", "fail", "na"],
+      "properties": {
+        "totalSignals": { "type": "integer", "const": 49, "description": "Total number of signals evaluated. Locked to 49 by rubric 1.0 — every signal in the canonical key list must be present in the `criteria` block, so this rolls up to a fixed value. If the rubric version changes, update this const alongside." },
+        "pass": { "type": "integer", "minimum": 0, "description": "Signals meeting the highest tier of their evaluation criteria." },
+        "partial": { "type": "integer", "minimum": 0, "description": "Signals meeting a middle tier — present but incomplete, or correct but sparse." },
+        "fail": { "type": "integer", "minimum": 0, "description": "Signals not meeting any tier — absent, broken, or fundamentally wrong." },
+        "na": { "type": "integer", "minimum": 0, "description": "Signals not applicable to this site (e.g., authorBylines on a pure-ecommerce site with no editorial content). Recorded as N/A with rationale in notes." }
+      }
+    },
+    "criteria": {
+      "type": "object",
+      "required": ["technicalHealth", "structuredData", "aeoReadiness", "eeatSignals", "contentFreshness", "entityClarity", "contentSpecificity", "llmsTxt"],
+      "additionalProperties": false,
+      "properties": {
+        "technicalHealth":    { "$ref": "#/definitions/technicalHealthCriterion",    "description": "Crawlability, HTTPS, robots.txt, sitemap, JS dependency, canonical URLs." },
+        "structuredData":     { "$ref": "#/definitions/structuredDataCriterion",     "description": "Schema markup, OG tags, schema relevance coverage." },
+        "aeoReadiness":       { "$ref": "#/definitions/aeoReadinessCriterion",       "description": "Answer Engine Optimization — FAQ, question headings, direct answers, answer capsules, title/meta question-match." },
+        "eeatSignals":        { "$ref": "#/definitions/eeatSignalsCriterion",        "description": "Experience, Expertise, Authoritativeness, Trustworthiness signals." },
+        "contentFreshness":   { "$ref": "#/definitions/contentFreshnessCriterion",   "description": "Copyright year, blog recency, date stamps, sitemap lastmod, per-page update recency." },
+        "entityClarity":      { "$ref": "#/definitions/entityClarityCriterion",      "description": "Named entity identification, primary focus specificity, geographic clarity." },
+        "contentSpecificity": { "$ref": "#/definitions/contentSpecificityCriterion", "description": "Named platforms, industries, outcomes, and passage extractability." },
+        "llmsTxt":            { "$ref": "#/definitions/llmsTxtCriterion",            "description": "llms.txt and llms-full.txt presence and quality." }
+      }
+    },
+    "issues": {
+      "type": "object",
+      "required": ["critical", "high", "medium", "low"],
+      "additionalProperties": false,
+      "properties": {
+        "critical": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Foundational signals at status 'fail'. Blocking AI discoverability or citation." },
+        "high": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Important signals at status 'fail', or foundational signals at status 'partial'. Significantly weakens AI understanding." },
+        "medium": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Signals at status 'partial' on non-foundational signals. Improvement opportunity." },
+        "low": { "type": "array", "items": { "$ref": "#/definitions/issue" }, "description": "Minor gaps. Worth noting but low priority." }
+      }
+    },
+    "actionablePrompts": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/actionablePrompt" },
+      "description": "One entry per signal at status 'fail' or 'partial'. Each includes a ready-to-use Claude prompt the site owner can paste directly."
+    },
+    "technicalNotes": {
+      "type": "object",
+      "description": "Technical findings from HTTP fetches and browser inspection.",
+      "required": ["applicableSchemas"],
+      "properties": {
+        "robotsTxt": { "type": "string", "description": "URL fetched and short summary of AI crawler access rules found." },
+        "sitemapUrl": { "type": "string", "description": "Sitemap URL found, or empty/'not found'." },
+        "llmsTxtFound": { "type": "boolean" },
+        "llmsFullTxtFound": { "type": "boolean" },
+        "javascriptRequired": { "type": "boolean", "description": "Whether core homepage content requires JavaScript to render." },
+        "httpsActive": { "type": "boolean" },
+        "mixedContentCount": { "type": "integer", "minimum": 0 },
+        "cmsDetected": { "type": "string", "description": "Detected CMS (e.g. 'WordPress', 'WordPress + Yoast', 'WordPress + RankMath', 'Headless'). Used by the skill to tune effort estimates." },
+        "schemaFormats": {
+          "type": "object",
+          "description": "Counts of structured-data formats present on the homepage. JSON-LD is preferred for AI parsing; microdata and RDFa earn partial credit on the structured-data signals.",
+          "properties": {
+            "jsonLd": { "type": "integer", "minimum": 0, "description": "Count of <script type=\"application/ld+json\"> blocks." },
+            "microdata": { "type": "integer", "minimum": 0, "description": "Count of [itemscope][itemtype] elements." },
+            "rdfa": { "type": "integer", "minimum": 0, "description": "Count of [typeof] elements inside a vocab=\"http://schema.org/\" or compatible prefix scope." }
+          }
+        },
+        "applicableSchemas": {
+          "type": "object",
+          "description": "Phase 0.4 schema relevance map. Keys are the 11 schema.org type names the AEO skill evaluates; values describe how relevant each schema is to the site's actual content. Drives primaryEntitySchema and relevantSchemasApplied evaluation.",
+          "required": ["Person", "Article", "Organization", "LocalBusiness", "Event", "FAQPage", "HowTo", "Product", "Course", "Recipe", "Review"],
+          "additionalProperties": false,
+          "properties": {
+            "Person":        { "$ref": "#/definitions/schemaRelevance" },
+            "Article":       { "$ref": "#/definitions/schemaRelevance" },
+            "Organization":  { "$ref": "#/definitions/schemaRelevance" },
+            "LocalBusiness": { "$ref": "#/definitions/schemaRelevance" },
+            "Event":         { "$ref": "#/definitions/schemaRelevance" },
+            "FAQPage":       { "$ref": "#/definitions/schemaRelevance" },
+            "HowTo":         { "$ref": "#/definitions/schemaRelevance" },
+            "Product":       { "$ref": "#/definitions/schemaRelevance" },
+            "Course":        { "$ref": "#/definitions/schemaRelevance" },
+            "Recipe":        { "$ref": "#/definitions/schemaRelevance" },
+            "Review":        { "$ref": "#/definitions/schemaRelevance" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "technicalHealthCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["robotsAndCrawlerAccess", "noNoindex", "httpsNoMixedContent", "sitemapLastmod", "nojsAccessible", "canonicalUrls"],
+          "additionalProperties": false,
+          "properties": {
+            "robotsAndCrawlerAccess": { "$ref": "#/definitions/signal" },
+            "noNoindex":              { "$ref": "#/definitions/signal" },
+            "httpsNoMixedContent":    { "$ref": "#/definitions/signal" },
+            "sitemapLastmod":         { "$ref": "#/definitions/signal" },
+            "nojsAccessible":         { "$ref": "#/definitions/signal" },
+            "canonicalUrls":          { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "structuredDataCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["organizationSchema", "primaryEntitySchema", "faqSchema", "relevantSchemasApplied", "jsonLdFormat", "openGraphTags", "reviewSchema"],
+          "additionalProperties": false,
+          "properties": {
+            "organizationSchema":     { "$ref": "#/definitions/signal" },
+            "primaryEntitySchema":    { "$ref": "#/definitions/signal" },
+            "faqSchema":              { "$ref": "#/definitions/signal" },
+            "relevantSchemasApplied": { "$ref": "#/definitions/signal" },
+            "jsonLdFormat":           { "$ref": "#/definitions/signal" },
+            "openGraphTags":          { "$ref": "#/definitions/signal" },
+            "reviewSchema":           { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "aeoReadinessCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["directAnswers", "whoWhatWho", "featuredSnippetStructure", "answerCapsules", "faqSectionPresent", "faqSchemaApplied", "questionFramedHeadings", "titleAndMetaQuestionMatch"],
+          "additionalProperties": false,
+          "properties": {
+            "directAnswers":             { "$ref": "#/definitions/signal" },
+            "whoWhatWho":                { "$ref": "#/definitions/signal" },
+            "featuredSnippetStructure":  { "$ref": "#/definitions/signal" },
+            "answerCapsules":            { "$ref": "#/definitions/signal" },
+            "faqSectionPresent":         { "$ref": "#/definitions/signal" },
+            "faqSchemaApplied":          { "$ref": "#/definitions/signal" },
+            "questionFramedHeadings":    { "$ref": "#/definitions/signal" },
+            "titleAndMetaQuestionMatch": { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "eeatSignalsCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["namedTeamMembers", "authorCredentials", "authorBylines", "demonstratedExpertise", "externalCitations", "certificationBadges", "namedExternalRelationships", "tenureIndicators"],
+          "additionalProperties": false,
+          "properties": {
+            "namedTeamMembers":           { "$ref": "#/definitions/signal" },
+            "authorCredentials":          { "$ref": "#/definitions/signal" },
+            "authorBylines":              { "$ref": "#/definitions/signal" },
+            "demonstratedExpertise":      { "$ref": "#/definitions/signal" },
+            "externalCitations":          { "$ref": "#/definitions/signal" },
+            "certificationBadges":        { "$ref": "#/definitions/signal" },
+            "namedExternalRelationships": { "$ref": "#/definitions/signal" },
+            "tenureIndicators":           { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "contentFreshnessCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["copyrightYearCurrent", "blogNewsRecent", "dateStampsOnContent", "contentUpdateRecency", "sitemapLastmodRecent", "recentFeaturedWork", "currentDomainReferences"],
+          "additionalProperties": false,
+          "properties": {
+            "copyrightYearCurrent":    { "$ref": "#/definitions/signal" },
+            "blogNewsRecent":          { "$ref": "#/definitions/signal" },
+            "dateStampsOnContent":     { "$ref": "#/definitions/signal" },
+            "contentUpdateRecency":    { "$ref": "#/definitions/signal" },
+            "sitemapLastmodRecent":    { "$ref": "#/definitions/signal" },
+            "recentFeaturedWork":      { "$ref": "#/definitions/signal" },
+            "currentDomainReferences": { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "entityClarityCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["entityIdentifiable", "primaryFocusSpecificity", "socialProfileLinks", "geographicMarketClarity", "consistentIdentity"],
+          "additionalProperties": false,
+          "properties": {
+            "entityIdentifiable":      { "$ref": "#/definitions/signal" },
+            "primaryFocusSpecificity": { "$ref": "#/definitions/signal" },
+            "socialProfileLinks":      { "$ref": "#/definitions/signal" },
+            "geographicMarketClarity": { "$ref": "#/definitions/signal" },
+            "consistentIdentity":      { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "contentSpecificityCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["primaryOfferingDetail", "namedSpecificEntities", "namedSubjectAreas", "specificOutcomes", "passageExtractionQuality"],
+          "additionalProperties": false,
+          "properties": {
+            "primaryOfferingDetail":    { "$ref": "#/definitions/signal" },
+            "namedSpecificEntities":    { "$ref": "#/definitions/signal" },
+            "namedSubjectAreas":        { "$ref": "#/definitions/signal" },
+            "specificOutcomes":         { "$ref": "#/definitions/signal" },
+            "passageExtractionQuality": { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "llmsTxtCriterion": {
+      "type": "object",
+      "required": ["signals"],
+      "additionalProperties": false,
+      "properties": {
+        "signals": {
+          "type": "object",
+          "required": ["llmsTxtPresent", "llmsFullTxtPresent", "llmsTxtContent"],
+          "additionalProperties": false,
+          "properties": {
+            "llmsTxtPresent":     { "$ref": "#/definitions/signal" },
+            "llmsFullTxtPresent": { "$ref": "#/definitions/signal" },
+            "llmsTxtContent":     { "$ref": "#/definitions/signal" }
+          }
+        }
+      }
+    },
+    "signal": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "partial", "fail", "na"],
+          "description": "Evaluation status. pass = meets the highest tier of the signal's criteria. partial = meets a middle tier (present but incomplete, or correct but sparse). fail = meets the bottom tier (absent, broken, or fundamentally wrong). na = signal does not apply to this site (e.g., authorBylines on a pure-ecommerce site)."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Short evidence sentence describing what was found and why this status was assigned."
+        }
+      }
+    },
+    "schemaRelevance": {
+      "type": "string",
+      "enum": ["high", "medium", "low", "absent"],
+      "description": "How relevant this schema.org type is to the site's actual content (Phase 0.4 detection). high = clearly applicable + content pattern is prominent. medium = some applicable content but secondary. low = one-off mention or weak pattern. absent = no content the schema would describe."
+    },
+    "criterionKey": {
+      "type": "string",
+      "enum": ["technicalHealth", "structuredData", "aeoReadiness", "eeatSignals", "contentFreshness", "entityClarity", "contentSpecificity", "llmsTxt"],
+      "description": "Canonical criterion key — the 8 keys the criteria block uses. Issue and actionablePrompt entries reference this enum to keep findings keyed on the same names criterionLabel() looks up."
+    },
+    "signalKey": {
+      "type": "string",
+      "enum": [
+        "robotsAndCrawlerAccess", "noNoindex", "httpsNoMixedContent", "sitemapLastmod", "nojsAccessible", "canonicalUrls",
+        "organizationSchema", "primaryEntitySchema", "faqSchema", "relevantSchemasApplied", "jsonLdFormat", "openGraphTags", "reviewSchema",
+        "directAnswers", "whoWhatWho", "featuredSnippetStructure", "answerCapsules", "faqSectionPresent", "faqSchemaApplied", "questionFramedHeadings", "titleAndMetaQuestionMatch",
+        "namedTeamMembers", "authorCredentials", "authorBylines", "demonstratedExpertise", "externalCitations", "certificationBadges", "namedExternalRelationships", "tenureIndicators",
+        "copyrightYearCurrent", "blogNewsRecent", "dateStampsOnContent", "contentUpdateRecency", "sitemapLastmodRecent", "recentFeaturedWork", "currentDomainReferences",
+        "entityIdentifiable", "primaryFocusSpecificity", "socialProfileLinks", "geographicMarketClarity", "consistentIdentity",
+        "primaryOfferingDetail", "namedSpecificEntities", "namedSubjectAreas", "specificOutcomes", "passageExtractionQuality",
+        "llmsTxtPresent", "llmsFullTxtPresent", "llmsTxtContent"
+      ],
+      "description": "Canonical signal key — one of the 49 keys listed in skills/aeo/references/signal-keys.md. Issue and actionablePrompt entries reference this enum so typos fail validation instead of rendering as raw keys via signalLabel()'s fallback."
+    },
+    "criterionSignalPairing": {
+      "description": "Discriminated union enforcing that the criterion + signal pair belongs together. Each variant fixes the criterion key and restricts the signal to that criterion's canonical subset, so `{ criterion: 'llmsTxt', signal: 'canonicalUrls' }` fails validation instead of rendering as a nonsense finding. Used by both `issue` and `actionablePrompt` via `allOf`.",
+      "oneOf": [
+        { "properties": {
+            "criterion": { "const": "technicalHealth" },
+            "signal":    { "enum": ["robotsAndCrawlerAccess", "noNoindex", "httpsNoMixedContent", "sitemapLastmod", "nojsAccessible", "canonicalUrls"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "structuredData" },
+            "signal":    { "enum": ["organizationSchema", "primaryEntitySchema", "faqSchema", "relevantSchemasApplied", "jsonLdFormat", "openGraphTags", "reviewSchema"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "aeoReadiness" },
+            "signal":    { "enum": ["directAnswers", "whoWhatWho", "featuredSnippetStructure", "answerCapsules", "faqSectionPresent", "faqSchemaApplied", "questionFramedHeadings", "titleAndMetaQuestionMatch"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "eeatSignals" },
+            "signal":    { "enum": ["namedTeamMembers", "authorCredentials", "authorBylines", "demonstratedExpertise", "externalCitations", "certificationBadges", "namedExternalRelationships", "tenureIndicators"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "contentFreshness" },
+            "signal":    { "enum": ["copyrightYearCurrent", "blogNewsRecent", "dateStampsOnContent", "contentUpdateRecency", "sitemapLastmodRecent", "recentFeaturedWork", "currentDomainReferences"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "entityClarity" },
+            "signal":    { "enum": ["entityIdentifiable", "primaryFocusSpecificity", "socialProfileLinks", "geographicMarketClarity", "consistentIdentity"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "contentSpecificity" },
+            "signal":    { "enum": ["primaryOfferingDetail", "namedSpecificEntities", "namedSubjectAreas", "specificOutcomes", "passageExtractionQuality"] }
+        } },
+        { "properties": {
+            "criterion": { "const": "llmsTxt" },
+            "signal":    { "enum": ["llmsTxtPresent", "llmsFullTxtPresent", "llmsTxtContent"] }
+        } }
+      ]
+    },
+    "issue": {
+      "type": "object",
+      "required": ["criterion", "signal", "issue", "impact", "effort"],
+      "properties": {
+        "criterion": { "$ref": "#/definitions/criterionKey", "description": "Canonical criterion key (one of the 8 enum values)." },
+        "signal":    { "$ref": "#/definitions/signalKey",    "description": "Canonical signal key (one of the 49 enum values). Must belong to the criterion above — see `criterionSignalPairing`." },
+        "issue": { "type": "string", "description": "One sentence describing the specific gap found on this site." },
+        "impact": { "type": "string", "description": "One sentence explaining the consequence for AI discoverability or citation." },
+        "effort": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "unknown"],
+          "description": "Implementation effort estimate. low = content edit or simple config change, no developer required (under 1 hour). medium = requires a developer, plugin, or significant content creation (hours to a day). high = requires design or development work, refactoring, or substantial content creation (days or more). unknown = stack context insufficient to assess."
+        },
+        "effortRationale": {
+          "type": "string",
+          "description": "Optional. Short site-specific note explaining why this effort rating was assigned, e.g. 'WordPress with Yoast detected — one-field edit in the SEO panel'. Only include when site context meaningfully changes the baseline."
+        },
+        "pages": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" },
+          "description": "Optional. URLs of pages where this issue was observed. Used for inner-page findings (FAQ structure, dated posts, etc.)."
+        }
+      },
+      "allOf": [{ "$ref": "#/definitions/criterionSignalPairing" }]
+    },
+    "actionablePrompt": {
+      "type": "object",
+      "required": ["criterion", "signal", "issue", "impact", "prompt"],
+      "properties": {
+        "criterion": { "$ref": "#/definitions/criterionKey", "description": "Canonical criterion key (one of the 8 enum values)." },
+        "signal":    { "$ref": "#/definitions/signalKey",    "description": "Canonical signal key (one of the 49 enum values). Must belong to the criterion above — see `criterionSignalPairing`." },
+        "issue": { "type": "string", "description": "Specific issue found on this site." },
+        "impact": { "type": "string", "description": "One sentence explaining the impact on AI discoverability or citation." },
+        "prompt": { "type": "string", "description": "Ready-to-use Claude prompt the site owner can paste directly." }
+      },
+      "allOf": [{ "$ref": "#/definitions/criterionSignalPairing" }]
+    }
+  }
+}
