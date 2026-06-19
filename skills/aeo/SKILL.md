@@ -348,7 +348,7 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 
 - The browser is already at the homepage from Phase 0
 - Confirm desktop viewport (1920×1080) via `browser_resize` if needed
-- `browser_take_screenshot` saved to `reports/screenshots/homepage-aeo-desktop.png` (full page)
+- `browser_take_screenshot` with `filename: "reports/screenshots/homepage-aeo-desktop.png"` (full page). Pass the full `reports/screenshots/...` path as `filename`; a bare filename saves to the project root, so do NOT pass a bare name and move the file afterward.
 
 ### 1.2 Technical Health
 
@@ -445,7 +445,7 @@ return {
 };
 ```
 
-Save a screenshot to `reports/screenshots/homepage-no-js.png`. Close the no-JS context and resume the normal session.
+Save a screenshot by passing `filename: "reports/screenshots/homepage-no-js.png"` to `browser_take_screenshot` (a bare filename saves to the project root — pass the full path, don't move the file afterward). Close the no-JS context and resume the normal session.
 
 **Evaluation:**
 - `pass` — H1 and 500+ chars of body copy visible without JS.

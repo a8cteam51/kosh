@@ -663,7 +663,7 @@ Populate `reports/data/qa-report-accessibility.json`:
 ```
 
 **`screenshots` field (optional but strongly encouraged for visual a11y findings):**
-Attach screenshots for findings where a visual is helpful — low-contrast text examples, missing focus indicators, touch targets that look too small, broken keyboard-only navigation flows. The path is relative to the `reports/` directory (e.g., `screenshots/contact-form-focus-state.png` for a file saved at `reports/screenshots/contact-form-focus-state.png`). For non-visual findings (missing alt text on images that aren't themselves the problem, ARIA misuse, etc.), skip the field.
+Attach screenshots for findings where a visual is helpful — low-contrast text examples, missing focus indicators, touch targets that look too small, broken keyboard-only navigation flows. Save each screenshot by passing its full path as the `filename` argument to `browser_take_screenshot`: `reports/screenshots/<name>.png` (e.g. `filename: "reports/screenshots/contact-form-focus-state.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. The `screenshots` field itself takes a path relative to the `reports/` directory — i.e. `screenshots/<name>.png` for the file saved at `reports/screenshots/<name>.png`. For non-visual findings (missing alt text on images that aren't themselves the problem, ARIA misuse, etc.), skip the field.
 
 ### A11y Issue Types
 
