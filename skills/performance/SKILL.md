@@ -324,7 +324,7 @@ Populate `reports/data/qa-report-performance.json` with this structure:
 **Note:** The `mobile` and `desktop` objects represent homepage data. Per-page findings for other pages are captured in the `issues` array.
 
 **`screenshots` field (optional):**
-When a performance finding is visually verifiable — a slow-loading hero, layout-shift evidence, a console-error overlay, network-tab capture — attach the relevant screenshot(s) so the HTML report can embed them inline. The path is relative to the `reports/` directory (e.g., `screenshots/homepage-network-tab.png` for a file saved at `reports/screenshots/homepage-network-tab.png`). Skip for findings that are purely numeric (load-time metrics, request counts).
+When a performance finding is visually verifiable — a slow-loading hero, layout-shift evidence, a console-error overlay, network-tab capture — attach the relevant screenshot(s) so the HTML report can embed them inline. Save each screenshot by passing its full path as the `filename` argument to `browser_take_screenshot`: `reports/screenshots/<name>.png` (e.g. `filename: "reports/screenshots/homepage-network-tab.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. The `screenshots` field itself takes a path relative to the `reports/` directory — i.e. `screenshots/<name>.png` for the file saved at `reports/screenshots/<name>.png`. Skip for findings that are purely numeric (load-time metrics, request counts).
 
 ### Issue Categories
 
