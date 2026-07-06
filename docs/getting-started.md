@@ -146,6 +146,24 @@ The options are `local`, `development`, `staging`, or `production`.
 
 If you don't specify, kosh guesses from the URL (e.g., `.test` or `.local` domains are treated as local) and defaults to production if it can't tell.
 
+## Testing a site that isn't publicly reachable
+
+kosh drives a real browser to the URL you give it. If the site is gated — so the browser sees a login or placeholder instead of the real site — kosh detects this and stops, rather than producing an empty or misleading report. Three common cases:
+
+- **Coming-soon mode** — the WordPress.com "coming soon" launchpad
+- **Password protection** — a single password prompt guarding the whole site
+- **Private / signed-in-only** — a "This site is currently private" notice on WordPress.com
+
+When kosh hits one of these, it tells you which gate it found and leaves the browser open. It also sends a desktop notification (and a phone push, if you have Remote Control connected) so you know it's waiting even if you've stepped away. To get past it:
+
+1. **Log in or unlock in the open browser window.** Log in to WordPress.com (coming-soon or private sites), or type the site password (password-protected sites), in the browser window kosh opened.
+2. **Tell kosh to continue.** It re-checks the page, confirms the gate is gone, and runs the test normally. Your session stays authenticated for the rest of the test.
+
+A couple of notes:
+
+- **Private sites need access, not just a login.** If your WordPress.com account hasn't been granted access to that specific site, logging in won't clear the gate — you'll need to request access first.
+- **Unattended runs:** if no one's at the keyboard (e.g. kosh is launched from automation), pass a share/preview link that already carries access as the URL — kosh uses it directly. Don't store site passwords or account credentials in the repo.
+
 ## Tips
 
 - **JSON reports are overwritten on each run.** If you want to keep a report, rename or move the file before testing a different site.

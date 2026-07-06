@@ -34,6 +34,8 @@ Then run a test:
 /kosh:aeo https://example.com
 ```
 
+Testing a site that's in coming-soon mode, password-protected, or private? kosh detects the gate and pauses so you can log in — see [Testing a site that isn't publicly reachable](docs/getting-started.md#testing-a-site-that-isnt-publicly-reachable).
+
 For detailed setup instructions (including troubleshooting), see the [Getting Started guide](docs/getting-started.md).
 
 ## Project structure
