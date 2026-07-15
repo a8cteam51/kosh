@@ -61,6 +61,7 @@ The top-level `summary` block carries the counts: `{ totalSignals: 49, pass, par
 
 - `skills/aeo/references/evaluation-rubric.md` — per-criterion signal list with pass/partial/fail tier definitions
 - `skills/aeo/references/signal-keys.md` — canonical signal keys for the JSON report
+- `skills/aeo/references/wp-seo-capabilities.md` — what WordPress core and Jetpack emit natively per signal; drives native-first fix recommendations and carries the `lastVerified` date for the staleness check
 
 Underlying frameworks the rubric draws on:
 
@@ -315,10 +316,17 @@ const hasEventCopy = /\bregister\s+now|tickets|conference|symposium|summit|webin
 const hasMultipleEvents = (text.match(/\bregister|tickets|join\s+us\s+on/gi) || []).length >= 2;
 const eventRelevance = (hasEventDatePattern && hasMultipleEvents) ? 'high' : hasEventCopy ? 'medium' : 'absent';
 
-// FAQ — Q&A patterns (also fed by existing faqSectionPresent in 1.4)
-const hasFaqMarkers = !!document.querySelector('[class*="faq"], [id*="faq"]') ||
-  Array.from(document.querySelectorAll('h2, h3')).filter(h => h.innerText.trim().endsWith('?')).length >= 2 ||
-  document.querySelectorAll('details').length >= 2;
+// FAQ — real FAQ structures only (also fed by existing faqSectionPresent in 1.4).
+// NOTE: question-style headings alone do NOT establish FAQ relevance. A CTA like
+// "Questions?" or "Ready to get involved?" ends in "?" but is not an FAQ. Requiring a
+// genuine FAQ marker prevents manufacturing a phantom FAQ requirement on sites that
+// have no FAQ. Genuine markers: an FAQ container, an explicit "frequently asked /
+// common questions" heading, or an accordion (2+ <details>).
+const hasFaqContainer = !!document.querySelector('[class*="faq"], [id*="faq"]');
+const hasFaqHeading = Array.from(document.querySelectorAll('h2, h3'))
+  .some(h => /frequently asked|common questions|\bfaqs?\b/i.test(h.innerText.trim()));
+const hasFaqAccordion = document.querySelectorAll('details').length >= 2;
+const hasFaqMarkers = hasFaqContainer || hasFaqHeading || hasFaqAccordion;
 const faqRelevance = hasFaqMarkers ? 'high' : 'absent';
 
 // HowTo — numbered step sequence with a stated goal
@@ -665,9 +673,13 @@ return { microdataFaq: !!microdataFaq };
 ```
 
 **Evaluation:**
-- `pass` — JSON-LD FAQPage with 2+ valid Q&A pairs.
-- `partial` — Malformed JSON-LD, OR microdata-only FAQ markup.
-- `fail` — Absent.
+
+FAQ schema only applies when the site actually has FAQ content. Gate on FAQ relevance (Section 0.4 `faqRelevance`) and the visible FAQ check (`faqSectionPresent`, Section 1.4). **Never fail a site merely for lacking an FAQ** — the many sites that legitimately have no FAQ get `na`, not `fail`.
+
+- `na` — No visible FAQ content and `faqRelevance` is `absent`. The site has no FAQ, so FAQ schema is not applicable. Record in `notes` as `"N/A — no FAQ content on the site; FAQ schema not applicable."` Do **not** generate an issue. This is the default for sites without an FAQ.
+- `pass` — Visible FAQ content present AND JSON-LD FAQPage with 2+ valid Q&A pairs.
+- `partial` — Visible FAQ content present but schema is malformed JSON-LD, OR microdata-only FAQ markup.
+- `fail` — Visible FAQ content present but no FAQ schema of any kind. (Only reachable when FAQ content actually exists.)
 
 #### JSON-LD format used — `jsonLdFormat`
 
@@ -764,9 +776,10 @@ If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit d
 Cross-reference: if a FAQ section was found AND FAQ JSON-LD schema was found in 1.3.
 
 **Evaluation:**
+- `na` — Neither visible FAQ content nor FAQ schema present AND `faqRelevance` is `absent`. The site has no FAQ, so there is nothing to align. Record in `notes` as `"N/A — no FAQ content on the site."` Do **not** generate an issue.
 - `pass` — Both visible FAQ content and FAQ schema present.
 - `partial` — FAQ schema present but no visible FAQ content, OR visible FAQ content present but no FAQ schema.
-- `fail` — Neither visible FAQ content nor FAQ schema present.
+- `fail` — FAQ content is warranted (`faqRelevance` high — e.g. a dedicated FAQ page or accordion exists) but neither the visible FAQ nor the schema is properly in place.
 
 This signal exists alongside `faqSchema` and `faqSectionPresent` to verify that the schema and the visible content are applied together — the alignment, not the presence of either alone.
 
@@ -787,9 +800,11 @@ return {
 - `partial` — Exactly one H2/H3 phrased as a question.
 - `fail` — No question-framed H2/H3 headings.
 
+> **Stylistic signal — low importance.** Question-framed headings are one valid way to structure content for AEO, not a requirement. Phrasing headings as statements is a legitimate style choice. When this signal is `fail` or `partial`, treat it as an optional *consideration*, not a defect: cap the issue at **`low`** severity (see the "Optional / stylistic signals" carve-out in the Issue severity guide) and word the finding as a suggestion (e.g. "Consider phrasing a few headings as questions…"), never as a directive. Never describe a site as deficient for using statement-style headings.
+
 #### Title and meta description question-match — `titleAndMetaQuestionMatch`
 
-For pages targeting a specific question, AI engines weight the page's `<title>` and `<meta name="description">` as signals about what question the page is answering. The post explicitly recommends: *"For pages targeting specific questions (e.g., a services page answering 'what does X company do?'), it helps to include the question or a close variant in the title tag or meta description."*
+AI engines weight the page's `<title>` and `<meta name="description">` as signals about what the page is about. The substantive thing this signal checks is whether the title and meta **actually describe the page's topic** — a `<title>` that's just the site name, or a theme-default boilerplate meta description, tells AI nothing about what the page answers. Question phrasing is *one optional way* to achieve that alignment (the post notes it "helps to include the question or a close variant in the title tag or meta description"), but it is **not required** — a clear descriptive title that matches the page's topic passes just as well. Do not treat statement-style (non-question) titles as a miss.
 
 Check the homepage AND every inner page visited in Phase 2.
 
@@ -839,9 +854,11 @@ return {
 
 **Evaluation:**
 
-- `pass` — Question-targeting pages on this site have a `<title>` OR `<meta name="description">` that either (a) contains question phrasing, or (b) reaches ≥50% token overlap with the page's H1. Evaluate across the homepage plus all inner pages visited; at least 50% of question-targeting pages must clear this bar.
-- `partial` — Title and meta exist on all sampled pages but show low alignment with H1 / question framing (between 20% and 50% of question-targeting pages clear the bar). OR the homepage is fine but inner pages are not.
-- `fail` — Title and meta are present-but-generic on every sampled page (e.g. `<title>` is the site name only; meta description is boilerplate from theme defaults), with no question framing or H1 alignment anywhere.
+This signal centers on **topical alignment**: does the title/meta describe the page? Question phrasing optionally counts toward that alignment but is never required, and its absence is never a miss on its own.
+
+- `pass` — Across the homepage plus inner pages visited, at least 50% of question-targeting pages have a `<title>` OR `<meta name="description">` that describes the page — reaching ≥50% token overlap with the page's H1. (Question phrasing may count toward the overlap but is optional.)
+- `partial` — Titles/metas exist but weakly describe their pages (20–50% of question-targeting pages clear the overlap bar), OR the homepage is fine but inner pages are generic.
+- `fail` — Title and meta are present-but-generic on every sampled page (e.g. `<title>` is the site name only; meta description is theme-default boilerplate), with no topical alignment to the page anywhere.
 
 > N/A exemption: if zero pages visited are question-targeting (a pure-portfolio site with one-word page titles like "Work", "Studio", "Contact"), record `na` and note in `notes` as `"N/A — no question-targeting pages observed."`
 >
@@ -901,6 +918,7 @@ If an About/Team/Authors page is linked, visit it in Phase 2 to confirm named in
 
 **Evaluation:**
 
+- `na` — The site runs on a deliberately anonymous model where named individuals would not be expected (e.g. a privacy- or safety-conscious org, or a collective/brand that intentionally doesn't front individuals). Record the rationale in `notes` (e.g. `"N/A — deliberately anonymous model; no named individuals expected."`). Use this only when the anonymity is clearly a choice, not a mere omission — when in doubt use `partial`. Many legitimate sites have no named team; do not treat that as a defect.
 - `pass` — Named individuals with type-appropriate roles visible (homepage or About/Team/Authors page).
 - `partial` — Site is referenced through anonymous language only ("our team", "our editors", "the staff") — no names anywhere accessible from the homepage.
 - `fail` — No team / author / staff signals at all.
@@ -928,6 +946,7 @@ DOM presence alone is not sufficient — confirm visually via the homepage scree
 
 **Evaluation:**
 
+- `na` — No third-party credential is applicable to this organization or field. Many legitimate organizations — nonprofits included — hold no relevant certification, accreditation, or trust-mark, and shouldn't be flagged for lacking one they may not qualify for or need. Record `"N/A — no applicable third-party credential for this org/field."`
 - `pass` — Credentialing badges present AND visually confirmed as legible/recognizable, matched to the site type.
 - `partial` — DOM indicators found but visual confirmation unclear, or only weak credentials (e.g. SSL-vendor badges).
 - `fail` — Absent.
@@ -1327,6 +1346,11 @@ const yoastBlock = Array.from(document.querySelectorAll('script[type="applicatio
 const yoastClass = !!document.querySelector('[class*="yoast"]');
 const rankMath = !!document.querySelector('meta[name="generator"][content*="Rank Math"]') || document.body.outerHTML.includes('rankmath');
 const seopress = document.body.outerHTML.includes('seopress');
+const jetpack = !!document.querySelector('link[href*="jetpack"], script[src*="jetpack"], [class*="jetpack"]') ||
+  document.body.outerHTML.includes('/jetpack/') || document.body.outerHTML.includes('jetpack-') ||
+  // Jetpack Open Graph tags carry an og: comment/marker and Jetpack sitemaps are a strong tell,
+  // but the asset path above is the reliable signal.
+  !!document.querySelector('meta[property="og:site_name"]') && document.body.outerHTML.includes('jetpack');
 const wpContent = !!document.querySelector('link[href*="/wp-content/"]') || !!document.querySelector('script[src*="/wp-content/"]');
 const wpJsonApi = document.body.outerHTML.includes('/wp-json/');
 return {
@@ -1334,11 +1358,22 @@ return {
   yoast: yoastBlock || yoastClass,
   rankMath,
   seopress,
+  jetpack,
   isWordPress: wpContent || wpJsonApi || (generator && /WordPress/i.test(generator.getAttribute('content') || ''))
 };
 ```
 
-Record the result in `technicalNotes.cmsDetected` (e.g. `"WordPress + Yoast"`, `"WordPress + RankMath"`, `"WordPress (no SEO plugin)"`, `"Headless / unknown"`). This drives the `effort` ratings in Phase 5.
+Record the result in `technicalNotes.cmsDetected` (e.g. `"WordPress + Yoast"`, `"WordPress + RankMath"`, `"WordPress + Jetpack"`, `"WordPress + Jetpack (no dedicated SEO plugin)"`, `"WordPress (no SEO plugin)"`, `"Headless / unknown"`). This drives the `effort` ratings in Phase 5. **Jetpack detection matters for native-first recommendations** — see the capability check below.
+
+### Native-first capability check + matrix staleness (run once, after CMS detection)
+
+Read `skills/aeo/references/wp-seo-capabilities.md`. It maps each plugin-dependent AEO signal to what WordPress core and Jetpack can emit natively, versus the schema signals that genuinely need a third-party plugin or custom JSON-LD.
+
+Use it two ways:
+
+1. **Native-first recommendations.** When you write actionable prompts and effort rationales in Phase 5, prefer the core / Jetpack path for any signal the matrix marks as natively covered (Open Graph, sitemap lastmod, canonical, robots/noindex, editable title + meta description). Only recommend a third-party SEO plugin (Yoast / RankMath / AIOSEO) or custom JSON-LD as the *primary* fix for the schema signals the matrix lists under "genuine gap" (`organizationSchema`, `primaryEntitySchema`, `faqSchema`, `reviewSchema`, `relevantSchemasApplied`, Article-schema `author`, breadcrumbs). Name the free vs. paid Jetpack tier when the native fix relies on one.
+
+2. **Staleness check.** Parse the `lastVerified:` date from that file and compare it to the current date. If the gap exceeds `stalenessThresholdDays` (90), print a one-line operator notice — `kosh: WP SEO capability matrix last verified YYYY-MM-DD (N days ago) — re-verify against the source docs in wp-seo-capabilities.md` — and record `capabilityMatrixStale: true` in `technicalNotes`. Under the threshold, stay silent. Either way, record `capabilityMatrixLastVerified: "YYYY-MM-DD"` in `technicalNotes`.
 
 ---
 
@@ -1449,6 +1484,7 @@ The evidence varies by site type:
 | `community` | Prior community-building / topic-area credentials |
 
 **Evaluation:**
+- `na` — No named individuals whose credentials could apply (i.e. `namedTeamMembers` is `na`, or the site legitimately has no named people). Record `"N/A — no named individuals whose credentials could apply."`
 - `pass` — Specific, third-party-verifiable credentials present.
 - `partial` — Generic credentials only ("years of experience", "industry leader") without specifics.
 - `fail` — No credentials at all.
@@ -1670,6 +1706,7 @@ Generalized from "client wins with numbers." Are quantified results or named ach
 | `community` | Named member/contributor counts, named published outputs |
 
 **Evaluation:**
+- `na` — The site legitimately has no quantifiable outcomes to report (e.g. an early-stage program, a service type where metrics aren't standard, or a privacy-constrained context). Record `"N/A — no quantifiable outcomes applicable to this site."` Use sparingly — prefer `fail` (which caps at `low`) when outcomes plausibly exist but simply aren't stated.
 - `pass` — Specific quantified outcomes or named achievements present.
 - `fail` — Vague claims only ("we get results", "great quality", "trusted").
 
@@ -1722,7 +1759,8 @@ Complete all items before generating the JSON report.
 - [ ] At least 4 pages visited (homepage + 3 type-appropriate inner pages) and recorded in `visitedPages`
 - [ ] Per-page `contentUpdateRecency` check run on at least one editorial / reference page (or N/A exemption applied per site type)
 - [ ] Per-page `authorBylines` check run on at least one article / post page (or N/A exemption applied per site type)
-- [ ] CMS detection completed and recorded in `technicalNotes.cmsDetected`
+- [ ] CMS detection completed and recorded in `technicalNotes.cmsDetected` (including Jetpack presence)
+- [ ] Native-first capability check run against `references/wp-seo-capabilities.md`; `capabilityMatrixLastVerified` recorded in `technicalNotes` and the staleness notice surfaced if over threshold
 - [ ] All Section 1 programmatic checks completed
 - [ ] All Section 2 inner-page checks completed
 - [ ] All Section 3 content checks completed
@@ -1808,6 +1846,8 @@ Minimal top-level shape:
     "httpsActive": true,
     "mixedContentCount": 0,
     "cmsDetected": "WordPress + Yoast",
+    "capabilityMatrixLastVerified": "2026-07-15",
+    "capabilityMatrixStale": false,
     "applicableSchemas": {
       "Person": "medium",
       "Article": "high",
@@ -1832,6 +1872,23 @@ Minimal top-level shape:
 - **medium** — Signal at `partial` where the gap is moderate. Improvement opportunity.
 - **low** — Minor gap. Worth noting but low priority.
 
+**Optional / stylistic signals — always cap at `low`.** A few signals describe optional AEO enhancements or stylistic choices, not requirements. Regardless of the criterion they live under, when these are `fail` or `partial` the issue is capped at **`low`** severity and worded as a consideration, not a directive:
+
+- `questionFramedHeadings` — phrasing headings as questions is one valid style, not a requirement.
+- `faqSectionPresent` — an FAQ is a useful AEO opportunity, but many sites legitimately don't need one. Suggest it; never flag its absence as critical.
+
+(FAQ *schema* signals — `faqSchema`, `faqSchemaApplied` — are handled separately: they go `na` when the site has no FAQ content, so they never generate an issue in that case.)
+
+**Content signals — cap at `low` (TAM judgment).** Content-quality findings are recommendations, not defects. They depend on editorial priorities, partner staffing, and whether the rubric's baseline even fits the site — so they are surfaced at **`low`** severity for the TAM to weigh, never at critical/high. Word them as considerations ("Consider adding…"), not directives. This applies to every signal in these criteria:
+
+- **E-E-A-T Signals** (`eeatSignals`)
+- **Content Freshness** (`contentFreshness`)
+- **Entity Clarity** (`entityClarity`)
+- **Content Specificity** (`contentSpecificity`)
+- The content-side **AEO Readiness** signals: `directAnswers`, `whoWhatWho`, `featuredSnippetStructure`, `answerCapsules`
+
+The objective, machine-level criteria — **Technical Health**, **Structured Data**, and **llms.txt** — keep their normal critical / high / medium severity. They are cheap, unambiguous, and not subject to editorial judgment, so they are not capped.
+
 ### Issue effort guide
 
 Every issue must include an `effort` field. Use this two-step process:
@@ -1845,10 +1902,15 @@ Every issue must include an `effort` field. Use this two-step process:
 | `high` | Requires design or development work, refactoring, or substantial new content. Days or more. | Fix JS-only rendering, build a blog or news section from scratch, create case studies with named outcomes |
 | `unknown` | Stack context insufficient to assess. Use sparingly. | |
 
-**Step 2 — adjust based on observed CMS context:**
+**Step 2 — adjust based on observed CMS context (native-first — consult `references/wp-seo-capabilities.md`):**
 
-- WordPress + Yoast / RankMath / SEOPress detected: schema additions and most meta-tag changes drop from `medium` to `low` (one-field edits in the SEO plugin panel). Record `effortRationale: "WordPress + Yoast detected — one-field edit in the SEO panel."`
-- WordPress core only (no SEO plugin): schema changes stay `medium` (requires plugin install or theme code edit).
+Recommend the **core / Jetpack** path before any third-party plugin. The capability matrix determines which fixes are native and which genuinely need a plugin:
+
+- **Natively-covered signals** (Open Graph, sitemap lastmod, canonical, robots/noindex, editable title + meta description): the fix is enabling or configuring a core setting or a Jetpack module — effort `low`. Examples: `openGraphTags` → "Enable Jetpack Social/Sharing (free) — OG tags emit automatically"; `sitemapLastmodRecent` → "Enable Jetpack Sitemaps (free) for lastmod support"; `titleAndMetaQuestionMatch` → "Set SEO title/meta in Jetpack SEO Tools". Name the free vs. paid Jetpack tier per the matrix so the estimate is honest.
+- **Schema-gap signals** (`organizationSchema`, `primaryEntitySchema`, `faqSchema`, `reviewSchema`, `relevantSchemasApplied`, Article-schema `author`, breadcrumbs): neither core nor Jetpack emits JSON-LD, so a third-party plugin or custom JSON-LD is warranted here.
+  - WordPress + Yoast / RankMath / AIOSEO already installed: schema additions are one-field / block edits in the SEO plugin panel — drop to `low`. Record `effortRationale: "WordPress + RankMath detected — schema is a one-field edit in the plugin panel."`
+  - WordPress + Jetpack but no dedicated SEO plugin: schema stays `medium` — Jetpack cannot emit it, so this needs a schema plugin (Yoast/RankMath/AIOSEO) or custom JSON-LD. Record that in `effortRationale`, and note it is a candidate to flag to the Jetpack team as a native-SEO gap.
+  - WordPress core only (no SEO plugin): schema stays `medium` (plugin install or theme code edit).
 - Headless WordPress / Next.js / custom React: structural changes stay `medium` or rise to `high`. Note in `effortRationale`.
 - llms.txt: always `low` regardless of stack — it's a plain text file at the domain root.
 - Partial completion (e.g. Organization schema present but missing `sameAs`): effort to complete is lower than building from scratch.
@@ -1885,6 +1947,7 @@ The `prompt` field conventions:
 - **State language only when not English.**
 - **No filler.** Skip "Help me", "Can you", "Please".
 - **`llms.txt` is always lowercase**, even at sentence start.
+- **Native-first.** For signals the capability matrix (`references/wp-seo-capabilities.md`) marks as natively covered — Open Graph, sitemap lastmod, canonical, robots/noindex, editable title + meta description — the prompt's recommended fix is the core / Jetpack path (naming the free vs. paid Jetpack tier), not a third-party plugin. Recommend Yoast / RankMath / AIOSEO or custom JSON-LD as the primary fix only for the schema signals the matrix lists as a genuine gap.
 
 Example — ❌ "I'm Maple Creative, a Toronto branding agency. My homepage has no Organization schema. Write me one."
 
@@ -1925,6 +1988,7 @@ Full report saved to:
 
 When you detect WordPress (look for `/wp-content/`, `/wp-json/`, `meta[name="generator"]` with WordPress, or admin bar markup), these patterns are common:
 
+- **Jetpack** — an Automattic-native option. Jetpack emits **Open Graph tags** (free, Social/Sharing) and **XML sitemaps with lastmod** (free), and its **SEO Tools** (paid tier) provide editable SEO titles, meta descriptions, and archive canonicals. **Jetpack emits no schema.org JSON-LD** — Organization, Article, FAQ, Product, Event, Review, and breadcrumb schema all require a dedicated SEO plugin or custom code even with Jetpack active. Prefer the native Jetpack/core path for OG, sitemap, canonical, robots, and title/meta fixes (see `references/wp-seo-capabilities.md`); treat schema as the genuine gap. When Jetpack is present but there's no schema plugin, flag missing schema as a candidate to raise with the Jetpack team rather than blanket-recommending a third-party plugin.
 - **Yoast SEO** — emits `@graph`-wrapped JSON-LD with Organization, WebSite, WebPage, and BreadcrumbList by default. Check whether Organization fields (logo, sameAs) are populated in the Yoast settings — empty fields are a common failure mode.
 - **RankMath** — similar coverage to Yoast, with FAQ block schema available in the editor. Check whether FAQ blocks were used on FAQ pages.
 - **SEOPress** — narrower default schema coverage; Organization usually present, FAQ usually not.

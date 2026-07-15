@@ -4,7 +4,9 @@ Reference summary of every signal's pass/partial/fail tier definitions, grouped 
 
 **49 signals across 8 criteria. Every signal evaluates to `pass`, `partial`, `fail`, or `na`.** There are no point values, no criterion subtotals, and no threshold labels — see `SKILL.md` Section 4 for the evaluation philosophy.
 
-The `na` status is allowed only where the signal's section in SKILL.md explicitly defines an N/A exemption (typically: `authorBylines` and `contentUpdateRecency` on sites with no editorial content; `recentFeaturedWork` and `currentDomainReferences` on bare single-page sites). When you use `na`, record the rationale in the signal's `notes` field.
+The `na` status is allowed only where the signal's section in SKILL.md explicitly defines an N/A exemption (typically: `faqSchema` and `faqSchemaApplied` on sites with no FAQ content; `certificationBadges` when no third-party credential applies to the org/field; `specificOutcomes` when no quantifiable outcomes apply; `namedTeamMembers` (and dependent `authorCredentials`) on deliberately-anonymous sites; `authorBylines` and `contentUpdateRecency` on sites with no editorial content; `recentFeaturedWork` and `currentDomainReferences` on bare single-page sites). When you use `na`, record the rationale in the signal's `notes` field.
+
+**Severity note:** the content-quality criteria — E-E-A-T Signals, Content Freshness, Entity Clarity, Content Specificity, and the content-side AEO Readiness signals (`directAnswers`, `whoWhatWho`, `featuredSnippetStructure`, `answerCapsules`) — cap at `low` severity in the report (TAM judgment). Technical Health, Structured Data, and llms.txt keep normal critical/high/medium severity. `questionFramedHeadings` and `faqSectionPresent` also cap at `low` as optional/stylistic. See `SKILL.md` Section 5 "Issue severity guide."
 
 ## Technical Health (6 signals)
 
@@ -24,7 +26,7 @@ The `na` status is allowed only where the signal's section in SKILL.md explicitl
 | organizationSchema | JSON-LD Organization present with name, url, logo, and at least one sameAs. | JSON-LD Organization present but sparse, OR microdata/RDFa-only with key fields populated. | Absent. |
 | primaryEntitySchema | JSON-LD primary entity schema present (type matches Section 0.4 relevance scan expected primary) AND required fields populated. | Schema of correct type present but sparse (key required fields missing), OR microdata/RDFa-only with required fields. | No schema matches the expected primary type for this site's content. |
 | relevantSchemasApplied | Coverage ≥ 90% — every high/medium-relevance schema is backed by matching markup. | Coverage 30–89% — significant gaps, may include one or more gaps on `high`-relevance schemas. | Coverage < 30%, OR no schemas of any kind present. |
-| faqSchema | JSON-LD FAQPage present with 2+ valid Q&A pairs. | Malformed JSON-LD, OR microdata/RDFa-only FAQ markup. | Absent. |
+| faqSchema | Visible FAQ content AND JSON-LD FAQPage with 2+ valid Q&A pairs. | Visible FAQ content but malformed JSON-LD, OR microdata/RDFa-only FAQ markup. | Visible FAQ content but no FAQ schema. (`na` when the site has no FAQ content — never `fail` merely for lacking an FAQ.) |
 | jsonLdFormat | JSON-LD present (any blocks). Microdata and/or RDFa may also be present. | No JSON-LD, but microdata OR RDFa present. Record the format breakdown in `notes`. | None of JSON-LD, microdata, or RDFa present. |
 | openGraphTags | og:title, og:description, AND og:image all present. | At least one of og:title / og:description / og:image present, but not all three. | None present. |
 | reviewSchema | Review or AggregateRating schema present in any format. | — | Absent. |
@@ -37,21 +39,21 @@ The `na` status is allowed only where the signal's section in SKILL.md explicitl
 | whoWhatWho | All three identity elements (publisher / focus / audience) answerable from the homepage within first scroll. | Two of three answerable. | One or fewer answerable. |
 | featuredSnippetStructure | 5+ extractable sentences across the homepage. | 2–4 extractable sentences. | 0–1 extractable sentences. |
 | answerCapsules | 3+ answer capsules (40–60 word self-contained answers directly under H2/H3) across analyzed pages. | 1–2 answer capsules. | No qualifying capsules. |
-| faqSectionPresent | FAQ section found (homepage or dedicated FAQ page) with 2+ Q&A pairs. | Partial — accordion present but only 1 item. | Absent. |
-| faqSchemaApplied | Visible FAQ content AND FAQ JSON-LD schema both present. | FAQ schema present but no visible FAQ content (or vice versa). | Neither present. |
-| questionFramedHeadings | 2+ H2/H3 phrased as questions. | One question-framed heading. | None. |
-| titleAndMetaQuestionMatch | ≥ 50% of question-targeting pages have `<title>` or `<meta name="description">` with question phrasing OR ≥ 50% H1 token overlap. | 20–50% of question-targeting pages clear the bar, OR homepage fine but inner pages not. | Title and meta are present-but-generic on every sampled page with no question framing or H1 alignment anywhere. |
+| faqSectionPresent | FAQ section found (homepage or dedicated FAQ page) with 2+ Q&A pairs. | Partial — accordion present but only 1 item. | Absent. **Optional — cap any issue at `low`; suggest, don't flag as critical.** |
+| faqSchemaApplied | Visible FAQ content AND FAQ JSON-LD schema both present. | FAQ schema present but no visible FAQ content (or vice versa). | FAQ warranted but neither in place. (`na` when the site has no FAQ content.) |
+| questionFramedHeadings | 2+ H2/H3 phrased as questions. | One question-framed heading. | None. **Stylistic — cap any issue at `low`; word as a consideration, not a defect.** |
+| titleAndMetaQuestionMatch | ≥ 50% of question-targeting pages have a `<title>` or `<meta name="description">` that describes the page (≥ 50% H1 token overlap; question phrasing optional, never required). | 20–50% of question-targeting pages clear the overlap bar, OR homepage fine but inner pages not. | Title and meta are present-but-generic on every sampled page with no topical alignment to the page anywhere. |
 
 ## E-E-A-T Signals (8 signals)
 
 | Signal | pass | partial | fail |
 | --- | --- | --- | --- |
-| namedTeamMembers | Named individuals with type-appropriate roles visible (homepage or About/Team/Authors page). | Site references team through anonymous language only ("our team", "our editors") — no names. | No team / author / staff signals at all. |
-| authorCredentials | Specific, verifiable credentials (named past employers/clients, recognized certifications, degrees). | Generic "years of experience" / "industry leader" without specifics. | No credentials mentioned. |
+| namedTeamMembers | Named individuals with type-appropriate roles visible (homepage or About/Team/Authors page). | Site references team through anonymous language only ("our team", "our editors") — no names. | No team / author / staff signals at all. (`na` when the site is deliberately anonymous.) |
+| authorCredentials | Specific, verifiable credentials (named past employers/clients, recognized certifications, degrees). | Generic "years of experience" / "industry leader" without specifics. | No credentials mentioned. (`na` when `namedTeamMembers` is `na`.) |
 | authorBylines | Visible byline AND author name linked to an author page AND article schema (any format) has populated `author`. | Visible byline AND linked author page, but no `author` on schema, OR `author` present in microdata/RDFa only. | No byline, or byline with no link, or no Article schema in any format. (`na` allowed for sites with no editorial content — record rationale.) |
 | demonstratedExpertise | 3+ specifics (named methodologies, sources, technologies, outcomes with numbers, primary citations). | 1–2 specifics with the rest of the copy claiming expertise without evidence. | 0 specifics — only generic claims ("award-winning", "leading"). |
 | externalCitations | Named external validation present (named publications, podcasts, awards with named bodies). | Vague "featured in" / "as seen on" without named outlets. | Absent. |
-| certificationBadges | Credentialing badges present AND visually confirmed as legible/recognizable, matched to the site type. | DOM indicators found but visual confirmation unclear, or only weak credentials (e.g. SSL-vendor badges). | Absent. |
+| certificationBadges | Credentialing badges present AND visually confirmed as legible/recognizable, matched to the site type. | DOM indicators found but visual confirmation unclear, or only weak credentials (e.g. SSL-vendor badges). | Absent. (`na` when no third-party credential applies to the org/field.) |
 | namedExternalRelationships | At least one named external relationship in copy (clients, partners, sources, funders) — not just a logo. | — | All relationships anonymous, generic ("our clients"), or logo-only. |
 | tenureIndicators | Any tenure indicator found (founded YYYY, since YYYY, N years experience, publishing since YYYY, etc.). | — | Absent. |
 
@@ -84,7 +86,7 @@ The `na` status is allowed only where the signal's section in SKILL.md explicitl
 | primaryOfferingDetail | What/who/outcome answered for most primary offerings. | Partially answered for most offerings. | Offerings listed by category label only with no detail. |
 | namedSpecificEntities | 2+ named specific entities relevant to the domain (platforms, brands, publishers, frameworks). | 1 named specific entity. | None — generic abstractions only. |
 | namedSubjectAreas | Specific subject areas named (industries, topic verticals, product categories, program areas). | — | Generic ("businesses", "people", "everyone"). |
-| specificOutcomes | Specific quantified outcomes or named achievements present. | — | Vague claims only ("we get results", "great quality"). |
+| specificOutcomes | Specific quantified outcomes or named achievements present. | — | Vague claims only ("we get results", "great quality"). (`na` when no quantifiable outcomes apply to the site.) |
 | passageExtractionQuality | Most sections yield clean extractable summaries. | — | Sections require surrounding context to make sense. |
 
 ## llms.txt (3 signals)
