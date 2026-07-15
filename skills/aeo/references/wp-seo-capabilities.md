@@ -20,8 +20,8 @@ Core + Jetpack cover **meta descriptions, Open Graph, XML sitemaps (with lastmod
 | AEO signal | WordPress core | Jetpack | Native fix to recommend |
 |---|---|---|---|
 | `openGraphTags` | ❌ none | ✅ Automatic OG tags — **free** (Social / Sharing module) | Enable Jetpack Social/Sharing; OG tags emit automatically. |
-| `sitemapLastmod`, `sitemapLastmodRecent` | ⚠️ Sitemap present (`wp-sitemap.xml`) but **no `<lastmod>`** by default | ✅ XML Sitemaps **with lastmod** — **free** (Jetpack → SEO → Sitemaps), refreshed ~12h | Enable Jetpack Sitemaps for lastmod support (core sitemap alone will score `partial` — no lastmod). |
-| `canonicalUrls` | ✅ Self-referential canonical on singular posts/pages | ✅ Adds canonical to **archive** pages too (SEO Tools) | Core already covers posts/pages; enable Jetpack canonical-for-archives to close the archive gap. |
+| `sitemapLastmod`, `sitemapLastmodRecent` | ⚠️ Sitemap present (`wp-sitemap.xml`) but **no `<lastmod>`** by default (deliberate — Trac #52099) | ✅ XML Sitemaps emit per-URL `<lastmod>` — **free** (Jetpack → SEO → Sitemaps), refreshed ~12h. Confirmed in Jetpack's `sitemap-builder.php` (`jp_sitemap_datetime()`). | Enable Jetpack Sitemaps for lastmod support (core sitemap alone will score `partial` — no lastmod). |
+| `canonicalUrls` | ⚠️ Self-referential canonical on **singular** views (posts/pages) only; **not** on a blog-posts-index front page (`is_home`) or on archives | ✅ Adds canonical to **archive** pages too (SEO Tools) | Core covers singular pages; if the front page is the posts index, or for archives, enable Jetpack canonical-for-archives (or a SEO plugin). |
 | `noNoindex` / robots meta | ✅ `wp_robots()` + Settings → Reading indexing control | (respects core) | Core-only; toggle Settings → Reading "Discourage search engines" appropriately. |
 | `titleAndMetaQuestionMatch` (editable title + meta description) | ⚠️ Title tag via `title-tag` support; **no meta description**, no per-page SEO title | ✅ Custom SEO titles + front-page/per-post meta descriptions (Jetpack **SEO Tools**) | Use Jetpack SEO Tools to set SEO title / meta description. |
 
@@ -66,11 +66,11 @@ Jetpack emits **no schema.org JSON-LD at all**, and core emits none by default. 
 Re-check these public docs and update the rows + the `lastVerified` date above:
 
 - Jetpack SEO Tools — <https://jetpack.com/support/seo-tools/> (titles, meta descriptions, archive canonicals, tiering)
-- Jetpack Sitemaps — <https://jetpack.com/support/sitemaps/> (lastmod, update frequency)
+- Jetpack Sitemaps — <https://jetpack.com/support/sitemaps/> (update frequency) and the sitemap builder source (`modules/sitemaps/sitemap-builder.php` in <https://github.com/Automattic/jetpack>) which confirms per-URL `<lastmod>` output via `jp_sitemap_datetime()`
 - Jetpack Open Graph — <https://developer.jetpack.com/hooks/jetpack_open_graph_tags/> (OG output, module)
 - WordPress core XML sitemaps — <https://make.wordpress.org/core/2020/07/22/new-xml-sitemaps-functionality-in-wordpress-5-5/> and lastmod ticket <https://core.trac.wordpress.org/ticket/52099>
 - WordPress core structured data — confirm core still emits no JSON-LD by default (test a default-theme install, or the WP plugin directory `json-ld` tag)
 
 Also confirm whether Jetpack has **added any schema.org JSON-LD output** since the last check — if so, move the affected rows out of the "genuine gap" table.
 
-**Sources of record (last verified 2026-07-15):** Jetpack SEO Tools, Jetpack Sitemaps, Jetpack Open Graph developer hook, WordPress 5.5 core sitemaps announcement + Trac #52099, WordPress core JSON-LD-by-default (none).
+**Sources of record (last verified 2026-07-15):** Jetpack SEO Tools, Jetpack Sitemaps support doc + `sitemap-builder.php` source (per-URL lastmod), Jetpack Open Graph developer hook, WordPress 5.5 core sitemaps announcement + Trac #52099 (core omits lastmod), WordPress core JSON-LD-by-default (none).

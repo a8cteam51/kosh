@@ -825,8 +825,8 @@ const pathSignalsQuestion = /\/(faq|services?|pricing|how-it-works|about|donate|
 
 const isQuestionTargeting = h1IsQuestion || pathSignalsQuestion;
 
-// Signal extraction — does title or meta description contain question phrasing
-// or align with the H1's question/topic?
+// Informational only — question phrasing is optional and never required to pass.
+// The pass/partial decision is driven by topical overlap (titleOverlap / metaOverlap) below.
 const titleHasQuestion = /\?/.test(title) || /^(how|what|why|when|where|who|can|does|is|are|should|do)\s+/i.test(title);
 const metaHasQuestion = /\?/.test(metaDesc) || /^(how|what|why|when|where|who|can|does|is|are|should|do)\s+/i.test(metaDesc);
 
@@ -1346,11 +1346,15 @@ const yoastBlock = Array.from(document.querySelectorAll('script[type="applicatio
 const yoastClass = !!document.querySelector('[class*="yoast"]');
 const rankMath = !!document.querySelector('meta[name="generator"][content*="Rank Math"]') || document.body.outerHTML.includes('rankmath');
 const seopress = document.body.outerHTML.includes('seopress');
-const jetpack = !!document.querySelector('link[href*="jetpack"], script[src*="jetpack"], [class*="jetpack"]') ||
-  document.body.outerHTML.includes('/jetpack/') || document.body.outerHTML.includes('jetpack-') ||
-  // Jetpack Open Graph tags carry an og: comment/marker and Jetpack sitemaps are a strong tell,
-  // but the asset path above is the reliable signal.
-  !!document.querySelector('meta[property="og:site_name"]') && document.body.outerHTML.includes('jetpack');
+// Jetpack: detect by its actual plugin asset paths and enqueued script/style handles,
+// not by incidental "jetpack" strings in visible text (which false-positive on footer
+// credits, comments, or links to jetpack.com).
+const jetpack = !!document.querySelector(
+  'link[href*="/plugins/jetpack/" i], script[src*="/plugins/jetpack/" i], ' +
+  'link[href*="/jetpack_vendor/" i], script[src*="/jetpack_vendor/" i], ' +
+  'link[id^="jetpack" i], script[id^="jetpack" i], style[id^="jetpack" i], ' +
+  '[class*="jp-carousel" i], [class*="sharedaddy" i], [id*="jp-post-flair" i]'
+);
 const wpContent = !!document.querySelector('link[href*="/wp-content/"]') || !!document.querySelector('script[src*="/wp-content/"]');
 const wpJsonApi = document.body.outerHTML.includes('/wp-json/');
 return {
@@ -1867,17 +1871,19 @@ Minimal top-level shape:
 
 ### Issue severity guide
 
-- **critical** — Signal at `fail` for a high-impact rubric area (Technical Health, Structured Data, AEO Readiness). Blocking AI discoverability or citation.
-- **high** — Signal at `fail` for any other criterion, or `partial` where the gap is substantial. Significantly weakens AI understanding or trust signals.
-- **medium** — Signal at `partial` where the gap is moderate. Improvement opportunity.
-- **low** — Minor gap. Worth noting but low priority.
+- **critical** — Signal at `fail` for a high-impact **technical** rubric area (Technical Health or Structured Data). Blocking AI discoverability or citation. (Note: AEO Readiness is **not** blanket-critical — most of its signals are content or stylistic and capped at `low` below; only `titleAndMetaQuestionMatch` and, when FAQ content is warranted, `faqSchemaApplied` stay elevated.)
+- **high** — Signal at `fail` for a non-content criterion that isn't capped below — `llmsTxt`, `titleAndMetaQuestionMatch`, or `faqSchemaApplied` (when warranted) — or a substantial `partial` on those. Significantly weakens AI understanding or trust signals.
+- **medium** — `partial` where the gap is moderate on a non-content, non-capped signal.
+- **low** — Minor gap, OR any content-quality / optional / stylistic signal per the caps below. Most AEO Readiness signals land here.
 
 **Optional / stylistic signals — always cap at `low`.** A few signals describe optional AEO enhancements or stylistic choices, not requirements. Regardless of the criterion they live under, when these are `fail` or `partial` the issue is capped at **`low`** severity and worded as a consideration, not a directive:
 
 - `questionFramedHeadings` — phrasing headings as questions is one valid style, not a requirement.
 - `faqSectionPresent` — an FAQ is a useful AEO opportunity, but many sites legitimately don't need one. Suggest it; never flag its absence as critical.
 
-(FAQ *schema* signals — `faqSchema`, `faqSchemaApplied` — are handled separately: they go `na` when the site has no FAQ content, so they never generate an issue in that case.)
+The FAQ story spans three signals with deliberately different treatment: `faqSectionPresent` (is there a visible FAQ?) caps at `low` as an optional suggestion; `faqSchema` and `faqSchemaApplied` (is the FAQ marked up?) go `na` when there's no FAQ content, so they never generate an issue on a site that simply has no FAQ. Only when FAQ content actually exists do the schema signals flag a missing-markup gap.
+
+**Consolidate shared-root schema findings.** When several Structured Data signals fail for the *same* root cause — the site emits no JSON-LD because it has no schema emitter (WordPress + Jetpack/core with no Yoast / RankMath / AIOSEO or custom schema) — do **not** emit a separate `critical` issue for every schema type; that floods the critical bucket with near-duplicates (the volume problem from the source feedback). Instead: record ONE representative `critical` issue on `organizationSchema` (or `primaryEntitySchema` if Organization is already present) describing the shared root and remedy, keep the other schema signals at their `fail` status, and record their issues at `high` with an `issue`/`impact` line that cross-references the primary (e.g. "part of the site-wide no-schema gap — see organizationSchema"). The finding stays complete; the critical bucket stays readable.
 
 **Content signals — cap at `low` (TAM judgment).** Content-quality findings are recommendations, not defects. They depend on editorial priorities, partner staffing, and whether the rubric's baseline even fits the site — so they are surfaced at **`low`** severity for the TAM to weigh, never at critical/high. Word them as considerations ("Consider adding…"), not directives. This applies to every signal in these criteria:
 
@@ -1888,6 +1894,8 @@ Minimal top-level shape:
 - The content-side **AEO Readiness** signals: `directAnswers`, `whoWhatWho`, `featuredSnippetStructure`, `answerCapsules`
 
 The objective, machine-level criteria — **Technical Health**, **Structured Data**, and **llms.txt** — keep their normal critical / high / medium severity. They are cheap, unambiguous, and not subject to editorial judgment, so they are not capped.
+
+> Impact and priority are different axes. A content signal can be high-*impact* for AEO — `answerCapsules`, for instance, is cited as a strong 2026 citation signal in `references/signal-keys.md` — yet still `low`-*priority* for a given partner because acting on it is discretionary editorial work. The cap reflects TAM priority, not a claim that the signal doesn't matter for AEO.
 
 ### Issue effort guide
 
