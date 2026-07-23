@@ -81,35 +81,18 @@ fi
 
 if [ -z "$TEST_TYPE_FLAGS" ]; then
   echo -e "${YELLOW}  Note: No test type flags specified. Including all available test data.${NC}"
-  node "$SCRIPT_PATH" "$QA_REPORT_JSON"
 else
   echo -e "${YELLOW}  Test type: $TEST_TYPE_FLAGS${NC}"
-  node "$SCRIPT_PATH" "$QA_REPORT_JSON" $TEST_TYPE_FLAGS
 fi
 
+# Capture the generator's output so Step 4 reads back the path it prints rather than
+# rebuilding the filename with a slug rule that can drift from the generator's.
+GENERATE_OUTPUT=$(node "$SCRIPT_PATH" "$QA_REPORT_JSON" $TEST_TYPE_FLAGS)
+echo "$GENERATE_OUTPUT"
+
 # Step 4: Verify output was created
-WEBSITE_NAME_UPPER=$(printf '%s' "$WEBSITE_NAME" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_' | tr -s '_')
-WEBSITE_NAME_UPPER="${WEBSITE_NAME_UPPER#_}"
-WEBSITE_NAME_UPPER="${WEBSITE_NAME_UPPER%_}"
-[ -z "$WEBSITE_NAME_UPPER" ] && WEBSITE_NAME_UPPER="REPORT"
-REPORT_DATE=$(echo "$TIMESTAMP" | cut -d'T' -f1)
-if [[ "$TEST_TYPE_FLAGS" == "--functional" ]]; then
-  TEST_TYPE_LABEL="FUNCTIONAL"
-elif [[ "$TEST_TYPE_FLAGS" == "--performance" ]]; then
-  TEST_TYPE_LABEL="PERFORMANCE"
-elif [[ "$TEST_TYPE_FLAGS" == "--accessibility" ]]; then
-  TEST_TYPE_LABEL="ACCESSIBILITY"
-elif [[ "$TEST_TYPE_FLAGS" == "--shop" ]]; then
-  TEST_TYPE_LABEL="SHOP"
-else
-  TEST_TYPE_LABEL=""
-fi
-if [ -n "$TEST_TYPE_LABEL" ]; then
-  REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_${TEST_TYPE_LABEL}_QA_REPORT_${REPORT_DATE}.html"
-else
-  REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_QA_REPORT_${REPORT_DATE}.html"
-fi
-if [ -f "$REPORT_FILE" ]; then
+REPORT_FILE=$(printf '%s\n' "$GENERATE_OUTPUT" | sed -n 's/^HTML report generated: //p' | tail -1)
+if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   echo -e "${GREEN}✓ Report successfully generated!${NC}"
   echo -e "${BLUE}Report location: $REPORT_FILE${NC}"
 

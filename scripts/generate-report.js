@@ -266,11 +266,8 @@ const renderCheck = (check) => {
   `;
 };
 
-// Renders the exploration pass when a report carries one. Reports without
-// `explorationPass` render exactly as before.
 const explorationPass = Array.isArray(report.explorationPass) ? report.explorationPass : [];
-// Clean results are coverage evidence rather than something to act on, so they
-// collapse behind a count and the actionable outcomes stay open.
+// Clean results are coverage evidence, not action items: collapse them, keep the rest open.
 const cleanChecks = explorationPass.filter((c) => c.outcome === 'no-issue');
 const notableChecks = explorationPass.filter((c) => c.outcome !== 'no-issue');
 const cleanChecksBlock = cleanChecks.length
