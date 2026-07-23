@@ -711,6 +711,7 @@ if (!fs.existsSync(reportsDir)) {
 
 const outputPath = path.join(reportsDir, outputFilename);
 fs.writeFileSync(outputPath, html);
+// run-qa-report.sh parses this exact "HTML report generated: " prefix — don't reword.
 console.log(`HTML report generated: ${outputPath}`);
 
 // ============================================================
@@ -1348,5 +1349,6 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
 
   const aeoOutputPath = path.join(aeoReportsDir, aeoOutputFilename);
   fs.writeFileSync(aeoOutputPath, html);
+  // run-qa-report.sh parses this exact "HTML report generated: " prefix — don't reword.
   console.log(`HTML report generated: ${aeoOutputPath}`);
 }
