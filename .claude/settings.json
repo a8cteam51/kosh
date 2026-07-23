@@ -7,6 +7,7 @@
     "allow": [
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_network_request",
       "mcp__playwright__browser_network_requests",
       "mcp__playwright__browser_resize",
       "mcp__playwright__browser_click",

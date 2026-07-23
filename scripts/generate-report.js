@@ -3,12 +3,12 @@
 /**
  * kosh report generator (HTML output)
  *
- * Reads a kosh JSON report (functional, performance, accessibility, AEO, or merged)
- * and emits a self-contained HTML file with inline CSS, color-coded severity,
- * collapsible sections, and inline screenshots when findings reference them.
+ * Reads a kosh JSON report (functional, performance, accessibility, shop, AEO,
+ * or merged) and emits a self-contained HTML file with inline CSS, color-coded
+ * severity, collapsible sections, and inline screenshots when findings reference them.
  *
  * Usage:
- *   node generate-report.js <json-file> [--functional|--performance|--accessibility|--aeo]
+ *   node generate-report.js <json-file> [--functional|--performance|--accessibility|--shop|--aeo]
  *
  * AEO reports are auto-detected from `report.mode === "aeo"`; --aeo forces the
  * AEO branch explicitly. The test-type flag affects the output filename.
@@ -26,6 +26,7 @@ const testTypeLabel =
   args.includes('--functional')    ? 'FUNCTIONAL'
   : args.includes('--performance') ? 'PERFORMANCE'
   : args.includes('--accessibility') ? 'ACCESSIBILITY'
+  : args.includes('--shop') ? 'SHOP'
   : args.includes('--aeo') ? 'AEO'
   : null;
 
@@ -106,7 +107,7 @@ const reportDate = report.timestamp ? new Date(report.timestamp).toLocaleString(
 // renderAeoReport is a hoisted function declaration at the bottom of this file.
 
 const aeoFlagSet = args.includes('--aeo');
-const qaFlagSet = args.some((a) => ['--functional', '--performance', '--accessibility'].includes(a));
+const qaFlagSet = args.some((a) => ['--functional', '--performance', '--accessibility', '--shop'].includes(a));
 const modeIsAeo = report.mode === 'aeo';
 const looksLikeAeo =
   modeIsAeo ||
@@ -114,7 +115,7 @@ const looksLikeAeo =
    ['technicalHealth', 'structuredData', 'aeoReadiness'].every((k) => k in report.criteria));
 
 if (aeoFlagSet && qaFlagSet) {
-  console.error('Error: --aeo cannot be combined with --functional / --performance / --accessibility.');
+  console.error('Error: --aeo cannot be combined with --functional / --performance / --accessibility / --shop.');
   process.exit(1);
 }
 if (aeoFlagSet && !looksLikeAeo) {
@@ -149,6 +150,7 @@ const totalFindings = severities.reduce((sum, s) => sum + severityCounts[s], 0);
 // Detect which skill data is present so the report title reflects what was actually run.
 const hasPerformanceData = !!(report.mobile?.console || report.desktop?.console || report.mobile?.network || report.desktop?.network);
 const hasAccessibilityData = !!(report.mobile?.a11y || report.desktop?.a11y);
+const hasShopData = !!report.shop;
 
 let runTypesLabel;
 if (testTypeLabel) {
@@ -157,6 +159,7 @@ if (testTypeLabel) {
   const parts = [];
   if (hasPerformanceData) parts.push('performance');
   if (hasAccessibilityData) parts.push('accessibility');
+  if (hasShopData) parts.push('shop');
   if (parts.length === 0) parts.push('functional');
   runTypesLabel = parts.join(' + ');
 }
@@ -236,6 +239,54 @@ const renderSeverityBlock = (sev) => {
   `;
 };
 
+const CHECK_OUTCOMES = {
+  'no-issue': 'No issue',
+  'finding-raised': 'Finding raised',
+  inconclusive: 'Inconclusive',
+  'out-of-scope': 'Out of scope',
+  unknown: 'Recorded',
+};
+
+const renderCheck = (check) => {
+  const outcome = check.outcome in CHECK_OUTCOMES ? check.outcome : 'unknown';
+  const area = check.area ? `<span class="check__area">${escHtml(check.area)}</span>` : '';
+  const referred = check.referredTo
+    ? `<p class="check__referred">Run <code>${escHtml(check.referredTo)}</code> to investigate this</p>`
+    : '';
+  return `
+    <article class="check">
+      <header class="check__header">
+        <span class="check__outcome check__outcome--${outcome}">${escHtml(CHECK_OUTCOMES[outcome])}</span>
+        ${area}
+      </header>
+      <p class="check__what">${escHtml(check.check)}</p>
+      <p class="check__detail">${escHtml(check.detail)}</p>
+      ${referred}
+    </article>
+  `;
+};
+
+const explorationPass = Array.isArray(report.explorationPass) ? report.explorationPass : [];
+// Clean results are coverage evidence, not action items: collapse them, keep the rest open.
+const cleanChecks = explorationPass.filter((c) => c.outcome === 'no-issue');
+const notableChecks = explorationPass.filter((c) => c.outcome !== 'no-issue');
+const cleanChecksBlock = cleanChecks.length
+  ? `
+    <details class="exploration__clean">
+      <summary class="exploration__clean-summary">${cleanChecks.length} check${cleanChecks.length === 1 ? '' : 's'} found no issue</summary>
+      <div class="exploration__grid exploration__clean-body">${cleanChecks.map(renderCheck).join('')}</div>
+    </details>`
+  : '';
+const explorationSection = explorationPass.length
+  ? `
+  <section class="exploration">
+    <h2>Exploration pass</h2>
+    <p class="exploration__intro">Threads investigated beyond the findings above, recorded whatever the outcome — so a reader can tell the difference between a surface that was checked and found clean, and one nobody looked at.</p>
+    ${notableChecks.length ? `<div class="exploration__grid">${notableChecks.map(renderCheck).join('')}</div>` : ''}
+    ${cleanChecksBlock}
+  </section>`
+  : '';
+
 const visitedPages = Array.isArray(report.visitedPages) ? report.visitedPages : [];
 const visitedPagesList = visitedPages.length
   ? `<ul>${visitedPages.map((p) => `<li>${renderLink(p)}</li>`).join('')}</ul>`
@@ -249,6 +300,10 @@ const TOKENS = {
   envStagingBg: '#FDE68A', envStagingFg: '#854D0E',
   envDevBg: '#BAE6FD', envDevFg: '#075985',
   envUnspecBg: '#E2E8F0', envUnspecFg: '#64748B',
+  checkOkBg: '#DCFCE7', checkOkFg: '#166534',
+  checkRaisedBg: '#FFE4E6', checkRaisedFg: '#9F1239',
+  checkOpenBg: '#FEF3C7', checkOpenFg: '#854D0E',
+  checkScopeBg: '#E0E7FF', checkScopeFg: '#3730A3',
   fontBody: '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   fontHeading: 'inherit',
 };
@@ -308,7 +363,8 @@ const styles = `
     align-self: center;
   }
   dl.meta dd { margin: 0; align-self: center; }
-  .env-tag {
+  .env-tag,
+  .check__outcome {
     display: inline-block;
     padding: 0.125rem 0.5rem;
     border-radius: 999px;
@@ -322,6 +378,56 @@ const styles = `
   .env-tag--development,
   .env-tag--local      { background: ${t.envDevBg}; color: ${t.envDevFg}; }
   .env-tag--unspecified { background: ${t.envUnspecBg}; color: ${t.envUnspecFg}; }
+  .exploration { margin-bottom: 2rem; }
+  .exploration h2 { font-size: 1.125rem; margin: 0 0 0.375rem; }
+  .exploration__intro { margin: 0 0 0.875rem; color: ${t.muted}; font-size: 0.9375rem; max-width: 68ch; }
+  .exploration__grid { display: grid; gap: 0.625rem; }
+  .check {
+    background: ${t.surface};
+    border: 1px solid ${t.border};
+    border-radius: 6px;
+    padding: 0.875rem 1rem;
+  }
+  .check__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .check__outcome--no-issue       { background: ${t.checkOkBg}; color: ${t.checkOkFg}; }
+  .check__outcome--finding-raised { background: ${t.checkRaisedBg}; color: ${t.checkRaisedFg}; }
+  .check__outcome--inconclusive   { background: ${t.checkOpenBg}; color: ${t.checkOpenFg}; }
+  .check__outcome--out-of-scope   { background: ${t.checkScopeBg}; color: ${t.checkScopeFg}; }
+  .check__outcome--unknown        { background: ${t.envUnspecBg}; color: ${t.envUnspecFg}; }
+  .check__area { font-size: 0.8125rem; color: ${t.muted}; font-weight: 600; }
+  .check__what { margin: 0 0 0.375rem; font-weight: 600; }
+  .check__detail { margin: 0; color: ${t.muted}; font-size: 0.9375rem; }
+  .check__referred { margin: 0.5rem 0 0; font-size: 0.875rem; }
+  .check__referred code { background: ${t.bg}; padding: 0.0625rem 0.3125rem; border-radius: 4px; }
+  .exploration__clean { margin-top: 0.625rem; }
+  .exploration__clean-summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    background: ${t.surface};
+    border: 1px solid ${t.border};
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: ${t.muted};
+  }
+  .exploration__clean-summary::-webkit-details-marker { display: none; }
+  .exploration__clean-summary::after {
+    content: "▾";
+    transition: transform 0.15s ease;
+  }
+  .exploration__clean[open] > .exploration__clean-summary::after { transform: rotate(180deg); }
+  .exploration__clean-summary:hover { color: ${t.text}; }
+  .exploration__clean-body { margin-top: 0.625rem; }
   .summary {
     margin-bottom: 2rem;
   }
@@ -574,7 +680,7 @@ const html = `<!doctype html>
     <h2>Findings</h2>
     ${findingsBlocks}
   </section>
-
+${explorationSection}
   <section class="methodology">
     <h2>Methodology</h2>
     <p>${escHtml(report.testMethodology || 'Not recorded.')}</p>
@@ -605,6 +711,7 @@ if (!fs.existsSync(reportsDir)) {
 
 const outputPath = path.join(reportsDir, outputFilename);
 fs.writeFileSync(outputPath, html);
+// run-qa-report.sh parses this exact "HTML report generated: " prefix — don't reword.
 console.log(`HTML report generated: ${outputPath}`);
 
 // ============================================================
@@ -1242,5 +1349,6 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
 
   const aeoOutputPath = path.join(aeoReportsDir, aeoOutputFilename);
   fs.writeFileSync(aeoOutputPath, html);
+  // run-qa-report.sh parses this exact "HTML report generated: " prefix — don't reword.
   console.log(`HTML report generated: ${aeoOutputPath}`);
 }

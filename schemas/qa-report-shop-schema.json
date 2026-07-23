@@ -1,0 +1,229 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kosh Shop Report",
+  "description": "Schema for the kosh shop report — a guest shopping-journey QA test of a WooCommerce (or other commerce) store, walking catalog → product → cart → checkout. The run always stops before payment submission; no order is ever placed. Reuses the common QA report frame (url / websiteName / timestamp / issues) so it renders through the standard QA renderer in scripts/generate-report.js — there is no shop-specific renderer.",
+  "type": "object",
+  "required": ["url", "websiteName", "timestamp", "environment", "testMethodology", "visitedPages", "shop", "explorationPass", "issues"],
+  "properties": {
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "The homepage URL the test started from."
+    },
+    "websiteName": {
+      "type": "string",
+      "description": "Store name extracted from og:site_name, the WordPress site title, or the page title."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the test was run."
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["local", "development", "staging", "production"],
+      "description": "Environment the store was running in during the test. Determined from $ARGUMENTS or inferred from the URL. Defaults to production. Drives how payment-gateway test-mode indicators are reported: expected on local/development, flagged on staging, critical on production."
+    },
+    "testMethodology": {
+      "type": "string",
+      "description": "Short prose description of how the test was performed, e.g. 'Guest shopping journey via Playwright MCP: catalog browse, two products added to cart, quantity update and item removal verified against cart totals, checkout form completed with test data and stopped at the payment step. No order was placed.'"
+    },
+    "visitedPages": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "type": "string", "format": "uri" },
+      "description": "URLs of every page visited during the journey: homepage, shop/catalog archive, both product pages, cart, and checkout. A store whose homepage is also its catalog still clears the minimum of 4. Example: https://example.com/shop/",
+      "examples": [
+        [
+          "https://example.com/",
+          "https://example.com/shop/",
+          "https://example.com/product/example-product-one/",
+          "https://example.com/product/example-product-two/",
+          "https://example.com/cart/",
+          "https://example.com/checkout/"
+        ]
+      ]
+    },
+    "shop": {
+      "type": "object",
+      "description": "Journey context and evidence. Not rendered by the HTML report — it exists so the report records what was actually exercised, and so a flagless generate-report.js run can still identify the report as a shop run.",
+      "required": ["platform", "shopUrl", "cartUrl", "checkoutUrl", "implementation", "productsTested", "cartOperations", "checkoutStop"],
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "type": "string",
+          "enum": ["woocommerce", "other"],
+          "description": "Commerce platform detected during the shop presence check. 'other' means commerce markers were present but WooCommerce signals were not — the journey ran with generic selectors."
+        },
+        "shopUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Discovered catalog/archive URL, verified by body class rather than assumed from convention."
+        },
+        "cartUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Discovered cart URL."
+        },
+        "checkoutUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Discovered checkout URL."
+        },
+        "implementation": {
+          "type": "object",
+          "description": "Whether the store uses classic WooCommerce shortcode templates or the newer Cart/Checkout blocks. Recorded because the two have materially different DOM structures, field IDs, and validation behavior — findings should be read in light of which one was tested.",
+          "required": ["cart", "checkout"],
+          "additionalProperties": false,
+          "properties": {
+            "cart": { "type": "string", "enum": ["classic", "blocks", "unknown"] },
+            "checkout": { "type": "string", "enum": ["classic", "blocks", "unknown"] }
+          }
+        },
+        "productsTested": {
+          "type": "array",
+          "minItems": 2,
+          "description": "The products exercised during the journey. At least two distinct products are required.",
+          "items": {
+            "type": "object",
+            "required": ["url", "name", "type"],
+            "additionalProperties": false,
+            "properties": {
+              "url": { "type": "string", "format": "uri" },
+              "name": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["simple", "variable", "other"],
+                "description": "Product type as observed on the product page. 'variable' means a variation had to be selected before add-to-cart became available."
+              },
+              "price": {
+                "type": "string",
+                "description": "Price as displayed on the product page, including currency symbol — kept as a string so it can be compared verbatim against the cart and checkout totals. Example: '$24.00'"
+              }
+            }
+          }
+        },
+        "cartOperations": {
+          "type": "object",
+          "description": "Which cart operations were completed and verified. All three are required by the skill's success criteria; false means the operation could not be completed, which should have a corresponding finding.",
+          "required": ["quantityUpdated", "itemRemoved", "totalsVerified"],
+          "additionalProperties": false,
+          "properties": {
+            "quantityUpdated": { "type": "boolean" },
+            "itemRemoved": { "type": "boolean" },
+            "totalsVerified": {
+              "type": "boolean",
+              "description": "Whether line subtotals and cart totals were checked numerically against unit price × quantity."
+            }
+          }
+        },
+        "checkoutStop": {
+          "type": "string",
+          "description": "Where and why the run stopped — always before payment submission. Example: 'Stopped at the payment step: Stripe card iframe present, Place Order not clicked.'"
+        }
+      }
+    },
+    "explorationPass": {
+      "type": "array",
+      "minItems": 3,
+      "description": "Threads investigated during the exploration pass that follows the scripted journey, recorded whatever the outcome. This is what makes coverage and dead ends visible: a check that found nothing is a real result, and an observation outside this test's scope survives here instead of being lost. Findings themselves live in `issues` — this records what was examined and what came of it.",
+      "items": {
+        "type": "object",
+        "required": ["check", "outcome", "detail"],
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "type": "string",
+            "description": "What was examined, specific enough for someone else to repeat it. Example: 'Whether the struck-through was-price on the product page reconciles with the discount applied in the cart.'"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["no-issue", "finding-raised", "inconclusive", "out-of-scope"],
+            "description": "no-issue = investigated and working correctly. finding-raised = became an entry in `issues`. inconclusive = cannot be settled without access not available during the run. out-of-scope = a real problem but not commerce-flow, in which case set `referredTo`."
+          },
+          "detail": {
+            "type": "string",
+            "description": "What was actually observed, including the evidence. For inconclusive outcomes, say what would settle it. For finding-raised, name the finding."
+          },
+          "area": {
+            "type": "string",
+            "description": "Surface this relates to (e.g. Catalog, Product, Cart, Checkout, Store). Free text rather than an enum, because exploration is not bounded by the finding categories."
+          },
+          "referredTo": {
+            "type": "string",
+            "description": "For out-of-scope outcomes, the kosh command that covers this territory — e.g. /kosh:a11y, /kosh:performance, /kosh:functional-design."
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "object",
+      "description": "Findings grouped by severity. Commerce-flow issues only — console and network errors observed during a step belong inside that finding's text as supporting evidence, not as standalone findings.",
+      "required": ["critical", "high", "medium", "low"],
+      "additionalProperties": false,
+      "properties": {
+        "critical": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/finding" },
+          "description": "Blocks the purchase path: add-to-cart fails, cart totals are wrong, checkout is unreachable, gateway in test mode on production."
+        },
+        "high": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/finding" },
+          "description": "Significantly impairs the purchase path without fully blocking it."
+        },
+        "medium": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/finding" },
+          "description": "Noticeable issue with a workaround available."
+        },
+        "low": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/finding" },
+          "description": "Minor concern or improvement suggestion."
+        }
+      }
+    }
+  },
+  "definitions": {
+    "finding": {
+      "type": "object",
+      "required": ["category", "issue", "impact", "device", "pages"],
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["Catalog", "Product", "Cart", "Checkout", "Store"],
+          "description": "Catalog = shop archive and product grid. Product = product page, variations, add-to-cart control. Cart = cart contents, quantity and removal operations, totals math. Checkout = checkout form, validation, order review, shipping and payment display. Store = cross-cutting issues such as store discovery, navigation between commerce surfaces, or a price that differs between surfaces."
+        },
+        "issue": {
+          "type": "string",
+          "description": "What is wrong, naming the specific element or behavior. Console and network evidence observed during this step is appended here as supporting text (e.g. 'Supporting evidence: the add-to-cart POST to ?wc-ajax=add_to_cart returned 500'), never raised as a separate finding."
+        },
+        "impact": {
+          "type": "string",
+          "description": "The user-facing or commercial consequence — what a shopper experiences and what it costs the store."
+        },
+        "device": {
+          "type": "string",
+          "enum": ["mobile", "desktop", "both"],
+          "description": "Which viewport the issue was observed on. The full journey runs at desktop 1920px; mobile 375px covers spot-checks of the product add-to-cart, cart, and checkout surfaces."
+        },
+        "pages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "format": "uri" },
+          "description": "URLs where the issue was observed."
+        },
+        "screenshots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^screenshots/"
+          },
+          "description": "Paths relative to the reports/ directory, e.g. 'screenshots/cart-totals-desktop.png' for a file saved at reports/screenshots/cart-totals-desktop.png. Strongly encouraged for visual findings so the HTML report can embed them inline."
+        }
+      }
+    }
+  }
+}

@@ -2,18 +2,19 @@
 
 <img alt="kosh; text reads one moment of perfect beauty" width="300" src="https://github.com/user-attachments/assets/db9737bb-7ea8-4dbf-b539-e503c29bb9a5">
 
-A Claude Code plugin for testing WordPress sites. Run automated functional, performance, accessibility, and AEO audits against any live URL using real browser automation via Playwright MCP.
+A Claude Code plugin for testing WordPress sites. Run automated functional, performance, accessibility, shop, and AEO audits against any live URL using real browser automation via Playwright MCP.
 
 ## What it does
 
-Kosh tests a site across four dimensions:
+Kosh tests a site across five dimensions:
 
 - **Functional & design:** User journeys, layout consistency, link validation, OpenGraph metadata, content quality
 - **Performance:** Load times, console errors, network failures, mixed content
 - **Accessibility:** WCAG 2.2 Level AA compliance: heading hierarchy, alt text, color contrast, keyboard navigation, form labels, ARIA
+- **Shop (WooCommerce):** The guest purchase path — catalog, product pages, add to cart, cart quantity and removal operations, cart math, and the checkout form. Stops at the payment step and never places an order.
 - **AEO (Answer Engine Optimization):** How AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews discover, parse, understand, and cite the site. 49 signals across 8 criteria, status-based evaluation (pass / partial / fail / N/A), site-type-aware and content-driven.
 
-Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. A render script converts the JSON into a self-contained HTML report with color-coded severity, collapsible sections, and inline screenshots. The functional, performance, and accessibility test types can also be merged into one comprehensive report.
+Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. A render script converts the JSON into a self-contained HTML report with color-coded severity, collapsible sections, and inline screenshots. The functional, performance, and accessibility test types can also be merged into one comprehensive report; shop and AEO reports are standalone.
 
 ## Quick start
 
@@ -31,6 +32,7 @@ Then run a test:
 /kosh:functional-design https://example.com
 /kosh:performance https://example.com
 /kosh:a11y https://example.com
+/kosh:shop https://example.com
 /kosh:aeo https://example.com
 ```
 
@@ -41,7 +43,7 @@ For detailed setup instructions (including troubleshooting), see the [Getting St
 ## Project structure
 
 ```text
-commands/        Slash commands (/kosh:a11y, /kosh:aeo, /kosh:functional-design, /kosh:performance)
+commands/        Slash commands (/kosh:a11y, /kosh:aeo, /kosh:functional-design, /kosh:performance, /kosh:shop)
 skills/          Full testing procedures for each command
 schemas/         JSON schemas for report validation
 scripts/         Report generation and merge scripts
@@ -72,4 +74,5 @@ Every test type emits a JSON report with this common frame:
 Beyond that frame, each test type has its own shape — see `schemas/` for the authoritative per-type definitions:
 
 - **Functional & design / Performance / Accessibility** (`qa-report-functional-schema.json`, `qa-report-performance-schema.json`, `qa-report-accessibility-schema.json`) — `mobile` and `desktop` blocks carry the viewport-specific findings (page metadata, network errors, contrast failures, etc.).
+- **Shop** (`qa-report-shop-schema.json`) — the common frame plus a `shop` block recording what the journey actually exercised: platform, the discovered catalog/cart/checkout URLs, whether the store runs classic or blocks templates, the products tested, which cart operations were verified, and where the run stopped at checkout.
 - **AEO** (`qa-report-aeo-schema.json`) — `criteria` block with eight criterion sub-blocks (each containing pass / partial / fail / N/A signal evaluations), a top-level `summary` with signal counts, plus `siteType`, `siteTypeConfidence`, and a `technicalNotes.applicableSchemas` relevance map.

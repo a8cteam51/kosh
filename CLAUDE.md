@@ -1,6 +1,6 @@
 # kosh — Claude Code Plugin for WordPress QA
 
-kosh is a Claude Code plugin that runs functional, performance, accessibility, and AEO (answer-engine optimization) tests against live WordPress sites using Playwright MCP browser automation.
+kosh is a Claude Code plugin that runs functional, performance, accessibility, shop, and AEO (answer-engine optimization) tests against live WordPress sites using Playwright MCP browser automation.
 
 ## How it works
 
@@ -27,6 +27,7 @@ Each test type has a matching set of files:
 | Functional & design | `commands/functional-design.md` | `skills/functional-design/SKILL.md` | `schemas/qa-report-functional-schema.json` |
 | Performance | `commands/performance.md` | `skills/performance/SKILL.md` | `schemas/qa-report-performance-schema.json` |
 | Accessibility | `commands/a11y.md` | `skills/a11y/SKILL.md` | `schemas/qa-report-accessibility-schema.json` |
+| Shop (WooCommerce) | `commands/shop.md` | `skills/shop/SKILL.md` | `schemas/qa-report-shop-schema.json` |
 | AEO / AI mode | `commands/aeo.md` | `skills/aeo/SKILL.md` | `schemas/qa-report-aeo-schema.json` |
 
 If you add a new test type, you need all three: a command, a skill, and a schema.
