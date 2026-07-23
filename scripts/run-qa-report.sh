@@ -4,10 +4,11 @@
 # Reads a kosh JSON report and emits a self-contained HTML report.
 #
 # Usage:
-#   ./run-qa-report.sh <path-to-json> [--functional] [--performance] [--accessibility]
+#   ./run-qa-report.sh <path-to-json> [--functional] [--performance] [--accessibility] [--shop]
 #
 # Examples:
-#   ./run-qa-report.sh qa-report-functional-wholyme.json --functional
+#   ./run-qa-report.sh qa-report-functional.json --functional
+#   ./run-qa-report.sh qa-report-shop.json --shop
 #   ./run-qa-report.sh qa-report.json --performance
 #   ./run-qa-report.sh qa-report.json --functional --performance --accessibility
 #   ./run-qa-report.sh qa-report.json (auto-detects test type from filename)
@@ -73,6 +74,8 @@ if [ -z "$TEST_TYPE_FLAGS" ]; then
     TEST_TYPE_FLAGS="--performance"
   elif [[ "$BASENAME" == *"accessibility"* ]]; then
     TEST_TYPE_FLAGS="--accessibility"
+  elif [[ "$BASENAME" == *"shop"* ]]; then
+    TEST_TYPE_FLAGS="--shop"
   fi
 fi
 
@@ -96,6 +99,8 @@ elif [[ "$TEST_TYPE_FLAGS" == "--performance" ]]; then
   TEST_TYPE_LABEL="PERFORMANCE"
 elif [[ "$TEST_TYPE_FLAGS" == "--accessibility" ]]; then
   TEST_TYPE_LABEL="ACCESSIBILITY"
+elif [[ "$TEST_TYPE_FLAGS" == "--shop" ]]; then
+  TEST_TYPE_LABEL="SHOP"
 else
   TEST_TYPE_LABEL=""
 fi
