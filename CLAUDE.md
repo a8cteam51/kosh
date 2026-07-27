@@ -25,10 +25,10 @@ Render a report to self-contained HTML:
 ```bash
 scripts/run-qa-report.sh reports/data/qa-report-functional.json   # detects type from filename
 node scripts/generate-report.js reports/data/qa-report-aeo.json   # or call the renderer directly
-scripts/merge-qa-reports.sh                                       # functional + performance + a11y
+scripts/merge-qa-reports.sh                                       # or /kosh:merge
 ```
 
-`merge-qa-reports.sh` requires all three of functional, performance, and accessibility; shop and AEO reports are standalone and cannot be merged.
+Merging requires all three of functional, performance, and accessibility; shop and AEO reports are standalone. Prefer `/kosh:merge` over calling the script — it reports which JSON files are missing up front, where the script exits on the first one it can't find.
 
 AEO reports route to a separate renderer on `mode: "aeo"` in the JSON. An AEO-shaped report missing that field is a hard error, not a fallback.
 
