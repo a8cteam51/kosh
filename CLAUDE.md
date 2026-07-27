@@ -2,6 +2,36 @@
 
 kosh is a Claude Code plugin that runs functional, performance, accessibility, shop, and AEO (answer-engine optimization) tests against live WordPress sites using Playwright MCP browser automation.
 
+## Commands
+
+No build step and no `package.json` — the scripts are plain `node` and `bash`.
+
+```bash
+claude --plugin-dir .    # launch Claude Code with the plugin loaded
+```
+
+Run a test — each writes its JSON to `reports/data/`:
+
+```
+/kosh:functional-design https://example.com
+/kosh:performance https://example.com
+/kosh:a11y https://example.com
+/kosh:shop https://example.com
+/kosh:aeo https://example.com
+```
+
+Render a report to self-contained HTML:
+
+```bash
+scripts/run-qa-report.sh reports/data/qa-report-functional.json   # detects type from filename
+node scripts/generate-report.js reports/data/qa-report-aeo.json   # or call the renderer directly
+scripts/merge-qa-reports.sh                                       # functional + performance + a11y
+```
+
+`merge-qa-reports.sh` requires all three of functional, performance, and accessibility; shop and AEO reports are standalone and cannot be merged.
+
+AEO reports route to a separate renderer on `mode: "aeo"` in the JSON. An AEO-shaped report missing that field is a hard error, not a fallback.
+
 ## How it works
 
 Each test is triggered by a **command** (`commands/`) which parses user input and delegates to a **skill** (`skills/`). The skill contains the full testing procedure — what to check, how to check it, and how to report findings. Results follow the structure defined in a **schema** (`schemas/`) and are saved as JSON reports, which are then rendered to self-contained HTML reports via scripts in `scripts/`.
@@ -31,6 +61,8 @@ Each test type has a matching set of files:
 | AEO / AI mode | `commands/aeo.md` | `skills/aeo/SKILL.md` | `schemas/qa-report-aeo-schema.json` |
 
 If you add a new test type, you need all three: a command, a skill, and a schema.
+
+`commands/merge.md` is the exception — it has no skill or schema and just runs `scripts/merge-qa-reports.sh`.
 
 ## Contributing
 
