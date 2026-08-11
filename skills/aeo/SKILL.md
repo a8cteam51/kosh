@@ -397,7 +397,7 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 
 > **`faqRelevance` is cross-page, not homepage-only — and schema presence must travel with it.** This snippet runs on the homepage first, but Section 1.4 explicitly re-runs the equivalent FAQ check on `/faq` / `/faqs` inner pages when the homepage has no FAQ. If that inner-page check finds a real FAQ (`faqSectionFound: true`) or a de facto one (`answeredQuestionHeadingCount ≥ 3`), update `faqRelevance` to the strongest value observed across all pages checked (`high` > `medium` > `absent`) before it feeds `applicableSchemas.FAQPage`, `faqSchema`, and `faqSchemaApplied`. (Not `relevantSchemasApplied` — `FAQPage` is deliberately excluded from that coverage ratio via `STANDALONE_SIGNALS`, so it isn't a consumer here.) Without this, a dedicated FAQ page that never got marked up would score `faqSectionPresent: partial` (correctly flagging the gap) while `faqSchema`/`faqSchemaApplied` simultaneously report `na` ("no FAQ content on the site") for the same site — the two disagreeing about whether the site has an FAQ at all.
 >
-> Relevance moving cross-page is only half the fix: also re-run FAQ-schema detection on whichever page raised `faqRelevance`. The homepage-only `microdataFaq` snippet above only checks microdata — it never parses `<script type="application/ld+json">`, so it isn't a complete, portable per-page check on its own. Use this canonical per-page check instead everywhere FAQ schema needs to be evaluated on a specific page (this note, the Section 1.4 `/faq` visit, and the Section 2.1 functional-page check, which now returns the same tier):
+> Relevance moving cross-page is only half the fix: also re-run FAQ-schema detection on whichever page raised `faqRelevance`. The homepage-only `microdataFaq` snippet below (Section 1.3) only checks microdata — it never parses `<script type="application/ld+json">`, so it isn't a complete, portable per-page check on its own, and the general JSON-LD inventory earlier in Section 1.3 collapses a Yoast/RankMath `@graph` payload to the literal string `'@graph'` without unpacking a nested `FAQPage` node, so it can't stand in either. Use this canonical per-page check instead everywhere FAQ schema needs to be evaluated on a specific page — **including Section 1.3 / the homepage itself**, not just the Section 1.4 `/faq` visit and the Section 2.1 functional-page check (all three now return the same tier, using an identical copy of this snippet):
 >
 > ```javascript
 > const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
@@ -411,11 +411,11 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 > const faqPageNodes = jsonLd.filter(s => [].concat(s['@type'] || []).includes('FAQPage'));
 > const hasValidJsonLdFaq = faqPageNodes.some(s => Array.isArray(s.mainEntity) && s.mainEntity.length >= 2);
 > const hasWeakJsonLdFaq = (faqPageNodes.length > 0 && !hasValidJsonLdFaq) || hasMalformedFaqAttempt;
-> const hasMicrodataFaq = !!document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"], [itemscope][itemtype*="schema.org/Question"]');
-> const faqSchemaTier = hasValidJsonLdFaq ? 'valid' : (hasWeakJsonLdFaq || hasMicrodataFaq) ? 'weak' : 'none';
+> const hasNonJsonLdFaq = !!document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"], [itemscope][itemtype*="schema.org/Question"], [typeof~="FAQPage"], [typeof~="schema:FAQPage"]');
+> const faqSchemaTier = hasValidJsonLdFaq ? 'valid' : (hasWeakJsonLdFaq || hasNonJsonLdFaq) ? 'weak' : 'none';
 > ```
 >
-> Carry forward the strongest tier observed across all pages checked (`valid` > `weak` > `none`): `valid` maps to `faqSchema`'s `pass` tier (JSON-LD FAQPage with 2+ Q&A pairs), `weak` maps to its `partial` tier (malformed JSON-LD or microdata-only), and `none` is what can reach `fail` when `faqRelevance` is `high`. Without normalizing `@type` and separating malformed/microdata-only from genuinely valid, a microdata-only or empty-`mainEntity` FAQ page could get carried forward as the *strongest* observation and wrongly graded at full credit, or an array-typed `FAQPage` on `/faq` could still be missed entirely — reproducing the false `critical` this note exists to remove.
+> Carry forward the strongest tier observed across all pages checked (`valid` > `weak` > `none`): `valid` maps to `faqSchema`'s `pass` tier (JSON-LD FAQPage with 2+ Q&A pairs), `weak` maps to its `partial` tier (malformed JSON-LD, microdata-only, or RDFa-only), and `none` is what can reach `fail` when `faqRelevance` is `high`. Without normalizing `@type`, separating malformed/microdata/RDFa-only from genuinely valid, and covering all three non-JSON-LD-valid formats, a microdata- or RDFa-only FAQ, or an empty-`mainEntity` FAQ page, could get carried forward as the *strongest* observation and wrongly graded at full credit, an array-typed `FAQPage` on `/faq` could still be missed entirely, or an RDFa-marked FAQ could score `none` and produce a false `critical` — reproducing exactly the problem this note exists to remove. This exact snippet — including this `hasNonJsonLdFaq` selector — must stay identical everywhere it's copied (Section 1.3 homepage, Section 1.4 `/faq` visit, Section 2.1 functional page); a divergence in one copy reopens the gap this note just closed in the others.
 
 ---
 
@@ -705,11 +705,21 @@ return { inScopeCount: inScope.length, matchedCount: matched.length, coveragePer
 
 #### FAQ schema
 
-JSON-LD `@type: "FAQPage"` with `mainEntity` containing Q&A pairs. Microdata check:
+JSON-LD `@type: "FAQPage"` with `mainEntity` containing Q&A pairs, microdata, or RDFa. Run the canonical `faqSchemaTier` check defined in the Section 0.4 cross-page note (identical snippet — do not re-derive this independently):
 
 ```javascript
-const microdataFaq = document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"], [itemscope][itemtype*="schema.org/Question"]');
-return { microdataFaq: !!microdataFaq };
+const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+let hasMalformedFaqAttempt = false;
+const jsonLd = scripts.map(s => {
+  try { return JSON.parse(s.innerText); }
+  catch (e) { if (/FAQPage/.test(s.innerText)) hasMalformedFaqAttempt = true; return null; }
+}).filter(Boolean).flatMap(s => Array.isArray(s) ? s : (s['@graph'] || [s]));
+const faqPageNodes = jsonLd.filter(s => [].concat(s['@type'] || []).includes('FAQPage'));
+const hasValidJsonLdFaq = faqPageNodes.some(s => Array.isArray(s.mainEntity) && s.mainEntity.length >= 2);
+const hasWeakJsonLdFaq = (faqPageNodes.length > 0 && !hasValidJsonLdFaq) || hasMalformedFaqAttempt;
+const hasNonJsonLdFaq = !!document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"], [itemscope][itemtype*="schema.org/Question"], [typeof~="FAQPage"], [typeof~="schema:FAQPage"]');
+const faqSchemaTier = hasValidJsonLdFaq ? 'valid' : (hasWeakJsonLdFaq || hasNonJsonLdFaq) ? 'weak' : 'none';
+return { faqSchemaTier };
 ```
 
 **Evaluation:**
@@ -717,9 +727,9 @@ return { microdataFaq: !!microdataFaq };
 FAQ schema only applies when the site actually has FAQ content. Gate on FAQ relevance (Section 0.4 `faqRelevance`) and the visible FAQ check (`faqSectionPresent`, Section 1.4). **Never fail a site merely for lacking an FAQ** — the many sites that legitimately have no FAQ get `na`, not `fail`.
 
 - `na` — No visible FAQ content and `faqRelevance` is `absent`. The site has no FAQ, so FAQ schema is not applicable. Record in `notes` as `"N/A — no FAQ content on the site; FAQ schema not applicable."` Do **not** generate an issue. This is the default for sites without an FAQ.
-- `pass` — Visible FAQ content present (a container/heading/accordion, OR — when `faqRelevance` is `medium` — the answered-question-heading cluster) AND JSON-LD FAQPage with 2+ valid Q&A pairs.
-- `partial` — Visible FAQ content present but schema is malformed JSON-LD, OR microdata-only FAQ markup, OR `faqRelevance` is `medium` (a cluster of 3+ answered question-framed headings looks like a de facto FAQ, but it carries no FAQ container, heading, or accordion) and no schema of any kind is present. Record in `notes` as `"Partial — question-style headings suggest an unmarked FAQ; no formal FAQ markup or schema found."` and recommend adding explicit FAQ markup (container/heading/accordion) plus FAQPage schema.
-- `fail` — Visible FAQ content present but no FAQ schema of any kind. (Only reachable when FAQ content actually exists, i.e. `faqRelevance` is `high`.)
+- `pass` — Visible FAQ content present (a container/heading/accordion, OR — when `faqRelevance` is `medium` — the answered-question-heading cluster) AND `faqSchemaTier` is `valid` (JSON-LD FAQPage with 2+ Q&A pairs).
+- `partial` — Visible FAQ content present and `faqSchemaTier` is `weak` (malformed JSON-LD, microdata-only, or RDFa-only FAQ markup), OR `faqRelevance` is `medium` (a cluster of 3+ answered question-framed headings looks like a de facto FAQ, but it carries no FAQ container, heading, or accordion) and `faqSchemaTier` is `none`. Record in `notes` as `"Partial — question-style headings suggest an unmarked FAQ; no formal FAQ markup or schema found."` and recommend adding explicit FAQ markup (container/heading/accordion) plus FAQPage schema.
+- `fail` — Visible FAQ content present but `faqSchemaTier` is `none`. (Only reachable when FAQ content actually exists, i.e. `faqRelevance` is `high`.)
 
 #### JSON-LD format used — `jsonLdFormat`
 
@@ -832,9 +842,9 @@ Cross-reference: if a FAQ section was found AND FAQ JSON-LD schema was found in 
 
 **Evaluation:**
 - `na` — Neither visible FAQ content nor FAQ schema present AND `faqRelevance` is `absent`. The site has no FAQ, so there is nothing to align. Record in `notes` as `"N/A — no FAQ content on the site."` Do **not** generate an issue.
-- `pass` — Both visible FAQ content (a container/heading/accordion, OR — when `faqRelevance` is `medium` — the answered-question-heading cluster) and FAQ schema present.
-- `partial` — FAQ schema present but no visible FAQ content, OR visible FAQ content present but no FAQ schema, OR `faqRelevance` is `medium` (answered-question-heading cluster present, no formal FAQ markup) and no schema is present. A genuine FAQ built from question-style headings alone — no `faq` class, no "frequently asked" heading, fewer than 2 `<details>` — lands here rather than `na`, so the missing markup still surfaces as a finding.
-- `fail` — FAQ content is warranted (`faqRelevance` is `high` — e.g. a dedicated FAQ page or accordion exists) but neither the visible FAQ nor the schema is properly in place.
+- `pass` — Both visible FAQ content (a container/heading/accordion, OR — when `faqRelevance` is `medium` — the answered-question-heading cluster) present AND `faqSchemaTier` is `valid`.
+- `partial` — `faqSchemaTier` is `weak` (malformed JSON-LD, microdata-only, or RDFa-only) with visible FAQ content present, OR `faqSchemaTier` is `valid`/`weak` but no visible FAQ content, OR visible FAQ content present but `faqSchemaTier` is `none`, OR `faqRelevance` is `medium` (answered-question-heading cluster present, no formal FAQ markup) and `faqSchemaTier` is `none`. A genuine FAQ built from question-style headings alone — no `faq` class, no "frequently asked" heading, fewer than 2 `<details>` — lands here rather than `na`, so the missing markup still surfaces as a finding, and microdata/RDFa-only or malformed schema never gets waved through as full credit.
+- `fail` — FAQ content is warranted (`faqRelevance` is `high` — e.g. a dedicated FAQ page or accordion exists) but neither the visible FAQ nor a `faqSchemaTier` of at least `weak` is properly in place.
 
 This signal exists alongside `faqSchema` and `faqSectionPresent` to verify that the schema and the visible content are applied together — the alignment, not the presence of either alone.
 
@@ -1283,8 +1293,8 @@ const jsonLd = scripts.map(s => {
 const faqPageNodes = jsonLd.filter(s => [].concat(s['@type'] || []).includes('FAQPage'));
 const hasValidJsonLdFaq = faqPageNodes.some(s => Array.isArray(s.mainEntity) && s.mainEntity.length >= 2);
 const hasWeakJsonLdFaq = (faqPageNodes.length > 0 && !hasValidJsonLdFaq) || hasMalformedFaqAttempt;
-const hasMicrodataFaq = !!document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"], [itemscope][itemtype*="schema.org/Question"]');
-const faqSchemaTier = hasValidJsonLdFaq ? 'valid' : (hasWeakJsonLdFaq || hasMicrodataFaq) ? 'weak' : 'none';
+const hasNonJsonLdFaq = !!document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"], [itemscope][itemtype*="schema.org/Question"], [typeof~="FAQPage"], [typeof~="schema:FAQPage"]');
+const faqSchemaTier = hasValidJsonLdFaq ? 'valid' : (hasWeakJsonLdFaq || hasNonJsonLdFaq) ? 'weak' : 'none';
 
 // Same two-tier definition as Section 0.4's hasFaqMarkers / hasQuestionHeadingCluster —
 // a real FAQ marker (container, a "frequently asked"/"common questions"/bare "FAQ"
@@ -1311,7 +1321,7 @@ How the result feeds into evaluation — treat this page as another page checked
 
 - **`hasFaqMarkers` true but `faqSchemaTier` is `none` on this page** → `faqRelevance` rises to `high` (or stays `high`) from this evidence. This page's tier feeds the same cross-page aggregation as Section 0.4 (`valid` > `weak` > `none`): if no page checked anywhere in the run (homepage, `/faq`, and this functional page) reaches `valid` or `weak`, `faqSchema` resolves to `fail` at its own Structured Data severity (`critical`, or `high` if consolidated), and `faqSchemaApplied` separately resolves to `partial` at `medium` severity with effort `low` and a paste-ready Claude prompt for the FAQ schema. If a stronger tier was already found elsewhere, that wins instead — don't let this page's `none` override it.
 - **`hasFaqMarkers` false but `answeredQuestionHeadingCount` ≥ 3 (a de facto FAQ) and `faqSchemaTier` is `none` on this page** → `faqRelevance` rises to at least `medium`; `faqSchema`/`faqSchemaApplied` land at their own `partial` tiers, unless a stronger tier from another page checked already supersedes it.
-- **Both `visibleFaq` and `faqSchemaTier` of `valid` or `weak` are present** → `faqRelevance` is `high` if `hasFaqMarkers` drove `visibleFaq`, or at least `medium` if only the de facto cluster did; `faqSchemaTier: valid` confirms `faqSchema` and `faqSchemaApplied` at full `pass` credit, while `faqSchemaTier: weak` (malformed JSON-LD or microdata-only) caps both at `partial` per their own tiers — `weak` is not full credit.
+- **Both `visibleFaq` and `faqSchemaTier` of `valid` or `weak` are present** → `faqRelevance` is `high` if `hasFaqMarkers` drove `visibleFaq`, or at least `medium` if only the de facto cluster did; `faqSchemaTier: valid` confirms `faqSchema` and `faqSchemaApplied` at full `pass` credit — both signals now require `valid` specifically for `pass`, per their own tier definitions — while `faqSchemaTier: weak` (malformed JSON-LD, microdata-only, or RDFa-only) caps both at `partial` per their own tiers. `weak` is never full credit.
 - **`visibleFaq` false** on the functional page → not penalized (the page may genuinely not need FAQ format) and doesn't affect `faqRelevance`, but record in `notes` as a missed AEO opportunity since these pages are high-intent.
 
 #### `archivePageQuality` check — `mediaBlog` only
