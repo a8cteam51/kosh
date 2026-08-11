@@ -667,8 +667,8 @@ const matched = inScope.filter(([k, v]) => allPresentTypes.has(k) ||
   (k === 'LocalBusiness' && [...allPresentTypes].some(t => /Restaurant|Dentist|Plumber|MedicalBusiness|Store|HomeAndConstructionBusiness/.test(t)))
 );
 
-const coverage = inScope.length === 0 ? 1 : matched.length / inScope.length;
-return { inScopeCount: inScope.length, matchedCount: matched.length, coveragePercent: Math.round(coverage * 100), gaps: inScope.filter(x => !matched.includes(x)).map(([k]) => k) };
+const coverage = inScope.length === 0 ? null : matched.length / inScope.length;
+return { inScopeCount: inScope.length, matchedCount: matched.length, coveragePercent: coverage === null ? null : Math.round(coverage * 100), gaps: inScope.filter(x => !matched.includes(x)).map(([k]) => k) };
 ```
 
 **Evaluation:**
@@ -677,7 +677,7 @@ return { inScopeCount: inScope.length, matchedCount: matched.length, coveragePer
 - `partial` — Coverage 30–89% (some relevant schemas present but significant gaps remain; the dominant primary schema may be present but secondary schemas are missing).
 - `fail` — Coverage < 30%, OR no schemas of any kind present.
 
-> If `Section 0.4` found no schemas with `high` or `medium` relevance (rare — Organization is always at least `high`, so this should never be empty), record `na` and note in `notes` as `"N/A — no content patterns matched any schema-eligible type beyond Organization."`
+> `inScopeCount: 0` (`coveragePercent: null`) — record `na`, with `notes` as `"N/A — no content patterns matched any schema-eligible type beyond Organization/FAQPage/Review, which are excluded from this ratio (they have their own standalone signals)."` This is now an expected outcome, not a rare edge case — Organization no longer keeps `inScope` non-empty by default, so any site whose only high/medium-relevance types are Organization, FAQPage, and/or Review (no blog listing, address+hours, shop, ordered steps, etc.) lands here. Never score this state as `pass`; `coveragePercent: null` makes that unreachable.
 >
 > Record the specific gap list in `notes` — e.g. `"Coverage 60% — gaps: Event (annual conference visible on homepage), HowTo (3 tutorial pages observed)."` Each gap also produces an entry in `actionablePrompts` with a paste-ready Claude prompt to generate the missing schema.
 
@@ -766,27 +766,42 @@ return { microdataReview: !!microdataReview };
 #### FAQ section present
 
 ```javascript
+// Marker set matches Section 0.4's hasFaqMarkers exactly (container class/id, a bare
+// "FAQ"/"FAQs" heading in addition to "frequently asked"/"common questions", and a 2+
+// <details> accordion) so faqSectionFound means the same thing here as faqRelevance:
+// 'high' does in 0.4 — whichever page this runs against.
 const faqIndicators = [
   ...document.querySelectorAll('[class*="faq"], [id*="faq"], [class*="FAQ"], [id*="FAQ"]'),
   ...Array.from(document.querySelectorAll('h2, h3')).filter(h => {
     const t = h.innerText.toLowerCase();
-    return t.includes('frequently asked') || t.includes('common questions');
+    return /frequently asked|common questions|\bfaqs?\b/.test(t);
   })
 ];
 const dlPairs = document.querySelectorAll('dl');
 const detailsElements = document.querySelectorAll('details');
+const hasFaqAccordion = detailsElements.length >= 2;
+// De facto FAQ: 3+ question-framed H2/H3s, each followed by answer-like body text, on
+// THIS page (homepage or the /faq inner page this snippet is run against) — same
+// "answered question heading" test as Section 0.4's faqRelevance check.
+const answeredQuestionHeadingCount = Array.from(document.querySelectorAll('h2, h3'))
+  .filter(h => h.innerText.trim().endsWith('?'))
+  .filter(h => {
+    const next = h.nextElementSibling;
+    return !!next && /^(P|DIV|UL|OL)$/.test(next.tagName) && next.innerText.trim().length > 20;
+  }).length;
 return {
-  faqSectionFound: faqIndicators.length > 0,
+  faqSectionFound: faqIndicators.length > 0 || hasFaqAccordion,
   dlPairs: dlPairs.length,
-  detailsElements: detailsElements.length
+  detailsElements: detailsElements.length,
+  answeredQuestionHeadingCount
 };
 ```
 
-If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit during Phase 2).
+If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit during Phase 2) — re-run this snippet on whichever page you land on, so a dedicated FAQ page gets the same de-facto-FAQ check as the homepage.
 
 **Evaluation:**
 - `pass` — FAQ section found (homepage or dedicated FAQ page) with 2+ Q&A pairs.
-- `partial` — Accordion or FAQ pattern present but only 1 item, or very thin, OR `faqRelevance` (Section 0.4) is `medium` — a de facto FAQ built from 3+ question-framed headings each followed by answer text, with no FAQ container/heading/accordion. Gate on `faqRelevance` rather than re-deriving from `faqSectionFound` above: `faqSectionFound`'s marker set here is narrower than Section 0.4's (it misses a bare "FAQ" heading and doesn't consider `detailsElements`), so a page that already has real FAQ markup — and is correctly `faqRelevance: 'high'` — must never fall into this branch. Word the finding as a suggestion to add explicit FAQ markup, not as a defect — this stays capped at `low` per the optional/stylistic carve-out below.
+- `partial` — Accordion or FAQ pattern present but only 1 item, or very thin, OR `faqSectionFound` is false but `answeredQuestionHeadingCount` ≥ 3 (a de facto FAQ built from question-style headings each followed by answer text, with no faq class/id, no "FAQ" heading, and fewer than 2 `<details>` — all now covered by `faqSectionFound` above, so this branch can't fire on a page that already has real FAQ markup). Word the finding as a suggestion to add explicit FAQ markup, not as a defect — this stays capped at `low` per the optional/stylistic carve-out below.
 - `fail` — Absent.
 
 #### FAQ schema applied to visible FAQ content — `faqSchemaApplied`
