@@ -395,7 +395,9 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 
 > Note: `Organization` is always `high`, but it's evaluated under its own standalone signal (`organizationSchema`) — not double-counted in `primaryEntitySchema` or `relevantSchemasApplied`. Similarly, `FAQPage` and `Review` have their own standalone signals and aren't double-counted.
 
-> **`faqRelevance` is cross-page, not homepage-only.** This snippet runs on the homepage first, but Section 1.4 explicitly re-runs the equivalent FAQ check on `/faq` / `/faqs` inner pages when the homepage has no FAQ. If that inner-page check finds a real FAQ (`faqSectionFound: true`) or a de facto one (`answeredQuestionHeadingCount ≥ 3`), update `faqRelevance` to the strongest value observed across all pages checked (`high` > `medium` > `absent`) before it feeds `applicableSchemas.FAQPage`, `relevantSchemasApplied`, `faqSchema`, and `faqSchemaApplied`. Without this, a dedicated FAQ page that never got marked up would score `faqSectionPresent: partial` (correctly flagging the gap) while `faqSchema`/`faqSchemaApplied` simultaneously report `na` ("no FAQ content on the site") for the same site — the two disagreeing about whether the site has an FAQ at all.
+> **`faqRelevance` is cross-page, not homepage-only — and schema presence must travel with it.** This snippet runs on the homepage first, but Section 1.4 explicitly re-runs the equivalent FAQ check on `/faq` / `/faqs` inner pages when the homepage has no FAQ. If that inner-page check finds a real FAQ (`faqSectionFound: true`) or a de facto one (`answeredQuestionHeadingCount ≥ 3`), update `faqRelevance` to the strongest value observed across all pages checked (`high` > `medium` > `absent`) before it feeds `applicableSchemas.FAQPage`, `faqSchema`, and `faqSchemaApplied`. (Not `relevantSchemasApplied` — `FAQPage` is deliberately excluded from that coverage ratio via `STANDALONE_SIGNALS`, so it isn't a consumer here.) Without this, a dedicated FAQ page that never got marked up would score `faqSectionPresent: partial` (correctly flagging the gap) while `faqSchema`/`faqSchemaApplied` simultaneously report `na` ("no FAQ content on the site") for the same site — the two disagreeing about whether the site has an FAQ at all.
+>
+> Relevance moving cross-page is only half the fix: also re-run FAQ-schema detection on whichever page raised `faqRelevance`. The homepage-only `microdataFaq` snippet above only checks microdata — it never parses `<script type="application/ld+json">`, so it isn't a complete, portable per-page check on its own. Use the same self-contained pattern as the Section 2.1 functional-page check instead (parse `script[type="application/ld+json"]` for `@type: "FAQPage"`, OR the microdata selector), and carry forward the strongest observation across all pages checked: valid JSON-LD FAQPage with 2+ Q&A pairs > microdata-only or malformed JSON-LD > no schema at all. Otherwise a site with a correctly schema-marked-up `/faq` page reads `faqRelevance: 'high'` from that page while the schema lookup — left homepage-only, and JSON-LD-blind even there — sees nothing, producing a false `fail` (`critical`, per the Structured Data severity rule) against a site that did the work correctly.
 
 ---
 
@@ -808,7 +810,7 @@ If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit d
 
 #### FAQ schema applied to visible FAQ content — `faqSchemaApplied`
 
-Cross-reference: if a FAQ section was found AND FAQ JSON-LD schema was found in 1.3.
+Cross-reference: if a FAQ section was found AND FAQ JSON-LD schema was found in 1.3 — on whichever page carries each, per the cross-page rule at the end of Section 0.4.
 
 **Evaluation:**
 - `na` — Neither visible FAQ content nor FAQ schema present AND `faqRelevance` is `absent`. The site has no FAQ, so there is nothing to align. Record in `notes` as `"N/A — no FAQ content on the site."` Do **not** generate an issue.
@@ -1236,7 +1238,7 @@ Always start with the **homepage** (already visited in Phase 0/1). Then pick inn
 | `nonprofit` | A program / cause / how-we-help page | A recent campaign / impact-report / news page | `/donate` or `/give` (FAQ schema check) |
 | `community` | A "what is this" / rules / wiki page | A recently-active discussion / featured contribution | `/join`, `/membership`, or `/become-a-member` (FAQ schema check) |
 
-**Optional 4th visit:** if a dedicated FAQ page exists at `/faq`, `/faqs`, `/help`, or `/support`, visit it to confirm `faqSectionPresent` and `faqSchemaApplied`.
+**Optional 4th visit:** if a dedicated FAQ page exists at `/faq`, `/faqs`, `/help`, or `/support`, visit it and re-run both the Section 1.4 FAQ check and the Section 1.3 FAQ-schema check on that page — this is what feeds `faqSectionPresent`, `faqSchema`, and `faqSchemaApplied`, and can raise `faqRelevance` per the cross-page rule at the end of Section 0.4.
 
 **Mediablog-specific 5th visit — archive page quality check.** For mediaBlog sites, visit at least one category or tag archive page (`/category/<slug>/`, `/tag/<slug>/`, `/topics/<slug>/`, or whatever the routing convention is). Run the `archivePageQuality` check from Section 2.1.
 
@@ -1257,19 +1259,33 @@ const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld
   .flatMap(s => Array.isArray(s) ? s : (s['@graph'] || [s]));
 const hasFaqSchema = jsonLd.some(s => s['@type'] === 'FAQPage') ||
   !!document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"]');
-const visibleFaq = !!document.querySelector('[class*="faq"], [id*="faq"]') ||
-  Array.from(document.querySelectorAll('h2, h3')).filter(h => h.innerText.trim().endsWith('?')).length >= 2 ||
+// Same two-tier definition as Section 0.4's hasFaqMarkers / hasQuestionHeadingCluster —
+// a real FAQ marker (container, a "frequently asked"/"common questions"/bare "FAQ"
+// heading, or a 2+ <details> accordion) counts as visibleFaq outright. Absent that, only
+// a cluster of 3+ question-framed headings EACH followed by answer-like body text counts
+// — two bare "?"-ending headings with no answer underneath is a CTA pattern, not an FAQ,
+// and must not flag this page as having one.
+const hasFaqMarkers = !!document.querySelector('[class*="faq"], [id*="faq"]') ||
+  Array.from(document.querySelectorAll('h2, h3')).some(h => /frequently asked|common questions|\bfaqs?\b/i.test(h.innerText.trim())) ||
   document.querySelectorAll('details').length >= 2;
-return { hasFaqSchema, visibleFaq, url: window.location.href };
+const answeredQuestionHeadingCount = Array.from(document.querySelectorAll('h2, h3'))
+  .filter(h => h.innerText.trim().endsWith('?'))
+  .filter(h => {
+    const next = h.nextElementSibling;
+    return !!next && /^(P|DIV|UL|OL)$/.test(next.tagName) && next.innerText.trim().length > 20;
+  }).length;
+const visibleFaq = hasFaqMarkers || answeredQuestionHeadingCount >= 3;
+return { hasFaqSchema, visibleFaq, hasFaqMarkers, answeredQuestionHeadingCount, url: window.location.href };
 ```
 
 The post's argument: donation, subscribe, and join/membership pages are exactly the pages where AI tools land users with concrete intent-bearing queries ("how do I donate to X?", "how do I subscribe to Y?", "what does a Z membership include?"). FAQ schema on these specific pages is high-leverage.
 
-How the result feeds into evaluation:
+How the result feeds into evaluation — treat this page as another page checked under the Section 0.4 cross-page rule, updating `faqRelevance`, `faqSchema`, and `faqSchemaApplied` together rather than `faqSchemaApplied` alone (leaving only `faqSchemaApplied` in sync here would reproduce, for this page, the same presence-vs-alignment split just fixed for the generic `/faq` case):
 
-- **Visible FAQ content present but no FAQ schema** on the functional page → drops `faqSchemaApplied` to `partial` and creates a `medium`-severity issue with effort `low` and a paste-ready Claude prompt for the FAQ schema.
-- **Both visible FAQ and FAQ schema present** → confirms `faqSchemaApplied` at full credit.
-- **No FAQ content visible at all** on the functional page → not penalized (the page may genuinely not need FAQ format), but record in `notes` as a missed AEO opportunity since these pages are high-intent.
+- **`hasFaqMarkers` true but no FAQ schema found on this page** → `faqRelevance` rises to `high` (or stays `high`) from this evidence. This page's schema evidence feeds the same cross-page aggregation as Section 0.4: if no page checked anywhere in the run (homepage, `/faq`, and this functional page) has valid schema, `faqSchema` resolves to `fail` and `faqSchemaApplied` to `partial`, creating a `medium`-severity issue with effort `low` and a paste-ready Claude prompt for the FAQ schema. If schema was already found elsewhere, that stronger observation wins instead — don't let this page's absence override it.
+- **`hasFaqMarkers` false but `answeredQuestionHeadingCount` ≥ 3 (a de facto FAQ) and no schema found on this page** → `faqRelevance` rises to at least `medium`; `faqSchema`/`faqSchemaApplied` land at `partial` per their own tiers, unless a stronger schema observation from another page checked already supersedes it.
+- **Both `visibleFaq` and FAQ schema present** → `faqRelevance` is `high` if `hasFaqMarkers` drove `visibleFaq`, or at least `medium` if only the de facto cluster did; either way this confirms `faqSchema` and `faqSchemaApplied` at full credit per their `pass` tiers.
+- **`visibleFaq` false** on the functional page → not penalized (the page may genuinely not need FAQ format) and doesn't affect `faqRelevance`, but record in `notes` as a missed AEO opportunity since these pages are high-intent.
 
 #### `archivePageQuality` check — `mediaBlog` only
 
