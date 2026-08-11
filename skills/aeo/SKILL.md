@@ -395,6 +395,8 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 
 > Note: `Organization` is always `high`, but it's evaluated under its own standalone signal (`organizationSchema`) — not double-counted in `primaryEntitySchema` or `relevantSchemasApplied`. Similarly, `FAQPage` and `Review` have their own standalone signals and aren't double-counted.
 
+> **`faqRelevance` is cross-page, not homepage-only.** This snippet runs on the homepage first, but Section 1.4 explicitly re-runs the equivalent FAQ check on `/faq` / `/faqs` inner pages when the homepage has no FAQ. If that inner-page check finds a real FAQ (`faqSectionFound: true`) or a de facto one (`answeredQuestionHeadingCount ≥ 3`), update `faqRelevance` to the strongest value observed across all pages checked (`high` > `medium` > `absent`) before it feeds `applicableSchemas.FAQPage`, `relevantSchemasApplied`, `faqSchema`, and `faqSchemaApplied`. Without this, a dedicated FAQ page that never got marked up would score `faqSectionPresent: partial` (correctly flagging the gap) while `faqSchema`/`faqSchemaApplied` simultaneously report `na` ("no FAQ content on the site") for the same site — the two disagreeing about whether the site has an FAQ at all.
+
 ---
 
 ## SECTION 1: Initial Setup & Homepage Programmatic Analysis
@@ -675,9 +677,9 @@ return { inScopeCount: inScope.length, matchedCount: matched.length, coveragePer
 
 - `pass` — Coverage ≥ 90% (every high/medium-relevance schema is backed by matching markup; or only one minor gap on a `medium`-relevance schema).
 - `partial` — Coverage 30–89% (some relevant schemas present but significant gaps remain; the dominant primary schema may be present but secondary schemas are missing).
-- `fail` — Coverage < 30%, OR no schemas of any kind present.
+- `fail` — `inScopeCount` > 0 AND (coverage < 30%, OR no schemas of any kind present).
 
-> `inScopeCount: 0` (`coveragePercent: null`) — record `na`, with `notes` as `"N/A — no content patterns matched any schema-eligible type beyond Organization/FAQPage/Review, which are excluded from this ratio (they have their own standalone signals)."` This is now an expected outcome, not a rare edge case — Organization no longer keeps `inScope` non-empty by default, so any site whose only high/medium-relevance types are Organization, FAQPage, and/or Review (no blog listing, address+hours, shop, ordered steps, etc.) lands here. Never score this state as `pass`; `coveragePercent: null` makes that unreachable.
+> `inScopeCount: 0` (`coveragePercent: null`) — record `na`, with `notes` as `"N/A — no content patterns matched any schema-eligible type beyond Organization/FAQPage/Review, which are excluded from this ratio (they have their own standalone signals)."` This is now an expected outcome, not a rare edge case — Organization no longer keeps `inScope` non-empty by default, so any site whose only high/medium-relevance types are Organization, FAQPage, and/or Review (no blog listing, address+hours, shop, ordered steps, etc.) lands here. Never score this state as `pass` or `fail`; requiring `inScopeCount` > 0 in the `fail` bullet above makes `na` the only reachable status when `coveragePercent` is `null`, even if the site also has zero structured data of any kind.
 >
 > Record the specific gap list in `notes` — e.g. `"Coverage 60% — gaps: Event (annual conference visible on homepage), HowTo (3 tutorial pages observed)."` Each gap also produces an entry in `actionablePrompts` with a paste-ready Claude prompt to generate the missing schema.
 
