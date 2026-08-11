@@ -316,8 +316,9 @@ const hasEventCopy = /\bregister\s+now|tickets|conference|symposium|summit|webin
 const hasMultipleEvents = (text.match(/\bregister|tickets|join\s+us\s+on/gi) || []).length >= 2;
 const eventRelevance = (hasEventDatePattern && hasMultipleEvents) ? 'high' : hasEventCopy ? 'medium' : 'absent';
 
-// FAQ — real FAQ structures only (also fed by existing faqSectionPresent in 1.4).
-// NOTE: question-style headings alone do NOT establish FAQ relevance. A CTA like
+// FAQ — real FAQ structures, plus a weaker "de facto FAQ" signal (also fed by
+// existing faqSectionPresent in 1.4).
+// NOTE: a single question-style heading does NOT establish FAQ relevance. A CTA like
 // "Questions?" or "Ready to get involved?" ends in "?" but is not an FAQ. Requiring a
 // genuine FAQ marker prevents manufacturing a phantom FAQ requirement on sites that
 // have no FAQ. Genuine markers: an FAQ container, an explicit "frequently asked /
@@ -327,7 +328,20 @@ const hasFaqHeading = Array.from(document.querySelectorAll('h2, h3'))
   .some(h => /frequently asked|common questions|\bfaqs?\b/i.test(h.innerText.trim()));
 const hasFaqAccordion = document.querySelectorAll('details').length >= 2;
 const hasFaqMarkers = hasFaqContainer || hasFaqHeading || hasFaqAccordion;
-const faqRelevance = hasFaqMarkers ? 'high' : 'absent';
+// Weaker signal: a cluster of 3+ question-framed H2/H3 headings, each immediately
+// followed by answer-like body text, looks like a genuine FAQ built without any of the
+// markers above (no faq class/id, no "FAQ" heading, fewer than 2 <details>). Requiring
+// answer text after the heading is what separates a real Q&A pattern from scattered
+// CTA headings ("Ready to get started?", "Questions?") that just end in "?" with no
+// answer underneath — a single one of those is still just a CTA, not an FAQ signal.
+const answeredQuestionHeadings = Array.from(document.querySelectorAll('h2, h3'))
+  .filter(h => h.innerText.trim().endsWith('?'))
+  .filter(h => {
+    const next = h.nextElementSibling;
+    return !!next && /^(P|DIV|UL|OL)$/.test(next.tagName) && next.innerText.trim().length > 20;
+  });
+const hasQuestionHeadingCluster = answeredQuestionHeadings.length >= 3;
+const faqRelevance = hasFaqMarkers ? 'high' : hasQuestionHeadingCluster ? 'medium' : 'absent';
 
 // HowTo — numbered step sequence with a stated goal
 const hasOrderedSteps = !!document.querySelector('ol li + li + li') ||
@@ -677,9 +691,9 @@ return { microdataFaq: !!microdataFaq };
 FAQ schema only applies when the site actually has FAQ content. Gate on FAQ relevance (Section 0.4 `faqRelevance`) and the visible FAQ check (`faqSectionPresent`, Section 1.4). **Never fail a site merely for lacking an FAQ** — the many sites that legitimately have no FAQ get `na`, not `fail`.
 
 - `na` — No visible FAQ content and `faqRelevance` is `absent`. The site has no FAQ, so FAQ schema is not applicable. Record in `notes` as `"N/A — no FAQ content on the site; FAQ schema not applicable."` Do **not** generate an issue. This is the default for sites without an FAQ.
-- `pass` — Visible FAQ content present AND JSON-LD FAQPage with 2+ valid Q&A pairs.
-- `partial` — Visible FAQ content present but schema is malformed JSON-LD, OR microdata-only FAQ markup.
-- `fail` — Visible FAQ content present but no FAQ schema of any kind. (Only reachable when FAQ content actually exists.)
+- `pass` — Visible FAQ content present (a container/heading/accordion, OR — when `faqRelevance` is `medium` — the answered-question-heading cluster) AND JSON-LD FAQPage with 2+ valid Q&A pairs.
+- `partial` — Visible FAQ content present but schema is malformed JSON-LD, OR microdata-only FAQ markup, OR `faqRelevance` is `medium` (a cluster of 3+ answered question-framed headings looks like a de facto FAQ, but it carries no FAQ container, heading, or accordion) and no schema of any kind is present. Record in `notes` as `"Partial — question-style headings suggest an unmarked FAQ; no formal FAQ markup or schema found."` and recommend adding explicit FAQ markup (container/heading/accordion) plus FAQPage schema.
+- `fail` — Visible FAQ content present but no FAQ schema of any kind. (Only reachable when FAQ content actually exists, i.e. `faqRelevance` is `high`.)
 
 #### JSON-LD format used — `jsonLdFormat`
 
@@ -757,10 +771,20 @@ const faqIndicators = [
 ];
 const dlPairs = document.querySelectorAll('dl');
 const detailsElements = document.querySelectorAll('details');
+// De facto FAQ: 3+ question-framed H2/H3s, each followed by answer-like body text,
+// with none of the markers above. Identical test to Section 0.4's faqRelevance check
+// (same "answered question heading" definition) so the two stay in lockstep.
+const answeredQuestionHeadingCount = Array.from(document.querySelectorAll('h2, h3'))
+  .filter(h => h.innerText.trim().endsWith('?'))
+  .filter(h => {
+    const next = h.nextElementSibling;
+    return !!next && /^(P|DIV|UL|OL)$/.test(next.tagName) && next.innerText.trim().length > 20;
+  }).length;
 return {
   faqSectionFound: faqIndicators.length > 0,
   dlPairs: dlPairs.length,
-  detailsElements: detailsElements.length
+  detailsElements: detailsElements.length,
+  answeredQuestionHeadingCount
 };
 ```
 
@@ -768,7 +792,7 @@ If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit d
 
 **Evaluation:**
 - `pass` — FAQ section found (homepage or dedicated FAQ page) with 2+ Q&A pairs.
-- `partial` — Accordion or FAQ pattern present but only 1 item, or very thin.
+- `partial` — Accordion or FAQ pattern present but only 1 item, or very thin, OR `faqSectionFound` is false but `answeredQuestionHeadingCount` ≥ 3 (a de facto FAQ built from question-style headings each followed by answer text, with no faq class/id, no "FAQ" heading, and fewer than 2 `<details>`). Word the finding as a suggestion to add explicit FAQ markup, not as a defect — this stays capped at `low` per the optional/stylistic carve-out below.
 - `fail` — Absent.
 
 #### FAQ schema applied to visible FAQ content — `faqSchemaApplied`
@@ -777,9 +801,9 @@ Cross-reference: if a FAQ section was found AND FAQ JSON-LD schema was found in 
 
 **Evaluation:**
 - `na` — Neither visible FAQ content nor FAQ schema present AND `faqRelevance` is `absent`. The site has no FAQ, so there is nothing to align. Record in `notes` as `"N/A — no FAQ content on the site."` Do **not** generate an issue.
-- `pass` — Both visible FAQ content and FAQ schema present.
-- `partial` — FAQ schema present but no visible FAQ content, OR visible FAQ content present but no FAQ schema.
-- `fail` — FAQ content is warranted (`faqRelevance` high — e.g. a dedicated FAQ page or accordion exists) but neither the visible FAQ nor the schema is properly in place.
+- `pass` — Both visible FAQ content (a container/heading/accordion, OR — when `faqRelevance` is `medium` — the answered-question-heading cluster) and FAQ schema present.
+- `partial` — FAQ schema present but no visible FAQ content, OR visible FAQ content present but no FAQ schema, OR `faqRelevance` is `medium` (answered-question-heading cluster present, no formal FAQ markup) and no schema is present. A genuine FAQ built from question-style headings alone — no `faq` class, no "frequently asked" heading, fewer than 2 `<details>` — lands here rather than `na`, so the missing markup still surfaces as a finding.
+- `fail` — FAQ content is warranted (`faqRelevance` is `high` — e.g. a dedicated FAQ page or accordion exists) but neither the visible FAQ nor the schema is properly in place.
 
 This signal exists alongside `faqSchema` and `faqSectionPresent` to verify that the schema and the visible content are applied together — the alignment, not the presence of either alone.
 
@@ -1872,7 +1896,7 @@ Minimal top-level shape:
 ### Issue severity guide
 
 - **critical** — Signal at `fail` for a high-impact **technical** rubric area (Technical Health or Structured Data). Blocking AI discoverability or citation. (Note: AEO Readiness is **not** blanket-critical — most of its signals are content or stylistic and capped at `low` below; only `titleAndMetaQuestionMatch` and, when FAQ content is warranted, `faqSchemaApplied` stay elevated.)
-- **high** — Signal at `fail` for a non-content criterion that isn't capped below — `llmsTxt`, `titleAndMetaQuestionMatch`, or `faqSchemaApplied` (when warranted) — or a substantial `partial` on those. Significantly weakens AI understanding or trust signals.
+- **high** — Signal at `fail` for a non-content criterion that isn't capped below — for example `llmsTxt`, `titleAndMetaQuestionMatch`, or `faqSchemaApplied` (when warranted) — or a substantial `partial` on those; also the severity for secondary Structured Data signals downgraded from `critical` under the "Consolidate shared-root schema findings" rule below (e.g. `faqSchema` or `reviewSchema` failing alongside whichever single signal — `organizationSchema` or `primaryEntitySchema` — was recorded as the `critical` anchor for that same no-schema-emitter root cause). Significantly weakens AI understanding or trust signals.
 - **medium** — `partial` where the gap is moderate on a non-content, non-capped signal.
 - **low** — Minor gap, OR any content-quality / optional / stylistic signal per the caps below. Most AEO Readiness signals land here.
 
