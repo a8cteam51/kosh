@@ -653,9 +653,13 @@ const rdfaTypes = new Set(
 
 const allPresentTypes = new Set([...jsonLdTypes, ...microdataTypes, ...rdfaTypes]);
 
-// Compare against the relevance map from 0.4
+// Compare against the relevance map from 0.4. Organization, FAQPage, and Review each
+// have their own standalone signal (organizationSchema, faqSchema, reviewSchema) and are
+// excluded here so they aren't double-counted in this coverage ratio too (see the note
+// at the end of Section 0.4).
 const relevance = /* applicableSchemas from 0.4 */;
-const inScope = Object.entries(relevance).filter(([k, v]) => v === 'high' || v === 'medium');
+const STANDALONE_SIGNALS = ['Organization', 'FAQPage', 'Review'];
+const inScope = Object.entries(relevance).filter(([k, v]) => (v === 'high' || v === 'medium') && !STANDALONE_SIGNALS.includes(k));
 const matched = inScope.filter(([k, v]) => allPresentTypes.has(k) ||
   // BlogPosting and NewsArticle satisfy Article relevance; Article satisfies BlogPosting relevance
   (k === 'Article' && (allPresentTypes.has('BlogPosting') || allPresentTypes.has('NewsArticle'))) ||
@@ -771,20 +775,10 @@ const faqIndicators = [
 ];
 const dlPairs = document.querySelectorAll('dl');
 const detailsElements = document.querySelectorAll('details');
-// De facto FAQ: 3+ question-framed H2/H3s, each followed by answer-like body text,
-// with none of the markers above. Identical test to Section 0.4's faqRelevance check
-// (same "answered question heading" definition) so the two stay in lockstep.
-const answeredQuestionHeadingCount = Array.from(document.querySelectorAll('h2, h3'))
-  .filter(h => h.innerText.trim().endsWith('?'))
-  .filter(h => {
-    const next = h.nextElementSibling;
-    return !!next && /^(P|DIV|UL|OL)$/.test(next.tagName) && next.innerText.trim().length > 20;
-  }).length;
 return {
   faqSectionFound: faqIndicators.length > 0,
   dlPairs: dlPairs.length,
-  detailsElements: detailsElements.length,
-  answeredQuestionHeadingCount
+  detailsElements: detailsElements.length
 };
 ```
 
@@ -792,7 +786,7 @@ If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit d
 
 **Evaluation:**
 - `pass` — FAQ section found (homepage or dedicated FAQ page) with 2+ Q&A pairs.
-- `partial` — Accordion or FAQ pattern present but only 1 item, or very thin, OR `faqSectionFound` is false but `answeredQuestionHeadingCount` ≥ 3 (a de facto FAQ built from question-style headings each followed by answer text, with no faq class/id, no "FAQ" heading, and fewer than 2 `<details>`). Word the finding as a suggestion to add explicit FAQ markup, not as a defect — this stays capped at `low` per the optional/stylistic carve-out below.
+- `partial` — Accordion or FAQ pattern present but only 1 item, or very thin, OR `faqRelevance` (Section 0.4) is `medium` — a de facto FAQ built from 3+ question-framed headings each followed by answer text, with no FAQ container/heading/accordion. Gate on `faqRelevance` rather than re-deriving from `faqSectionFound` above: `faqSectionFound`'s marker set here is narrower than Section 0.4's (it misses a bare "FAQ" heading and doesn't consider `detailsElements`), so a page that already has real FAQ markup — and is correctly `faqRelevance: 'high'` — must never fall into this branch. Word the finding as a suggestion to add explicit FAQ markup, not as a defect — this stays capped at `low` per the optional/stylistic carve-out below.
 - `fail` — Absent.
 
 #### FAQ schema applied to visible FAQ content — `faqSchemaApplied`
