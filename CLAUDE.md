@@ -28,6 +28,14 @@ node scripts/generate-report.js reports/data/qa-report-aeo.json   # or call the 
 scripts/merge-qa-reports.sh                                       # or /kosh:merge
 ```
 
+`run-qa-report.sh` also archives the source JSON to `reports/data/archive/`, under
+the same basename as the HTML it generated. `reports/data/qa-report-<type>.json`
+is a fixed name that every run overwrites, so without this the evidence behind a
+finished report is destroyed by the next test — the HTML survives, its source data
+did not. Sharing the basename means you can get from a report to its exact input
+and back. A same-day rerun with different content gets the run timestamp appended
+rather than overwriting.
+
 Merging requires all three of functional, performance, and accessibility; shop and AEO reports are standalone. Prefer `/kosh:merge` over calling the script — it reports which JSON files are missing up front, where the script exits on the first one it can't find.
 
 `run-qa-report.sh` has no aeo branch in its filename detection, so AEO reports fall through to the renderer's own dispatch: it routes on `mode: "aeo"` in the JSON. An AEO-shaped report missing that field is a hard error, not a fallback.
