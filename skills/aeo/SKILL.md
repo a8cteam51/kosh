@@ -61,6 +61,7 @@ The top-level `summary` block carries the counts: `{ totalSignals: 49, pass, par
 
 - `skills/aeo/references/evaluation-rubric.md` — per-criterion signal list with pass/partial/fail tier definitions
 - `skills/aeo/references/signal-keys.md` — canonical signal keys for the JSON report
+- `skills/aeo/references/faq-detection.md` — the canonical `koshFaqProbe()` and the single definition of every FAQ determination (relevance, schema tier, cross-page aggregation, status mapping). Four signals depend on it; never inline or re-derive its logic in this file
 - `skills/aeo/references/wp-seo-capabilities.md` — what WordPress core and Jetpack emit natively per signal; drives native-first fix recommendations and carries the `lastVerified` date for the staleness check
 
 Underlying frameworks the rubric draws on:
@@ -316,32 +317,15 @@ const hasEventCopy = /\bregister\s+now|tickets|conference|symposium|summit|webin
 const hasMultipleEvents = (text.match(/\bregister|tickets|join\s+us\s+on/gi) || []).length >= 2;
 const eventRelevance = (hasEventDatePattern && hasMultipleEvents) ? 'high' : hasEventCopy ? 'medium' : 'absent';
 
-// FAQ — real FAQ structures, plus a weaker "de facto FAQ" signal (also fed by
-// existing faqSectionPresent in 1.4).
-// NOTE: a single question-style heading does NOT establish FAQ relevance. A CTA like
-// "Questions?" or "Ready to get involved?" ends in "?" but is not an FAQ. Requiring a
-// genuine FAQ marker prevents manufacturing a phantom FAQ requirement on sites that
-// have no FAQ. Genuine markers: an FAQ container, an explicit "frequently asked /
-// common questions" heading, or an accordion (2+ <details>).
-const hasFaqContainer = !!document.querySelector('[class*="faq"], [id*="faq"]');
-const hasFaqHeading = Array.from(document.querySelectorAll('h2, h3'))
-  .some(h => /frequently asked|common questions|\bfaqs?\b/i.test(h.innerText.trim()));
-const hasFaqAccordion = document.querySelectorAll('details').length >= 2;
-const hasFaqMarkers = hasFaqContainer || hasFaqHeading || hasFaqAccordion;
-// Weaker signal: a cluster of 3+ question-framed H2/H3 headings, each immediately
-// followed by answer-like body text, looks like a genuine FAQ built without any of the
-// markers above (no faq class/id, no "FAQ" heading, fewer than 2 <details>). Requiring
-// answer text after the heading is what separates a real Q&A pattern from scattered
-// CTA headings ("Ready to get started?", "Questions?") that just end in "?" with no
-// answer underneath — a single one of those is still just a CTA, not an FAQ signal.
-const answeredQuestionHeadings = Array.from(document.querySelectorAll('h2, h3'))
-  .filter(h => h.innerText.trim().endsWith('?'))
-  .filter(h => {
-    const next = h.nextElementSibling;
-    return !!next && /^(P|DIV|UL|OL)$/.test(next.tagName) && next.innerText.trim().length > 20;
-  });
-const hasQuestionHeadingCluster = answeredQuestionHeadings.length >= 3;
-const faqRelevance = hasFaqMarkers ? 'high' : hasQuestionHeadingCluster ? 'medium' : 'absent';
+// FAQ — relevance comes from the canonical FAQ probe, the single source of truth for
+// every FAQ determination in this skill (see references/faq-detection.md). Inject
+// koshFaqProbe alongside this scan and read its faqRelevance: 'high' for a genuine FAQ
+// marker (container / "frequently asked" heading / 2+ <details> accordion), 'medium' for
+// a de facto FAQ (3+ question-framed headings EACH followed by answer text), 'absent'
+// otherwise — so a lone CTA like "Questions?" never manufactures a phantom FAQ.
+// Do NOT re-derive any of that logic here: this file previously carried four separate
+// copies of it, and every fix round left one behind.
+const faqRelevance = koshFaqProbe().faqRelevance;
 
 // HowTo — numbered step sequence with a stated goal
 const hasOrderedSteps = !!document.querySelector('ol li + li + li') ||
@@ -395,27 +379,11 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 
 > Note: `Organization` is always `high`, but it's evaluated under its own standalone signal (`organizationSchema`) — not double-counted in `primaryEntitySchema` or `relevantSchemasApplied`. Similarly, `FAQPage` and `Review` have their own standalone signals and aren't double-counted.
 
-> **`faqRelevance` is cross-page, not homepage-only — and schema presence must travel with it.** This snippet runs on the homepage first, but Section 1.4 explicitly re-runs the equivalent FAQ check on `/faq` / `/faqs` inner pages when the homepage has no FAQ. If that inner-page check finds a real FAQ (`faqSectionFound: true`) or a de facto one (`answeredQuestionHeadingCount ≥ 3`), update `faqRelevance` to the strongest value observed across all pages checked (`high` > `medium` > `absent`) before it feeds `applicableSchemas.FAQPage`, `faqSchema`, and `faqSchemaApplied`. (Not `relevantSchemasApplied` — `FAQPage` is deliberately excluded from that coverage ratio via `STANDALONE_SIGNALS`, so it isn't a consumer here.) Without this, a dedicated FAQ page that never got marked up would score `faqSectionPresent: partial` (correctly flagging the gap) while `faqSchema`/`faqSchemaApplied` simultaneously report `na` ("no FAQ content on the site") for the same site — the two disagreeing about whether the site has an FAQ at all.
+> **FAQ detection is defined once, in `references/faq-detection.md`.** That file holds the canonical `koshFaqProbe()` — visible-FAQ evidence *and* FAQ-schema tier in a single per-page call — plus the cross-page aggregation rules, the `faqSchema` / `faqSchemaApplied` status mapping, and the per-branch `notes`/remedy strings. Inject and run it on **every** page where FAQ evidence is collected (homepage in Section 1.3, a dedicated `/faq` page per Section 1.4 and the Phase 2 optional visit, and the Section 2.1 functional page), then aggregate the strongest observation on each axis independently: `faqRelevance` (`high` > `medium` > `absent`) and `faqSchemaTier` (`valid` > `weak` > `none`).
 >
-> Relevance moving cross-page is only half the fix: also re-run FAQ-schema detection on whichever page raised `faqRelevance`. The homepage-only `microdataFaq` snippet below (Section 1.3) only checks microdata — it never parses `<script type="application/ld+json">`, so it isn't a complete, portable per-page check on its own, and the general JSON-LD inventory earlier in Section 1.3 collapses a Yoast/RankMath `@graph` payload to the literal string `'@graph'` without unpacking a nested `FAQPage` node, so it can't stand in either. Use this canonical per-page check instead everywhere FAQ schema needs to be evaluated on a specific page — **including Section 1.3 / the homepage itself**, not just the Section 1.4 `/faq` visit and the Section 2.1 functional-page check (all three now return the same tier, using an identical copy of this snippet):
+> Both axes must travel together, which is why the probe returns them from one call. Raising relevance from an inner page without probing that page's schema is what produced reports where `faqSectionPresent: partial` ("there's an unmarked FAQ") sat next to `faqSchema: na` ("this site has no FAQ") for the same site. And because the probe is defined in exactly one place, the three sections that consume it can no longer drift apart — the failure mode that repeatedly reopened false `critical` findings when each copy was patched separately.
 >
-> ```javascript
-> const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
-> let hasMalformedFaqAttempt = false;
-> const jsonLd = scripts.map(s => {
->   try { return JSON.parse(s.innerText); }
->   catch (e) { if (/FAQPage/.test(s.innerText)) hasMalformedFaqAttempt = true; return null; }
-> }).filter(Boolean).flatMap(s => Array.isArray(s) ? s : (s['@graph'] || [s]));
-> // [].concat(...) normalizes @type so an array-typed node (e.g. ["WebPage","FAQPage"])
-> // is caught the same way the homepage JSON-LD inventory already does.
-> const faqPageNodes = jsonLd.filter(s => [].concat(s['@type'] || []).includes('FAQPage'));
-> const hasValidJsonLdFaq = faqPageNodes.some(s => Array.isArray(s.mainEntity) && s.mainEntity.length >= 2);
-> const hasWeakJsonLdFaq = (faqPageNodes.length > 0 && !hasValidJsonLdFaq) || hasMalformedFaqAttempt;
-> const hasNonJsonLdFaq = !!document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"], [itemscope][itemtype*="schema.org/Question"], [typeof~="FAQPage"], [typeof~="schema:FAQPage"]');
-> const faqSchemaTier = hasValidJsonLdFaq ? 'valid' : (hasWeakJsonLdFaq || hasNonJsonLdFaq) ? 'weak' : 'none';
-> ```
->
-> Carry forward the strongest tier observed across all pages checked (`valid` > `weak` > `none`): `valid` maps to `faqSchema`'s `pass` tier (JSON-LD FAQPage with 2+ Q&A pairs), `weak` maps to its `partial` tier (malformed JSON-LD, microdata-only, or RDFa-only), and `none` is what can reach `fail` when `faqRelevance` is `high`. Without normalizing `@type`, separating malformed/microdata/RDFa-only from genuinely valid, and covering all three non-JSON-LD-valid formats, a microdata- or RDFa-only FAQ, or an empty-`mainEntity` FAQ page, could get carried forward as the *strongest* observation and wrongly graded at full credit, an array-typed `FAQPage` on `/faq` could still be missed entirely, or an RDFa-marked FAQ could score `none` and produce a false `critical` — reproducing exactly the problem this note exists to remove. This exact snippet — including this `hasNonJsonLdFaq` selector — must stay identical everywhere it's copied (Section 1.3 homepage, Section 1.4 `/faq` visit, Section 2.1 functional page); a divergence in one copy reopens the gap this note just closed in the others.
+> `FAQPage` is deliberately excluded from `relevantSchemasApplied` via `STANDALONE_SIGNALS`, so that coverage ratio is not a consumer of these values.
 
 ---
 
@@ -705,22 +673,15 @@ return { inScopeCount: inScope.length, matchedCount: matched.length, coveragePer
 
 #### FAQ schema
 
-JSON-LD `@type: "FAQPage"` with `mainEntity` containing Q&A pairs, microdata, or RDFa. Run the canonical `faqSchemaTier` check defined in the Section 0.4 cross-page note (identical snippet — do not re-derive this independently):
+JSON-LD `@type: "FAQPage"` with `mainEntity` containing Q&A pairs, microdata, or RDFa. Run the canonical probe on the homepage and read `faqSchemaTier`:
 
 ```javascript
-const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
-let hasMalformedFaqAttempt = false;
-const jsonLd = scripts.map(s => {
-  try { return JSON.parse(s.innerText); }
-  catch (e) { if (/FAQPage/.test(s.innerText)) hasMalformedFaqAttempt = true; return null; }
-}).filter(Boolean).flatMap(s => Array.isArray(s) ? s : (s['@graph'] || [s]));
-const faqPageNodes = jsonLd.filter(s => [].concat(s['@type'] || []).includes('FAQPage'));
-const hasValidJsonLdFaq = faqPageNodes.some(s => Array.isArray(s.mainEntity) && s.mainEntity.length >= 2);
-const hasWeakJsonLdFaq = (faqPageNodes.length > 0 && !hasValidJsonLdFaq) || hasMalformedFaqAttempt;
-const hasNonJsonLdFaq = !!document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"], [itemscope][itemtype*="schema.org/Question"], [typeof~="FAQPage"], [typeof~="schema:FAQPage"]');
-const faqSchemaTier = hasValidJsonLdFaq ? 'valid' : (hasWeakJsonLdFaq || hasNonJsonLdFaq) ? 'weak' : 'none';
-return { faqSchemaTier };
+// Canonical FAQ probe — defined in references/faq-detection.md. Inject it verbatim; do
+// not re-derive or inline any part of it here.
+return koshFaqProbe();   // → { faqRelevance, visibleFaq, faqSchemaTier, faqSchemaFormats, ... }
 ```
+
+`faqSchemaTier` is `valid` only for JSON-LD `FAQPage` carrying 2+ `mainEntity` `Question` nodes with non-empty `acceptedAnswer` text; `weak` covers malformed JSON-LD, an empty/thin `mainEntity`, and microdata- or RDFa-only markup (both syntaxes accept `FAQPage` *and* `Question`, so the same FAQ scores the same tier whichever expresses it); `none` means no FAQ markup in any format. Carry the strongest tier observed across all pages probed (`valid` > `weak` > `none`) — see the aggregation rules in `references/faq-detection.md`.
 
 **Evaluation:**
 
@@ -728,7 +689,9 @@ FAQ schema only applies when the site actually has FAQ content. Gate on FAQ rele
 
 - `na` — No visible FAQ content and `faqRelevance` is `absent`. The site has no FAQ, so FAQ schema is not applicable. Record in `notes` as `"N/A — no FAQ content on the site; FAQ schema not applicable."` Do **not** generate an issue. This is the default for sites without an FAQ.
 - `pass` — Visible FAQ content present (a container/heading/accordion, OR — when `faqRelevance` is `medium` — the answered-question-heading cluster) AND `faqSchemaTier` is `valid` (JSON-LD FAQPage with 2+ Q&A pairs).
-- `partial` — Visible FAQ content present and `faqSchemaTier` is `weak` (malformed JSON-LD, microdata-only, or RDFa-only FAQ markup), OR `faqRelevance` is `medium` (a cluster of 3+ answered question-framed headings looks like a de facto FAQ, but it carries no FAQ container, heading, or accordion) and `faqSchemaTier` is `none`. Record in `notes` as `"Partial — question-style headings suggest an unmarked FAQ; no formal FAQ markup or schema found."` and recommend adding explicit FAQ markup (container/heading/accordion) plus FAQPage schema.
+- `partial` — two distinct branches with **different remedies**. `actionablePrompts` emits one paste-ready prompt per `partial` signal, so never share one `notes` string between them (that is how a site with microdata FAQ markup got a prompt telling it to add FAQ markup it already had):
+  - **`faqSchemaTier` is `weak`** with visible FAQ content — the FAQ *is* marked up, just not as valid JSON-LD. Name the format actually found (read `faqSchemaFormats`): `notes` as `"Partial — FAQ markup found as <malformed JSON-LD | microdata | RDFa>, not valid JSON-LD FAQPage."` Remedy: re-express the existing microdata/RDFa FAQ as JSON-LD `FAQPage` with 2+ `mainEntity` `Question` nodes each carrying a non-empty `acceptedAnswer`, or repair the unparseable JSON-LD block.
+  - **`faqRelevance` is `medium` and `faqSchemaTier` is `none`** — a cluster of 3+ answered question-framed headings looks like a de facto FAQ, but nothing identifies it as one. `notes` as `"Partial — question-style headings suggest an unmarked FAQ; no formal FAQ markup or schema found."` Remedy: add explicit FAQ markup (container/heading/accordion) plus `FAQPage` schema.
 - `fail` — Visible FAQ content present but `faqSchemaTier` is `none`. (Only reachable when FAQ content actually exists, i.e. `faqRelevance` is `high`.)
 
 #### JSON-LD format used — `jsonLdFormat`
@@ -739,13 +702,12 @@ The signal name reflects what AI engines prefer, but the check enumerates all th
 const jsonLd = document.querySelectorAll('script[type="application/ld+json"]').length;
 const microdata = document.querySelectorAll('[itemscope][itemtype]').length;
 
-// RDFa: count elements with `typeof` inside a `vocab="http://schema.org/"` or compatible prefix scope
-const rdfa = Array.from(document.querySelectorAll('[typeof]')).filter(el => {
-  const vocab = el.closest('[vocab]');
-  const prefix = el.closest('[prefix]');
-  return (vocab && /schema\.org/.test(vocab.getAttribute('vocab'))) ||
-         (prefix && /schema(:|=)\s*http:\/\/schema\.org/.test(prefix.getAttribute('prefix')));
-}).length;
+// RDFa: count elements whose `typeof` resolves to schema.org. Uses the SAME
+// isSchemaOrgRdfa helper as the canonical FAQ probe (references/faq-detection.md) so the
+// two can never disagree — previously this required an explicit vocab/prefix scope while
+// the FAQ check accepted bare `schema:` prefixes, letting one report claim "RDFa-only FAQ
+// markup present" alongside "no RDFa present" for the very same markup.
+const rdfa = Array.from(document.querySelectorAll('[typeof]')).filter(isSchemaOrgRdfa).length;
 
 return { jsonLd, microdata, rdfa };
 ```
@@ -798,38 +760,14 @@ return { microdataReview: !!microdataReview };
 #### FAQ section present
 
 ```javascript
-// Marker set matches Section 0.4's hasFaqMarkers exactly (container class/id, a bare
-// "FAQ"/"FAQs" heading in addition to "frequently asked"/"common questions", and a 2+
-// <details> accordion) so faqSectionFound means the same thing here as faqRelevance:
-// 'high' does in 0.4 — whichever page this runs against.
-const faqIndicators = [
-  ...document.querySelectorAll('[class*="faq"], [id*="faq"], [class*="FAQ"], [id*="FAQ"]'),
-  ...Array.from(document.querySelectorAll('h2, h3')).filter(h => {
-    const t = h.innerText.toLowerCase();
-    return /frequently asked|common questions|\bfaqs?\b/.test(t);
-  })
-];
-const dlPairs = document.querySelectorAll('dl');
-const detailsElements = document.querySelectorAll('details');
-const hasFaqAccordion = detailsElements.length >= 2;
-// De facto FAQ: 3+ question-framed H2/H3s, each followed by answer-like body text, on
-// THIS page (homepage or the /faq inner page this snippet is run against) — same
-// "answered question heading" test as Section 0.4's faqRelevance check.
-const answeredQuestionHeadingCount = Array.from(document.querySelectorAll('h2, h3'))
-  .filter(h => h.innerText.trim().endsWith('?'))
-  .filter(h => {
-    const next = h.nextElementSibling;
-    return !!next && /^(P|DIV|UL|OL)$/.test(next.tagName) && next.innerText.trim().length > 20;
-  }).length;
-return {
-  faqSectionFound: faqIndicators.length > 0 || hasFaqAccordion,
-  dlPairs: dlPairs.length,
-  detailsElements: detailsElements.length,
-  answeredQuestionHeadingCount
-};
+// Same canonical probe as Sections 1.3 and 2.1 — references/faq-detection.md. Its
+// faqSectionFound / dlPairs / detailsElements / answeredQuestionHeadingCount outputs are
+// what this signal reads, so faqSectionFound means exactly what faqRelevance: 'high'
+// means in Section 0.4, by construction rather than by two selector lists agreeing.
+return koshFaqProbe();
 ```
 
-If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit during Phase 2) — re-run this snippet on whichever page you land on, so a dedicated FAQ page gets the same de-facto-FAQ check as the homepage.
+If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit during Phase 2) — re-run the probe on whichever page you land on, so a dedicated FAQ page gets the same visible-FAQ *and* schema-tier evidence as the homepage, and both aggregate per `references/faq-detection.md`.
 
 **Evaluation:**
 - `pass` — FAQ section found (homepage or dedicated FAQ page) with 2+ Q&A pairs.
@@ -838,7 +776,7 @@ If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit d
 
 #### FAQ schema applied to visible FAQ content — `faqSchemaApplied`
 
-Cross-reference: if a FAQ section was found AND FAQ JSON-LD schema was found in 1.3 — on whichever page carries each, per the cross-page rule at the end of Section 0.4.
+Cross-reference the two aggregated axes from the canonical probe — visible FAQ evidence and `faqSchemaTier` — on whichever page carries each. The full status table for both `faqSchema` and `faqSchemaApplied`, including the per-branch `notes` strings, lives in `references/faq-detection.md`. Note the two signals carry **different severities**: `faqSchema` is Structured Data (`fail` → `critical`, or `high` when consolidated), `faqSchemaApplied` is AEO Readiness (`partial` → `medium`, effort `low`).
 
 **Evaluation:**
 - `na` — Neither visible FAQ content nor FAQ schema present AND `faqRelevance` is `absent`. The site has no FAQ, so there is nothing to align. Record in `notes` as `"N/A — no FAQ content on the site."` Do **not** generate an issue.
@@ -1266,7 +1204,7 @@ Always start with the **homepage** (already visited in Phase 0/1). Then pick inn
 | `nonprofit` | A program / cause / how-we-help page | A recent campaign / impact-report / news page | `/donate` or `/give` (FAQ schema check) |
 | `community` | A "what is this" / rules / wiki page | A recently-active discussion / featured contribution | `/join`, `/membership`, or `/become-a-member` (FAQ schema check) |
 
-**Optional 4th visit:** if a dedicated FAQ page exists at `/faq`, `/faqs`, `/help`, or `/support`, visit it and re-run both the Section 1.4 FAQ check and the canonical FAQ-schema tier snippet (defined in the cross-page note at the end of Section 0.4) on that page — this is what feeds `faqSectionPresent`, `faqSchema`, and `faqSchemaApplied`, and can raise `faqRelevance`.
+**Optional 4th visit:** if a dedicated FAQ page exists at `/faq`, `/faqs`, `/help`, or `/support`, visit it and re-run the canonical FAQ probe (`references/faq-detection.md`) on that page — one call covers both the visible-FAQ check and the schema tier — this is what feeds `faqSectionPresent`, `faqSchema`, and `faqSchemaApplied`, and can raise `faqRelevance`.
 
 **Mediablog-specific 5th visit — archive page quality check.** For mediaBlog sites, visit at least one category or tag archive page (`/category/<slug>/`, `/tag/<slug>/`, `/topics/<slug>/`, or whatever the routing convention is). Run the `archivePageQuality` check from Section 2.1.
 
@@ -1281,38 +1219,11 @@ These checks feed into existing evaluated signals rather than introducing new on
 Visit the type-specific functional page and re-run the FAQ check:
 
 ```javascript
-// Canonical per-page FAQ-schema tier — same snippet defined in the Section 0.4
-// cross-page note. Returns 'valid' / 'weak' / 'none' instead of a boolean so it can be
-// compared across pages without collapsing malformed/microdata-only markup into "found".
-const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
-let hasMalformedFaqAttempt = false;
-const jsonLd = scripts.map(s => {
-  try { return JSON.parse(s.innerText); }
-  catch (e) { if (/FAQPage/.test(s.innerText)) hasMalformedFaqAttempt = true; return null; }
-}).filter(Boolean).flatMap(s => Array.isArray(s) ? s : (s['@graph'] || [s]));
-const faqPageNodes = jsonLd.filter(s => [].concat(s['@type'] || []).includes('FAQPage'));
-const hasValidJsonLdFaq = faqPageNodes.some(s => Array.isArray(s.mainEntity) && s.mainEntity.length >= 2);
-const hasWeakJsonLdFaq = (faqPageNodes.length > 0 && !hasValidJsonLdFaq) || hasMalformedFaqAttempt;
-const hasNonJsonLdFaq = !!document.querySelector('[itemscope][itemtype*="schema.org/FAQPage"], [itemscope][itemtype*="schema.org/Question"], [typeof~="FAQPage"], [typeof~="schema:FAQPage"]');
-const faqSchemaTier = hasValidJsonLdFaq ? 'valid' : (hasWeakJsonLdFaq || hasNonJsonLdFaq) ? 'weak' : 'none';
-
-// Same two-tier definition as Section 0.4's hasFaqMarkers / hasQuestionHeadingCluster —
-// a real FAQ marker (container, a "frequently asked"/"common questions"/bare "FAQ"
-// heading, or a 2+ <details> accordion) counts as visibleFaq outright. Absent that, only
-// a cluster of 3+ question-framed headings EACH followed by answer-like body text counts
-// — two bare "?"-ending headings with no answer underneath is a CTA pattern, not an FAQ,
-// and must not flag this page as having one.
-const hasFaqMarkers = !!document.querySelector('[class*="faq"], [id*="faq"]') ||
-  Array.from(document.querySelectorAll('h2, h3')).some(h => /frequently asked|common questions|\bfaqs?\b/i.test(h.innerText.trim())) ||
-  document.querySelectorAll('details').length >= 2;
-const answeredQuestionHeadingCount = Array.from(document.querySelectorAll('h2, h3'))
-  .filter(h => h.innerText.trim().endsWith('?'))
-  .filter(h => {
-    const next = h.nextElementSibling;
-    return !!next && /^(P|DIV|UL|OL)$/.test(next.tagName) && next.innerText.trim().length > 20;
-  }).length;
-const visibleFaq = hasFaqMarkers || answeredQuestionHeadingCount >= 3;
-return { faqSchemaTier, visibleFaq, hasFaqMarkers, answeredQuestionHeadingCount, url: window.location.href };
+// Same canonical probe as Sections 1.3 and 1.4 — references/faq-detection.md. Returns
+// both the visible-FAQ evidence (visibleFaq / hasFaqMarkers /
+// answeredQuestionHeadingCount) and the schema tier for THIS page, so relevance and
+// schema presence can only ever move together.
+return koshFaqProbe();
 ```
 
 The post's argument: donation, subscribe, and join/membership pages are exactly the pages where AI tools land users with concrete intent-bearing queries ("how do I donate to X?", "how do I subscribe to Y?", "what does a Z membership include?"). FAQ schema on these specific pages is high-leverage.
