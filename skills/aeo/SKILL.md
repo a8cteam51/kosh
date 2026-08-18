@@ -676,8 +676,9 @@ return { inScopeCount: inScope.length, matchedCount: matched.length, coveragePer
 JSON-LD `@type: "FAQPage"` with `mainEntity` containing Q&A pairs, microdata, or RDFa. Run the canonical probe on the homepage and read `faqSchemaTier`:
 
 ```javascript
-// Canonical FAQ probe — defined in references/faq-detection.md. Inject it verbatim; do
-// not re-derive or inline any part of it here.
+// Canonical FAQ probe — defined in references/faq-detection.md as a single
+// self-contained block. Inject it verbatim; do not re-derive or inline any part of it
+// here, and do not split helpers out of it.
 return koshFaqProbe();   // → { faqRelevance, visibleFaq, faqSchemaTier, faqSchemaFormats, ... }
 ```
 
@@ -687,7 +688,7 @@ return koshFaqProbe();   // → { faqRelevance, visibleFaq, faqSchemaTier, faqSc
 
 FAQ schema only applies when the site actually has FAQ content. Gate on FAQ relevance (Section 0.4 `faqRelevance`) and the visible FAQ check (`faqSectionPresent`, Section 1.4). **Never fail a site merely for lacking an FAQ** — the many sites that legitimately have no FAQ get `na`, not `fail`.
 
-- `na` — No visible FAQ content and `faqRelevance` is `absent`. The site has no FAQ, so FAQ schema is not applicable. Record in `notes` as `"N/A — no FAQ content on the site; FAQ schema not applicable."` Do **not** generate an issue. This is the default for sites without an FAQ.
+- `na` — No visible FAQ content, `faqRelevance` is `absent`, **and `faqSchemaTier` is `none`**. The site has no FAQ, so FAQ schema is not applicable. Record in `notes` as `"N/A — no FAQ content on the site; FAQ schema not applicable."` Do **not** generate an issue. This is the default for sites without an FAQ. (The tier condition matters: a site emitting plugin-generated `FAQPage` JSON-LD with a client-side-rendered FAQ has `faqRelevance: absent` *and* a `valid` tier — that is `partial`, not `na`, because there is markup the rendered page never substantiates.)
 - `pass` — Visible FAQ content present (a container/heading/accordion, OR — when `faqRelevance` is `medium` — the answered-question-heading cluster) AND `faqSchemaTier` is `valid` (JSON-LD FAQPage with 2+ Q&A pairs).
 - `partial` — two distinct branches with **different remedies**. `actionablePrompts` emits one paste-ready prompt per `partial` signal, so never share one `notes` string between them (that is how a site with microdata FAQ markup got a prompt telling it to add FAQ markup it already had):
   - **`faqSchemaTier` is `weak`** with visible FAQ content — the FAQ *is* marked up, just not as valid JSON-LD. Name the format actually found (read `faqSchemaFormats`): `notes` as `"Partial — FAQ markup found as <malformed JSON-LD | microdata | RDFa>, not valid JSON-LD FAQPage."` Remedy: re-express the existing microdata/RDFa FAQ as JSON-LD `FAQPage` with 2+ `mainEntity` `Question` nodes each carrying a non-empty `acceptedAnswer`, or repair the unparseable JSON-LD block.
@@ -702,12 +703,14 @@ The signal name reflects what AI engines prefer, but the check enumerates all th
 const jsonLd = document.querySelectorAll('script[type="application/ld+json"]').length;
 const microdata = document.querySelectorAll('[itemscope][itemtype]').length;
 
-// RDFa: count elements whose `typeof` resolves to schema.org. Uses the SAME
-// isSchemaOrgRdfa helper as the canonical FAQ probe (references/faq-detection.md) so the
-// two can never disagree — previously this required an explicit vocab/prefix scope while
-// the FAQ check accepted bare `schema:` prefixes, letting one report claim "RDFa-only FAQ
-// markup present" alongside "no RDFa present" for the very same markup.
-const rdfa = Array.from(document.querySelectorAll('[typeof]')).filter(isSchemaOrgRdfa).length;
+// RDFa: the schema.org-scoped count comes from the canonical FAQ probe
+// (references/faq-detection.md), which returns it as schemaOrgRdfaCount. Reading that
+// field rather than re-implementing the scope test is what keeps this signal and the
+// probe's RDFa detection from disagreeing — previously this required an explicit
+// vocab/prefix scope while the FAQ check accepted bare `schema:` prefixes, letting one
+// report claim "RDFa-only FAQ markup present" alongside "no RDFa present" for the same
+// markup. Do not inline a scope test here.
+const rdfa = koshFaqProbe().schemaOrgRdfaCount;
 
 return { jsonLd, microdata, rdfa };
 ```

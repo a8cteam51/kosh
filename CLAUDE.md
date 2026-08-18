@@ -12,6 +12,8 @@ skills/          → detailed testing procedures (the actual prompts)
 schemas/         → JSON schemas that define report structure
 scripts/         → report generation and merge scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
+tests/           → fixture checks for browser snippets, extracted from the skill docs
+                   (manual: `npm install jsdom && node tests/<name>.test.mjs`)
 .mcp.json        → Playwright MCP server configuration
 .claude/         → project settings and Playwright tool permissions
 ```

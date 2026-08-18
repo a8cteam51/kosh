@@ -6,8 +6,13 @@
  * fixtures exercise is by construction the same code the skill instructs the agent
  * to run. If someone edits the snippet in the doc, these checks cover the edit.
  *
- * Usage:  node --experimental-vm-modules tests/faq-detection.test.mjs
- *         (requires jsdom on NODE_PATH, e.g. `npm i jsdom`)
+ * The probe must be SELF-CONTAINED: this runner injects the one block the skill tells
+ * the agent to inject and nothing else. If the doc ever splits a helper into a second
+ * block, these checks fail with a ReferenceError instead of quietly compensating by
+ * concatenating sources — which is exactly how a missing-helper bug once shipped.
+ *
+ * Usage:  node tests/faq-detection.test.mjs
+ *         (requires jsdom, e.g. `npm install jsdom`)
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -24,19 +29,22 @@ function extractJsBlocks(path) {
 }
 
 const blocks = extractJsBlocks(DOC);
-if (blocks.length < 2) {
-  throw new Error(`expected 2 javascript blocks in ${DOC} (probe + isSchemaOrgRdfa), found ${blocks.length}`);
+// Exactly one injectable block, matching the single injection instruction in SKILL.md.
+if (blocks.length !== 1) {
+  throw new Error(
+    `expected exactly 1 javascript block in ${DOC}, found ${blocks.length}. ` +
+    'The probe must stay self-contained: a second block is a helper callers will forget ' +
+    'to inject, which throws ReferenceError at runtime.'
+  );
 }
-// Order-independent: identify blocks by the function they define.
-const probeSrc = blocks.find(b => /function koshFaqProbe/.test(b));
-const rdfaSrc = blocks.find(b => /function isSchemaOrgRdfa/.test(b));
-if (!probeSrc || !rdfaSrc) throw new Error('could not locate koshFaqProbe / isSchemaOrgRdfa in the reference doc');
+const probeSrc = blocks[0];
+if (!/function koshFaqProbe/.test(probeSrc)) throw new Error('could not locate koshFaqProbe in the reference doc');
 
 function runProbe(html) {
   const dom = new JSDOM(html, { url: 'https://example.test/', runScripts: 'outside-only' });
   const { window } = dom;
-  // Evaluate the documented source inside the page context.
-  window.eval(`${rdfaSrc}\n${probeSrc}\nwindow.__result = koshFaqProbe();`);
+  // Evaluate the documented source inside the page context — probe only, nothing added.
+  window.eval(`${probeSrc}\nwindow.__result = koshFaqProbe();`);
   return window.__result;
 }
 
@@ -143,6 +151,38 @@ const cases = [
     html: `<section class="faq"><div typeof="Question">${QA('Q?', ANSWER)}</div></section>`,
     expect: { faqSchemaTier: 'none' },
     formats: { rdfa: false }
+  },
+  {
+    // Self-containment guard: a typeof-bearing page is what exposed the missing helper.
+    name: 'REGRESSION: probe runs standalone on a typeof-bearing page (no ReferenceError)',
+    html: `<div typeof="schema:WebPage"><h2>About</h2><p>${ANSWER}</p></div>`,
+    expect: { faqRelevance: 'absent', faqSchemaTier: 'none' }
+  },
+  {
+    name: 'schemaOrgRdfaCount is exposed for jsonLdFormat to consume',
+    html: `<div vocab="https://schema.org/"><div typeof="Organization"></div><div typeof="WebPage"></div></div>
+           <div typeof="unscoped"></div>`,
+    expect: { schemaOrgRdfaCount: 2 }
+  },
+  {
+    // The phantom FAQ that the widened parent fallback reopened.
+    name: 'REGRESSION: CTA headings in separate page-builder bands are NOT an FAQ',
+    html: `<section><h2>Ready to get started?</h2></section><section><p>${ANSWER}</p></section>
+           <section><h2>Questions?</h2></section><section><p>${ANSWER}</p></section>
+           <section><h2>Want to learn more?</h2></section><section><p>${ANSWER}</p></section>`,
+    expect: { faqRelevance: 'absent', answeredQuestionHeadingCount: 0, visibleFaq: false }
+  },
+  {
+    name: 'REGRESSION: consecutive wrapped question headings with no answers are NOT an FAQ',
+    html: `<div><h3>Q1?</h3></div><div><h3>Q2?</h3></div><div><h3>Q3?</h3></div>`,
+    expect: { faqRelevance: 'absent', answeredQuestionHeadingCount: 0 }
+  },
+  {
+    name: 'accordion item wrappers (heading + answer share a wrapper) still count',
+    html: `<div><h3>Q1?</h3><div>${ANSWER}</div></div>
+           <div><h3>Q2?</h3><div>${ANSWER}</div></div>
+           <div><h3>Q3?</h3><div>${ANSWER}</div></div>`,
+    expect: { faqRelevance: 'medium', answeredQuestionHeadingCount: 3 }
   }
 ];
 
