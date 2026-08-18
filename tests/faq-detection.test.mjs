@@ -178,6 +178,18 @@ const cases = [
     expect: { faqRelevance: 'absent', answeredQuestionHeadingCount: 0 }
   },
   {
+    // Pinned behavior, not an endorsement — see "Known limitation" in faq-detection.md.
+    // A "?" heading with a sibling paragraph is structurally a real FAQ item, so this scores
+    // medium. Bounded consequence (partial + a suggestion, never critical) and every
+    // discriminator tried was worse. If you change the heuristic, change this expectation
+    // deliberately.
+    name: 'KNOWN LIMITATION: CTA heading + subcopy in one band scores medium',
+    html: `<section><h2>Ready to get started?</h2><p>${ANSWER}</p></section>
+           <section><h2>Questions?</h2><p>${ANSWER}</p></section>
+           <section><h2>Want to learn more?</h2><p>${ANSWER}</p></section>`,
+    expect: { faqRelevance: 'medium', answeredQuestionHeadingCount: 3 }
+  },
+  {
     name: 'accordion item wrappers (heading + answer share a wrapper) still count',
     html: `<div><h3>Q1?</h3><div>${ANSWER}</div></div>
            <div><h3>Q2?</h3><div>${ANSWER}</div></div>

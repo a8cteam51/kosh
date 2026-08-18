@@ -163,6 +163,25 @@ function koshFaqProbe() {
 
 There is deliberately **one** injectable block in this file. Anything the probe needs is defined within it: a second block that callers must remember to inject is a latent `ReferenceError`, and the injection instructions will not stay in sync with it.
 
+### Known limitation: CTA band with supporting copy
+
+A `?`-ending heading followed by a sibling paragraph in the same container is structurally
+identical to a real FAQ item, so three CTA bands of the form
+`<section><h2>Ready to get started?</h2><p>…copy…</p></section>` score
+`faqRelevance: medium`. This is **accepted, not overlooked**:
+
+- It predates the de-facto-FAQ tier (the original inline logic scored it the same way) and is
+  unchanged by the consolidation.
+- The consequence is bounded — `partial` with a "consider adding FAQ markup" suggestion,
+  `faqSectionPresent` capped at `low`. It cannot produce a `critical`.
+- Every available discriminator is worse: requiring the question cluster to share a container
+  breaks accordions built as sibling wrappers, and pattern-matching CTA phrasing reintroduces
+  the brittleness this file exists to remove.
+
+`tests/faq-detection.test.mjs` pins the current behavior so a future change to the heuristic
+surfaces as a deliberate decision rather than an accident. Revisit only with evidence from real
+report runs that it misleads partners.
+
 ## Cross-page aggregation
 
 FAQ evidence is **never homepage-only**. Aggregate across every page probed in the run, taking the strongest observation on each axis independently:
