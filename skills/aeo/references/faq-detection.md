@@ -1,6 +1,6 @@
 # Canonical FAQ detection — single source of truth
 
-**Version:** 1  ·  **Consumers:** `faqRelevance` (Section 0.4), `faqSchema` (1.3), `faqSectionPresent` + `faqSchemaApplied` (1.4), functional-page FAQ check (2.1)
+**Version:** 2  ·  **Consumers:** `faqRelevance` (Section 0.4), `faqSchema` (1.3), `faqSectionPresent` + `faqSchemaApplied` (1.4), functional-page FAQ check (2.1)
 
 Every FAQ determination in the AEO skill — is there an FAQ, is it marked up, how well — comes from the one probe defined below. **Do not re-derive, paraphrase, or partially inline any part of it in `SKILL.md`.** Previous revisions of this skill carried three "identical" copies of this logic in Sections 1.3, 1.4, and 2.1; each fix round patched one copy and left the others behind, which is what produced the false `critical` findings this file exists to prevent. Sections reference this probe by name and consume its outputs.
 
@@ -181,6 +181,14 @@ identical to a real FAQ item, so three CTA bands of the form
 `tests/faq-detection.test.mjs` pins the current behavior so a future change to the heuristic
 surfaces as a deliberate decision rather than an accident. Revisit only with evidence from real
 report runs that it misleads partners.
+
+The matching **false negative** is the price of that choice: because `FALLBACK_ANSWER_TAGS`
+excludes layout tags, a wrapped-heading accordion whose answer is also wrapped —
+`<div><h3>Q?</h3></div><div><p>A</p></div>` — is not counted by the fallback. The two shapes are
+structurally indistinguishable (heading alone in one band, prose alone in the next), so one of
+them has to lose; a missed de-facto FAQ costs a suggestion, while a phantom one puts three
+signals into `partial` on a site with no FAQ. Pages like that almost always carry an FAQ
+container, heading, or `<details>` accordion, so `hasFaqMarkers` scores them `high` regardless.
 
 ## Cross-page aggregation
 

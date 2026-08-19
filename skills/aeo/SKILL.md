@@ -700,20 +700,18 @@ FAQ schema only applies when the site actually has FAQ content. Gate on FAQ rele
 The signal name reflects what AI engines prefer, but the check enumerates all three structured-data formats the rubric supports: JSON-LD, microdata, and RDFa.
 
 ```javascript
+// Self-contained: every identifier used here is defined here. Each snippet in this file
+// runs as its own browser_evaluate and definitions do NOT persist between evaluations,
+// so a snippet may never reference a helper or probe defined elsewhere.
 const jsonLd = document.querySelectorAll('script[type="application/ld+json"]').length;
 const microdata = document.querySelectorAll('[itemscope][itemtype]').length;
 
-// RDFa: the schema.org-scoped count comes from the canonical FAQ probe
-// (references/faq-detection.md), which returns it as schemaOrgRdfaCount. Reading that
-// field rather than re-implementing the scope test is what keeps this signal and the
-// probe's RDFa detection from disagreeing — previously this required an explicit
-// vocab/prefix scope while the FAQ check accepted bare `schema:` prefixes, letting one
-// report claim "RDFa-only FAQ markup present" alongside "no RDFa present" for the same
-// markup. Do not inline a scope test here.
-const rdfa = koshFaqProbe().schemaOrgRdfaCount;
-
-return { jsonLd, microdata, rdfa };
+return { jsonLd, microdata };
 ```
+
+**The `rdfa` count is carried over, not recomputed here.** Take it from `schemaOrgRdfaCount` on the FAQ-schema probe result this section already collected for the same page (the `koshFaqProbe()` call above) — that field *is* the schema.org-scoped RDFa element count. Reading it rather than re-implementing the scope test is what keeps this signal and the probe's RDFa detection in agreement: previously `jsonLdFormat` required an explicit `vocab`/`prefix` scope while the FAQ check accepted a bare `schema:` prefix, so one report could claim "RDFa-only FAQ markup present" alongside "no RDFa present" for the same markup. Do not inline a scope test here, and do not re-invoke the probe — one probe call per page.
+
+So the three counts for this signal are `jsonLd` and `microdata` from the snippet above, plus `rdfa` = `schemaOrgRdfaCount` from the probe result.
 
 **Evaluation:**
 
@@ -763,9 +761,11 @@ return { microdataReview: !!microdataReview };
 #### FAQ section present
 
 ```javascript
-// Same canonical probe as Sections 1.3 and 2.1 — references/faq-detection.md. Its
-// faqSectionFound / dlPairs / detailsElements / answeredQuestionHeadingCount outputs are
-// what this signal reads, so faqSectionFound means exactly what faqRelevance: 'high'
+// Same canonical probe as Sections 1.3 and 2.1 — references/faq-detection.md.
+// Inject koshFaqProbe verbatim alongside this snippet: each snippet runs as its own
+// browser_evaluate and definitions do not persist between evaluations.
+// Its faqSectionFound / dlPairs / detailsElements / answeredQuestionHeadingCount outputs
+// are what this signal reads, so faqSectionFound means exactly what faqRelevance: 'high'
 // means in Section 0.4, by construction rather than by two selector lists agreeing.
 return koshFaqProbe();
 ```
@@ -1222,8 +1222,10 @@ These checks feed into existing evaluated signals rather than introducing new on
 Visit the type-specific functional page and re-run the FAQ check:
 
 ```javascript
-// Same canonical probe as Sections 1.3 and 1.4 — references/faq-detection.md. Returns
-// both the visible-FAQ evidence (visibleFaq / hasFaqMarkers /
+// Same canonical probe as Sections 1.3 and 1.4 — references/faq-detection.md.
+// Inject koshFaqProbe verbatim alongside this snippet: each snippet runs as its own
+// browser_evaluate and definitions do not persist between evaluations.
+// Returns both the visible-FAQ evidence (visibleFaq / hasFaqMarkers /
 // answeredQuestionHeadingCount) and the schema tier for THIS page, so relevance and
 // schema presence can only ever move together.
 return koshFaqProbe();
