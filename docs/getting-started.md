@@ -52,7 +52,7 @@ If you accidentally skip this step, you'll get a permission prompt for every bro
 
 ## Step 3: Run a test
 
-kosh has three test commands. Each one takes a URL — the site you want to test.
+kosh has five test commands. Each one takes a URL — the site you want to test.
 
 **Functional & design test:** Checks user journeys, layout, links, metadata, and content:
 ```
@@ -67,6 +67,16 @@ kosh has three test commands. Each one takes a URL — the site you want to test
 **Accessibility test:** Checks WCAG 2.2 Level AA compliance (headings, alt text, contrast, keyboard navigation):
 ```
 /kosh:a11y https://example.com
+```
+
+**Shop test:** Walks the guest purchase path of a WooCommerce store — catalog, product pages, add to cart, cart math, and the checkout form. It stops at the payment step and never places an order:
+```
+/kosh:shop https://example.com
+```
+
+**AEO test:** Checks how AI tools like ChatGPT, Perplexity, and Google AI Overviews discover, parse, and cite the site:
+```
+/kosh:aeo https://example.com
 ```
 
 Replace `https://example.com` with the URL of the site you want to test. The test will take a few minutes — kosh opens a real browser, visits 4-6+ pages, and runs checks on each one.
@@ -122,13 +132,13 @@ I want to know if the navigation is keyboard accessible on mobile — can you ch
 
 ## Combining reports
 
-After running all three tests against the same site, you can merge them into one comprehensive report:
+After running the functional, performance, and accessibility tests against the same site, you can merge them into one comprehensive report:
 
 ```
 /kosh:merge
 ```
 
-This creates a single HTML document covering functional, performance, and accessibility findings.
+This creates a single HTML document covering functional, performance, and accessibility findings. The shop and AEO tests aren't part of the merge — they render as standalone reports.
 
 ## Specifying the environment
 
@@ -167,5 +177,5 @@ A couple of notes:
 ## Tips
 
 - **JSON reports are overwritten on each run.** If you want to keep a report, rename or move the file before testing a different site.
-- **You can re-run a single test** without re-running all three. Each test is independent.
+- **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.

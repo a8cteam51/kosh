@@ -545,7 +545,7 @@ On **this page** (check footer on at least homepage and one other page):
 
 **Footer Credits & Attribution:**
 - ✅ Copyright year is present on footer
-- ✅ "Proudly powered by WordPress" credit link is present
+- ✅ "Designed with WordPress" credit link is present. This exact wording is required — flag the older "Proudly powered by WordPress" as an issue, and report the exact wording found.
 - ✅ Footer links are correct and functional
 - ✅ Footer styling is consistent across pages
 

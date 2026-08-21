@@ -1,6 +1,36 @@
 # kosh — Claude Code Plugin for WordPress QA
 
-kosh is a Claude Code plugin that runs functional, performance, and accessibility tests against live WordPress sites using Playwright MCP browser automation.
+kosh is a Claude Code plugin that runs functional, performance, accessibility, shop, and AEO (answer-engine optimization) tests against live WordPress sites using Playwright MCP browser automation.
+
+## Commands
+
+No build step and no `package.json` — the scripts are plain `node` and `bash`.
+
+```bash
+claude --plugin-dir .    # launch Claude Code with the plugin loaded
+```
+
+Run a test — each writes its JSON to `reports/data/`:
+
+```
+/kosh:functional-design https://example.com
+/kosh:performance https://example.com
+/kosh:a11y https://example.com
+/kosh:shop https://example.com
+/kosh:aeo https://example.com
+```
+
+Render a report to self-contained HTML:
+
+```bash
+scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from filename, except aeo
+node scripts/generate-report.js reports/data/qa-report-aeo.json   # or call the renderer directly
+scripts/merge-qa-reports.sh                                       # or /kosh:merge
+```
+
+Merging requires all three of functional, performance, and accessibility; shop and AEO reports are standalone. Prefer `/kosh:merge` over calling the script — it reports which JSON files are missing up front, where the script exits on the first one it can't find.
+
+`run-qa-report.sh` has no aeo branch in its filename detection, so AEO reports fall through to the renderer's own dispatch: it routes on `mode: "aeo"` in the JSON. An AEO-shaped report missing that field is a hard error, not a fallback.
 
 ## How it works
 
@@ -12,12 +42,14 @@ skills/          → detailed testing procedures (the actual prompts)
 schemas/         → JSON schemas that define report structure
 scripts/         → report generation and merge scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
+docs/            → user-facing guides (getting-started.md)
 tests/           → fixture + lint checks for browser snippets, extracted from the skill
                    docs (manual: `npm install jsdom && node tests/<name>.test.mjs`).
                    Snippets must be self-contained: each runs as its own
                    browser_evaluate, so definitions never persist between them.
 .mcp.json        → Playwright MCP server configuration
 .claude/         → project settings and Playwright tool permissions
+.claude-plugin/  → plugin manifest (plugin.json)
 ```
 
 ### How commands, skills, and schemas relate
@@ -29,8 +61,12 @@ Each test type has a matching set of files:
 | Functional & design | `commands/functional-design.md` | `skills/functional-design/SKILL.md` | `schemas/qa-report-functional-schema.json` |
 | Performance | `commands/performance.md` | `skills/performance/SKILL.md` | `schemas/qa-report-performance-schema.json` |
 | Accessibility | `commands/a11y.md` | `skills/a11y/SKILL.md` | `schemas/qa-report-accessibility-schema.json` |
+| Shop (WooCommerce) | `commands/shop.md` | `skills/shop/SKILL.md` | `schemas/qa-report-shop-schema.json` |
+| AEO / AI mode | `commands/aeo.md` | `skills/aeo/SKILL.md` | `schemas/qa-report-aeo-schema.json` |
 
 If you add a new test type, you need all three: a command, a skill, and a schema.
+
+`commands/merge.md` is the exception — it has no skill or schema, and runs `scripts/merge-qa-reports.sh` after a pre-flight check for the three input reports.
 
 ## Contributing
 
