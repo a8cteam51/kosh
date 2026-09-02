@@ -2,6 +2,7 @@
   "url": "https://example.com",
   "websiteName": "Example",
   "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+  "environment": "production",
   "mobile": {
     "viewport": "375x812",
     "title": "Page Title",

@@ -1,9 +1,15 @@
 ---
 name: shop
 description: Guest shopping journey QA for WooCommerce stores — catalog to checkout, never placing an order
+argument-hint: <url> [local|development|staging|production]
 ---
 
-Navigate to $ARGUMENTS and conduct a guest shopping-journey QA test of the site's store.
+Parse $ARGUMENTS into a URL and an optional environment type before doing anything else:
+
+1. Extract the URL from $ARGUMENTS (the token that starts with `http://` or `https://`). If no URL is found, ask the user to provide one before proceeding. Do not begin testing without a valid URL.
+2. Extract the environment type if present — one of `local`, `development`, `staging`, or `production`. If not provided, infer it from the URL when possible (e.g., `.test`/`.local` domains suggest local, `staging.*` subdomains suggest staging). Default to `production` if unclear.
+
+Navigate to the extracted URL and conduct a guest shopping-journey QA test of the site's store — catalog through checkout, never submitting an order — by following the full procedure below, using the determined environment type to guide how findings are reported.
 
 # Playwright Shop QA Testing: The Guest Purchase Path
 
@@ -50,7 +56,7 @@ When a step fails or behaves oddly, treat that as the start of an investigation,
 
 Each finding MUST name what is actually wrong and what to change. "Add to cart didn't work" is not a finding; "the add-to-cart button on variable products stays disabled after a variation is selected, because the variation form reports no matching variation" is.
 
-**Console and network evidence.** While walking the journey, watch for console errors and failed requests — but only as *evidence for the step you are testing*. When a commerce step fails, fold the technical detail into that finding's `issue` text (e.g. "Supporting evidence: the add-to-cart POST to `?wc-ajax=add_to_cart` returned 500"). Do **not** raise standalone console-error or network findings, and do not sweep the site for them: general page health is the job of `/kosh:functional-design` and `/kosh:performance`. If you notice site-wide problems outside the purchase path, mention them in your closing summary to the user and recommend those commands — don't put them in this report.
+**Console and network evidence.** While walking the journey, watch for console errors and failed requests — but only as *evidence for the step you are testing*. When a commerce step fails, fold the technical detail into that finding's `issue` text (e.g. "Supporting evidence: the add-to-cart POST to `?wc-ajax=add_to_cart` returned 500"). Do **not** raise standalone console-error or network findings, and do not sweep the site for them: general page health is the job of `/kosh:functional-design` and `/kosh:performance`. If you notice site-wide problems outside the purchase path, mention them in your closing summary to the user and recommend those tests — don't put them in this report.
 
 ---
 
@@ -578,7 +584,7 @@ Investigate each to a conclusion, holding to the same standard as the rest of th
 | `no-issue` | Investigated and working correctly |
 | `finding-raised` | It became an entry in `issues` — name which one |
 | `inconclusive` | Can't be settled without access you don't have; say what would settle it |
-| `out-of-scope` | A real problem, but not commerce-flow. Set `referredTo` to the command that covers it (`/kosh:a11y`, `/kosh:performance`, `/kosh:functional-design`) |
+| `out-of-scope` | A real problem, but not commerce-flow. Set `referredTo` to the test that covers it (`/kosh:a11y`, `/kosh:performance`, `/kosh:functional-design`) |
 
 That last row is the one that earns its keep: it's how a real observation survives the run instead of being mentioned once and lost.
 

@@ -43,8 +43,8 @@ For detailed setup instructions (including troubleshooting), see the [Getting St
 ## Project structure
 
 ```text
-commands/        Slash commands (/kosh:a11y, /kosh:aeo, /kosh:functional-design, /kosh:performance, /kosh:shop)
-skills/          Full testing procedures for each command
+commands/        Slash command for /kosh:merge
+skills/          Full testing procedures, invoked as /kosh:a11y, /kosh:aeo, /kosh:functional-design, /kosh:performance, /kosh:shop
 schemas/         JSON schemas for report validation
 scripts/         Report generation and merge scripts
 hooks/           Session hook that creates reports/data/ on startup
