@@ -151,7 +151,7 @@
           },
           "referredTo": {
             "type": "string",
-            "description": "For out-of-scope outcomes, the kosh command that covers this territory — e.g. /kosh:a11y, /kosh:performance, /kosh:functional-design."
+            "description": "For out-of-scope outcomes, the kosh test that covers this territory — e.g. /kosh:a11y, /kosh:performance, /kosh:functional-design."
           }
         }
       }
