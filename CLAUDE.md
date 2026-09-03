@@ -43,10 +43,6 @@ schemas/         → JSON schemas that define report structure
 scripts/         → report generation and merge scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
 docs/            → user-facing guides (getting-started.md)
-tests/           → fixture + lint checks for browser snippets, extracted from the skill
-                   docs (manual: `npm install jsdom && node tests/<name>.test.mjs`).
-                   Snippets must be self-contained: each runs as its own
-                   browser_evaluate, so definitions never persist between them.
 .mcp.json        → Playwright MCP server configuration
 .claude/         → project settings and Playwright tool permissions
 .claude-plugin/  → plugin manifest (plugin.json)

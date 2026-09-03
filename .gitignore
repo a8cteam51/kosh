@@ -1,8 +1,5 @@
-# Dependencies — tests are a manual check (see tests/README.md); `npm install jsdom`
-# creates these locally and they are deliberately not committed
+# Dependencies
 node_modules/
-package.json
-package-lock.json
 
 # Test output — reports and raw data are client-specific, not committed
 reports/data/

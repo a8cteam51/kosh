@@ -178,8 +178,7 @@ identical to a real FAQ item, so three CTA bands of the form
   breaks accordions built as sibling wrappers, and pattern-matching CTA phrasing reintroduces
   the brittleness this file exists to remove.
 
-`tests/faq-detection.test.mjs` pins the current behavior so a future change to the heuristic
-surfaces as a deliberate decision rather than an accident. Revisit only with evidence from real
+This is a deliberate tradeoff, not an oversight. Revisit only with evidence from real
 report runs that it misleads partners.
 
 The matching **false negative** is the price of that choice: because `FALLBACK_ANSWER_TAGS`
@@ -233,4 +232,4 @@ The two `partial` branches have different root causes and therefore different re
 
 ## Changing this file
 
-Any change to the probe changes four signals at once. Bump the **Version** above, update the status table and the rubric rows for `faqSchema` / `faqSchemaApplied` / `faqSectionPresent` in `evaluation-rubric.md` in the same commit, and re-run the fixture checks in `tests/faq-detection.test.mjs`.
+Any change to the probe changes four signals at once. Bump the **Version** above, update the status table and the rubric rows for `faqSchema` / `faqSchemaApplied` / `faqSectionPresent` in `evaluation-rubric.md` in the same commit, and manually re-verify the probe against the scenarios described earlier in this file (the walkthrough and the "Known limitation" case above).
