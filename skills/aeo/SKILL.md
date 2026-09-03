@@ -1348,19 +1348,21 @@ Record per-page results to feed the `canonicalUrls` Phase 1 signal.
 const generator = document.querySelector('meta[name="generator"]');
 const yoastBlock = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).some(s => s.innerText.includes('"yoast"') || s.innerText.includes('Yoast'));
 const yoastClass = !!document.querySelector('[class*="yoast"]');
-const rankMath = !!document.querySelector('meta[name="generator"][content*="Rank Math"]') || document.body.outerHTML.includes('rankmath');
-const seopress = document.body.outerHTML.includes('seopress');
+const html = document.documentElement.outerHTML;
+const rankMath = /rank-?math/i.test(html);
+const seopress = /seopress/i.test(html);
 // Jetpack: detect by its actual plugin asset paths and enqueued script/style handles,
 // not by incidental "jetpack" strings in visible text (which false-positive on footer
 // credits, comments, or links to jetpack.com).
-const jetpack = !!document.querySelector(
+// Jetpack Boost reuses the jetpack- handle prefix and ships its own jetpack_vendor/.
+const jetpack = Array.from(document.querySelectorAll(
   'link[href*="/plugins/jetpack/" i], script[src*="/plugins/jetpack/" i], ' +
   'link[href*="/jetpack_vendor/" i], script[src*="/jetpack_vendor/" i], ' +
   'link[id^="jetpack" i], script[id^="jetpack" i], style[id^="jetpack" i], ' +
   '[class*="jp-carousel" i], [class*="sharedaddy" i], [id*="jp-post-flair" i]'
-);
+)).some(el => !/jetpack-boost/i.test(el.id + (el.getAttribute('href') || el.getAttribute('src') || '')));
 const wpContent = !!document.querySelector('link[href*="/wp-content/"]') || !!document.querySelector('script[src*="/wp-content/"]');
-const wpJsonApi = document.body.outerHTML.includes('/wp-json/');
+const wpJsonApi = html.includes('/wp-json/');
 return {
   generator: generator ? generator.getAttribute('content') : null,
   yoast: yoastBlock || yoastClass,
