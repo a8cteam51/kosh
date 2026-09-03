@@ -2,7 +2,7 @@
 
 What WordPress **core** and **Jetpack** can emit natively for each plugin-dependent AEO signal, and where a third-party SEO plugin (Yoast / RankMath / AIOSEO) or custom code is genuinely required.
 
-The AEO skill reads this file to make its fix recommendations **native-first**: recommend the core / Jetpack path when one exists, and only fall back to a third-party plugin for capabilities neither core nor Jetpack provides. It also reads `lastVerified` below to decide whether to surface a re-verification notice (see "Staleness check").
+The AEO skill reads this file to make its fix recommendations **native-first**: recommend the SEO plugin the site already runs when one is detected, otherwise the core / Jetpack path, and only fall back to installing a third-party plugin for capabilities neither core nor Jetpack provides. It also reads `lastVerified` below to decide whether to surface a re-verification notice (see "Staleness check").
 
 **lastVerified:** 2026-07-15
 **stalenessThresholdDays:** 90
@@ -55,7 +55,7 @@ Jetpack emits **no schema.org JSON-LD at all**, and core emits none by default. 
 
 ## How the skill uses this file
 
-1. **Native-first recommendations.** For any signal in the "native-first" table above, the actionable prompt and effort rationale recommend the core / Jetpack path first (naming the free vs. paid tier). Only for the "genuine gap" signals does the skill recommend a third-party plugin or custom JSON-LD as the primary fix.
+1. **Native-first recommendations.** For any signal in the "native-first" table above, the actionable prompt and effort rationale recommend the core / Jetpack path first (naming the free vs. paid tier) unless a dedicated SEO plugin is already detected — that plugin's field is the fix. Only for the "genuine gap" signals does the skill recommend a third-party plugin or custom JSON-LD as the primary fix.
 2. **Effort adjustment.** Native fixes that are toggles (enable Jetpack Sitemaps, enable Social) are `low`. Schema-gap fixes stay `medium` (plugin install/config) or rise per stack, per the Issue effort guide.
 3. **Staleness check.** At CMS-detection time the skill compares `lastVerified` to the current date. If the gap exceeds `stalenessThresholdDays`, it prints a one-line notice to the operator and records `capabilityMatrixStale: true` plus `capabilityMatrixLastVerified` in `technicalNotes`. Under the threshold it stays silent but still records the date.
 
