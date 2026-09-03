@@ -1349,8 +1349,11 @@ const generator = document.querySelector('meta[name="generator"]');
 const yoastBlock = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).some(s => s.innerText.includes('"yoast"') || s.innerText.includes('Yoast'));
 const yoastClass = !!document.querySelector('[class*="yoast"]');
 const html = document.documentElement.outerHTML;
-const rankMath = /rank-?math/i.test(html);
-const seopress = /seopress/i.test(html);
+// Match each plugin's own front-end output (head comment, asset path, JSON-LD class), never prose that mentions it.
+const rankMath = !!document.querySelector('meta[name="generator"][content*="Rank Math" i]') ||
+  /<!-- Search Engine Optimization by Rank Math|\/plugins\/seo-by-rank-math\/|class="rank-math-schema/i.test(html);
+const seopress = /<script id="website-schema"|\/plugins\/wp-seopress(-pro)?\/|class="seopress-user-consent/i.test(html);
+const aioseo = /<!-- All in One SEO|\/plugins\/all-in-one-seo-pack(-pro)?\/|class="aioseo-schema/i.test(html);
 // Jetpack: detect by its actual plugin asset paths and enqueued script/style handles,
 // not by incidental "jetpack" strings in visible text (which false-positive on footer
 // credits, comments, or links to jetpack.com).
@@ -1368,12 +1371,13 @@ return {
   yoast: yoastBlock || yoastClass,
   rankMath,
   seopress,
+  aioseo,
   jetpack,
   isWordPress: wpContent || wpJsonApi || (generator && /WordPress/i.test(generator.getAttribute('content') || ''))
 };
 ```
 
-Record the result in `technicalNotes.cmsDetected` (e.g. `"WordPress + Yoast"`, `"WordPress + RankMath"`, `"WordPress + Jetpack"`, `"WordPress + Jetpack (no dedicated SEO plugin)"`, `"WordPress (no SEO plugin)"`, `"Headless / unknown"`). This drives the `effort` ratings in Phase 5. **Jetpack detection matters for native-first recommendations** — see the capability check below.
+Record the result in `technicalNotes.cmsDetected` (e.g. `"WordPress + Yoast"`, `"WordPress + RankMath"`, `"WordPress + AIOSEO"`, `"WordPress + Jetpack"`, `"WordPress + Jetpack (no dedicated SEO plugin)"`, `"WordPress (no SEO plugin)"`, `"Headless / unknown"`). This drives the `effort` ratings in Phase 5. **Jetpack detection matters for native-first recommendations** — see the capability check below.
 
 ### Native-first capability check + matrix staleness (run once, after CMS detection)
 
