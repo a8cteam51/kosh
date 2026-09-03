@@ -774,7 +774,7 @@ If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit d
 
 **Evaluation:**
 - `pass` — FAQ section found (homepage or dedicated FAQ page) with 2+ Q&A pairs.
-- `partial` — Accordion or FAQ pattern present but only 1 item, or very thin, OR `faqSectionFound` is false but `answeredQuestionHeadingCount` ≥ 3 (a de facto FAQ built from question-style headings each followed by answer text, with no faq class/id, no "FAQ" heading, and fewer than 2 `<details>` — all now covered by `faqSectionFound` above, so this branch can't fire on a page that already has real FAQ markup). Word the finding as a suggestion to add explicit FAQ markup, not as a defect — this stays capped at `low` per the optional/stylistic carve-out below.
+- `partial` — Accordion or FAQ pattern present but only 1 item, or very thin, OR `faqSectionFound` is false but `answeredQuestionHeadingCount` ≥ 3 (a de facto FAQ built from question-style headings each followed by answer text, with no faq class/id, no "FAQ" heading, and fewer than 2 question-shaped `<details>` — all now covered by `faqSectionFound` above, so this branch can't fire on a page that already has real FAQ markup). Word the finding as a suggestion to add explicit FAQ markup, not as a defect — this stays capped at `low` per the optional/stylistic carve-out below.
 - `fail` — Absent.
 
 #### FAQ schema applied to visible FAQ content — `faqSchemaApplied`

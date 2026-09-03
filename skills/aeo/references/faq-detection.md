@@ -1,6 +1,6 @@
 # Canonical FAQ detection — single source of truth
 
-**Version:** 2  ·  **Consumers:** `faqRelevance` (Section 0.4), `faqSchema` (1.3), `faqSectionPresent` + `faqSchemaApplied` (1.4), functional-page FAQ check (2.1)
+**Version:** 3  ·  **Consumers:** `faqRelevance` (Section 0.4), `faqSchema` (1.3), `faqSectionPresent` + `faqSchemaApplied` (1.4), functional-page FAQ check (2.1)
 
 Every FAQ determination in the AEO skill — is there an FAQ, is it marked up, how well — comes from the one probe defined below. **Do not re-derive, paraphrase, or partially inline any part of it in `SKILL.md`.** Previous revisions of this skill carried three "identical" copies of this logic in Sections 1.3, 1.4, and 2.1; each fix round patched one copy and left the others behind, which is what produced the false `critical` findings this file exists to prevent. Sections reference this probe by name and consume its outputs.
 
@@ -38,14 +38,19 @@ function koshFaqProbe() {
   // Case-insensitive attribute matching ([... i]) replaces the hand-listed case
   // variants that used to differ between copies of this logic ('faq' in one place,
   // 'faq' + 'FAQ' in another, so the same page scored differently per section).
-  const FAQ_CONTAINER_SELECTOR = '[class*="faq" i], [id*="faq" i]';
   const FAQ_HEADING_PATTERN = /frequently asked|common questions|\bfaqs?\b/i;
+  // WP core stamps term slugs on post listings (category-faq, tag-faq): a link to FAQ posts, not an FAQ here.
+  const WP_TERM_CLASS = /^(category|tag|term)-/i;
 
   const headings = Array.from(document.querySelectorAll('h2, h3'));
-  const hasFaqContainer = !!document.querySelector(FAQ_CONTAINER_SELECTOR);
+  const hasFaqContainer = !!document.querySelector('[id*="faq" i]') ||
+    Array.from(document.querySelectorAll('[class*="faq" i]')).some(el =>
+      Array.from(el.classList).some(c => /faq/i.test(c) && !WP_TERM_CLASS.test(c)));
   const hasFaqHeading = headings.some(h => FAQ_HEADING_PATTERN.test(txt(h)));
   const detailsElements = document.querySelectorAll('details').length;
-  const hasFaqAccordion = detailsElements >= 2;
+  // Question-shaped summaries separate an FAQ accordion from Woo's Shipping/Returns disclosures.
+  const hasFaqAccordion = Array.from(document.querySelectorAll('details > summary'))
+    .filter(s => txt(s).endsWith('?')).length >= 2;
   const hasFaqMarkers = hasFaqContainer || hasFaqHeading || hasFaqAccordion;
 
   // De facto FAQ: a question-framed heading only counts when answer-like body text
@@ -103,9 +108,12 @@ function koshFaqProbe() {
 
   const types = node => [].concat((node && node['@type']) || []);
   const faqPageNodes = jsonLd.filter(n => types(n).includes('FAQPage'));
+  // Yoast's FAQ block lists mainEntity as bare {"@id"} references to Question nodes in the @graph.
+  const byId = new Map(jsonLd.filter(n => n && n['@id']).map(n => [n['@id'], n]));
+  const resolve = q => (q && typeof q === 'object' && q['@id'] && !q['@type'] && byId.get(q['@id'])) || q;
   // A Q&A pair must actually be a Question node with a non-empty acceptedAnswer.
   // Counting bare `mainEntity` array length let two empty objects reach 'valid'.
-  const qaPairs = node => [].concat(node.mainEntity || []).filter(q =>
+  const qaPairs = node => [].concat(node.mainEntity || []).map(resolve).filter(q =>
     q && typeof q === 'object' &&
     types(q).includes('Question') &&
     [].concat(q.acceptedAnswer || []).some(a => a && typeof a === 'object' && String(a.text || '').trim().length > 0)
