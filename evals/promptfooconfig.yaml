@@ -17,6 +17,7 @@ providers:
   - id: anthropic:claude-agent-sdk
     label: Claude Code with current functional-design skill
     config:
+      model: claude-opus-5
       working_dir: ./.workspaces/current
       setting_sources: ['project']
       skills: ['functional-design']
@@ -66,12 +67,15 @@ tests:
           "sizesAttr": "(max-width: 1024px) 485px, 485px"
         }
 
-        Begin your answer with the single word MARKUP or SOURCE to name which
-        category owns the fix, then give the one-sentence recommended fix as
-        it would appear in the report.
+        Answer in three lines:
+        1. MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does the fix change the page markup?
+        3. The one-sentence recommended fix as it would appear in the report.
     assert:
       - type: regex
-        value: '^[\s*_#>]*MARKUP\b'
+        value: '^[\s*_#>\d.)]*MARKUP\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*YES\b'
       - type: icontains
         value: sizes
 
@@ -93,12 +97,15 @@ tests:
           "sizesAttr": "100vw"
         }
 
-        Begin your answer with the single word MARKUP or SOURCE to name which
-        category owns the fix, then give the one-sentence recommended action
-        as it would appear in the report.
+        Answer in three lines:
+        1. MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does the fix change the page markup?
+        3. The one-sentence recommended action as it would appear in the report.
     assert:
       - type: regex
-        value: '^[\s*_#>]*SOURCE\b'
+        value: '^[\s*_#>\d.)]*SOURCE\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*NO\b'
       - type: regex
         value: '([Uu]pload|[Oo]riginal|[Gg]enerator)'
 

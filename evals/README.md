@@ -15,6 +15,8 @@ npm run eval -- 5     # repeat every case 5 times to measure stability
 
 Requires Node 20.20+ or 22.22+ and a Claude Code login. The provider is the Claude Agent SDK, so no API key is needed.
 
+The model is pinned under `providers[0].config.model` in `promptfooconfig.yaml`. Without a pin, the Claude Code CLI's default applies, which changes across versions and machines. Each case's `modelUsage` in the raw JSON records what actually served it.
+
 Each run:
 
 1. Rebuilds `.workspaces/current/` from `skills/functional-design/` in the working tree, so the eval always tests your uncommitted edits.
