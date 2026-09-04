@@ -109,7 +109,9 @@
         "javascriptRequired": { "type": "boolean", "description": "Whether core homepage content requires JavaScript to render." },
         "httpsActive": { "type": "boolean" },
         "mixedContentCount": { "type": "integer", "minimum": 0 },
-        "cmsDetected": { "type": "string", "description": "Detected CMS (e.g. 'WordPress', 'WordPress + Yoast', 'WordPress + RankMath', 'Headless'). Used by the skill to tune effort estimates." },
+        "cmsDetected": { "type": "string", "description": "Detected CMS (e.g. 'WordPress', 'WordPress + Yoast', 'WordPress + RankMath', 'WordPress + Jetpack', 'Headless'). Used by the skill to tune effort estimates and native-first recommendations." },
+        "capabilityMatrixLastVerified": { "type": "string", "description": "The lastVerified date (YYYY-MM-DD) read from references/wp-seo-capabilities.md at run time." },
+        "capabilityMatrixStale": { "type": "boolean", "description": "True when the capability matrix lastVerified date is older than its staleness threshold (default 90 days) — signals that WP core / Jetpack SEO capabilities should be re-verified against source docs." },
         "schemaFormats": {
           "type": "object",
           "description": "Counts of structured-data formats present on the homepage. JSON-LD is preferred for AI parsing; microdata and RDFa earn partial credit on the structured-data signals.",
