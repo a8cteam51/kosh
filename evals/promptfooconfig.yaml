@@ -112,4 +112,6 @@ tests:
 evaluateOptions:
   maxConcurrency: 2
 
-outputPath: results/functional-design.html
+outputPath:
+  - results/functional-design.html
+  - results/raw/functional-design.json

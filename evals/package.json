@@ -7,7 +7,7 @@
   },
   "scripts": {
     "reset": "node scripts/reset-workspace.mjs",
-    "eval": "node scripts/run-eval.mjs"
+    "eval": "node scripts/reset-workspace.mjs && promptfoo eval --no-cache"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.211",

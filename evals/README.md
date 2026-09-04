@@ -9,8 +9,8 @@ These make real model calls and cost money. Run them by hand, not in CI.
 ```bash
 cd evals
 npm install
-npm run eval          # one pass
-npm run eval -- 5     # repeat every case 5 times to measure stability
+npm run eval                 # one pass
+npm run eval -- --repeat 5   # repeat every case 5 times to measure stability
 ```
 
 Requires Node 20.20+ or 22.22+ and a Claude Code login. The provider is the Claude Agent SDK, so no API key is needed.
@@ -22,7 +22,7 @@ Each run:
 1. Rebuilds `.workspaces/current/` from `skills/functional-design/` in the working tree, so the eval always tests your uncommitted edits.
 2. Runs `promptfooconfig.yaml` with caching off.
 3. Writes `results/functional-design.html` and `results/raw/functional-design.json`.
-4. Exits non-zero on any provider error or assertion failure.
+4. Exits with promptfoo's failure code (100) when any case fails or errors.
 
 `.workspaces/`, `results/`, and `node_modules/` are gitignored.
 
