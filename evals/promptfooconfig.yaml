@@ -25,10 +25,6 @@ providers:
       apiKeyRequired: false
       persist_session: false
 
-defaultTest:
-  options:
-    bustCache: true
-
 tests:
   - description: WCAG cited for contrast only, /kosh:a11y recommended for the rest
     vars:
