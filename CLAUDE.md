@@ -4,7 +4,7 @@ kosh is a Claude Code plugin that runs functional, performance, accessibility, s
 
 ## Commands
 
-No build step and no `package.json` — the scripts are plain `node` and `bash`.
+No build step and no root `package.json` — the scripts are plain `node` and `bash`. `evals/` has its own `package.json` for promptfoo.
 
 ```bash
 claude --plugin-dir .    # launch Claude Code with the plugin loaded
@@ -44,6 +44,7 @@ skills/          → detailed testing procedures (the actual prompts)
 schemas/         → JSON schemas that define report structure
 scripts/         → report generation and merge scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
+evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
 docs/            → user-facing guides (getting-started.md)
 .mcp.json        → Playwright MCP server configuration
 .claude/         → project settings and Playwright tool permissions
@@ -76,7 +77,7 @@ Skill files are long, detailed prompts — not code. They tell Claude exactly wh
 - Use `- ✅` for mandatory requirement declarations (things Claude must do, stated upfront as rules). Use `- [ ]` for completion tracking checklists (things Claude checks off as it works, used as a gate before report generation). Both patterns appear in skill files and serve different purposes.
 - Maintain the existing phase structure (setup → multi-page testing → analysis → reporting).
 - Open with the shared `$ARGUMENTS` preamble: parse the URL, validate it is present (ask the user if not), and resolve the environment type.
-- Test your changes by running the skill against a real site and reviewing the report.
+- Test your changes by running the skill against a real site and reviewing the report. For `functional-design`, also run the promptfoo evals — see `evals/README.md`.
 
 ### Adding or editing a schema
 

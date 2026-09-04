@@ -48,6 +48,7 @@ skills/          Full testing procedures, invoked as /kosh:a11y, /kosh:aeo, /kos
 schemas/         JSON schemas for report validation
 scripts/         Report generation and merge scripts
 hooks/           Session hook that creates reports/data/ on startup
+evals/           Promptfoo regression checks for skill decision rules
 .mcp.json        Playwright MCP server configuration
 .claude/         Project settings and Playwright tool permissions
 ```
