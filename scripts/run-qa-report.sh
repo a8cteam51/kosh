@@ -108,38 +108,19 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   echo -e "  ${YELLOW}Medium Priority Issues:${NC} $MEDIUM_COUNT"
   echo -e "  ${YELLOW}Low Priority Issues:${NC} $LOW_COUNT"
 
-  # Step 5: Archive the source JSON next to the report it produced.
-  #
-  # reports/data/qa-report-<type>.json is a FIXED name that every run overwrites,
-  # so the evidence behind a past report is destroyed by the next test. The HTML
-  # is dated and survives; its source data did not. That gap turns a finished
-  # report into something you cannot re-examine, re-render, or diff against a
-  # later run.
-  #
-  # The archive takes the HTML report's own basename, so a report and its source
-  # always share a name and you can get from either to the other. That name is
-  # read back from the generator's output rather than rebuilt here — same reason
-  # Step 4 does it: a slug rule copied into this script can drift from the
-  # generator's.
-  ARCHIVE_DIR="$REPORTS_DIR/data/archive"
-  mkdir -p "$ARCHIVE_DIR"
+  # Step 5: Archive the source JSON under the HTML's basename; qa-report-<type>.json is overwritten by every run.
+  ARCHIVE_DIR="$(dirname "$REPORT_FILE")/data/archive"
   ARCHIVE_JSON="$ARCHIVE_DIR/$(basename "${REPORT_FILE%.html}").json"
 
-  # The HTML name carries a DATE, not a time, so two runs of the same type
-  # against the same site on the same day collide — which would reproduce the
-  # very bug this step exists to fix, just one level down. On a collision, fall
-  # back to the run's own timestamp, which the report already carries and which
-  # is unique per run.
+  # The HTML name carries only a date, so a same-day rerun moves the previous run aside under its own timestamp.
   if [ -e "$ARCHIVE_JSON" ] && ! cmp -s "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
-    RUN_STAMP=$(printf '%s' "$TIMESTAMP" | tr -c 'A-Za-z0-9' '-')
-    ARCHIVE_JSON="$ARCHIVE_DIR/$(basename "${REPORT_FILE%.html}")_$RUN_STAMP.json"
+    OLD_STAMP=$(node -p "JSON.parse(require('fs').readFileSync('$ARCHIVE_JSON','utf8')).timestamp" | tr -c 'A-Za-z0-9\n' '-')
+    mv "$ARCHIVE_JSON" "${ARCHIVE_JSON%.json}_$OLD_STAMP.json"
   fi
 
-  if cp "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
+  if mkdir -p "$ARCHIVE_DIR" && cp "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
     echo -e "${BLUE}Source data archived: $ARCHIVE_JSON${NC}"
   else
-    # Not fatal. The report is already generated and valid; failing the whole
-    # workflow over a copy would be worse than losing one archive.
     echo -e "${YELLOW}Warning: could not archive source JSON to $ARCHIVE_JSON${NC}"
   fi
 
