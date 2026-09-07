@@ -25,10 +25,9 @@ Core + Jetpack cover **meta descriptions, Open Graph, XML sitemaps (with lastmod
 | `noNoindex` / robots meta | ✅ `wp_robots()` + Settings → Reading indexing control | (respects core) | Core-only; toggle Settings → Reading "Discourage search engines" appropriately. |
 | `titleAndMetaQuestionMatch` (editable title + meta description) | ⚠️ Title tag via `title-tag` support; **no meta description**, no per-page SEO title | ✅ Custom SEO titles + front-page/per-post meta descriptions (Jetpack **SEO Tools**) | Use Jetpack SEO Tools to set SEO title / meta description. |
 
-**Jetpack tiers (verify on re-check):**
+**Jetpack tiers (verify on re-check — plans are Free / Security / Growth / Complete):**
 
-- **Free:** Open Graph tags (Social/Sharing), XML Sitemaps (with lastmod).
-- **Paid (SEO Tools — Professional / Complete or the Security/Complete bundles):** custom SEO titles, per-post & front-page meta descriptions, archive canonical URLs.
+- **Free (all plans):** Open Graph tags (Social/Sharing), XML Sitemaps (with lastmod), and SEO Tools — custom SEO titles, per-post & front-page meta descriptions, archive canonical URLs. The SEO Tools support doc names no plan requirement.
 - **Complete only:** AI auto-generation of SEO titles / descriptions / image alt text.
 
 > When a native fix relies on a **paid** Jetpack tier, say so in the recommendation and note the free fallback (core, or a free third-party plugin) so the effort/cost is honest.
