@@ -1982,10 +1982,10 @@ Example — ✅ "Write a complete JSON-LD Organization schema block for a Toront
 Once `reports/data/qa-report-aeo.json` is saved, run:
 
 ```bash
-node scripts/generate-report.js reports/data/qa-report-aeo.json
+scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo
 ```
 
-The AEO branch is auto-detected from `report.mode === "aeo"`. The script writes a self-contained HTML report to `reports/` (color-coded status pills, per-criterion signal tables, schema-relevance section, collapsible severity blocks, paste-ready Claude prompts) and prints the output path. `--aeo` can be passed explicitly to force the AEO branch.
+`--aeo` forces the generator's AEO branch, which is otherwise auto-detected from `report.mode === "aeo"`. The script writes a self-contained HTML report to `reports/` (color-coded status pills, per-criterion signal tables, schema-relevance section, collapsible severity blocks, paste-ready Claude prompts), prints the output path, and archives the source JSON under the same basename in `reports/data/archive/`.
 
 ### Terminal summary
 

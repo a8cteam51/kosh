@@ -23,8 +23,9 @@ Run a test — each writes its JSON to `reports/data/`:
 Render a report to self-contained HTML:
 
 ```bash
-scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from filename, except aeo
-node scripts/generate-report.js reports/data/qa-report-aeo.json   # or call the renderer directly
+scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from filename
+scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo has no filename detection
+node scripts/generate-report.js reports/data/qa-report-aeo.json   # renderer only, skips the archive
 scripts/merge-qa-reports.sh                                       # or /kosh:merge
 ```
 
@@ -32,7 +33,7 @@ scripts/merge-qa-reports.sh                                       # or /kosh:mer
 
 Merging requires all three of functional, performance, and accessibility; shop and AEO reports are standalone. Prefer `/kosh:merge` over calling the script — it reports which JSON files are missing up front, where the script exits on the first one it can't find.
 
-`run-qa-report.sh` has no aeo branch in its filename detection, so AEO reports fall through to the renderer's own dispatch: it routes on `mode: "aeo"` in the JSON. An AEO-shaped report missing that field is a hard error, not a fallback.
+`run-qa-report.sh` has no aeo branch in its filename detection, so the AEO skill passes `--aeo` explicitly; without it the renderer's own dispatch routes on `mode: "aeo"` in the JSON. An AEO-shaped report missing that field is a hard error, not a fallback.
 
 ## How it works
 
