@@ -1,0 +1,113 @@
+description: Regression checks for the functional-design skill's decision rules
+
+prompts:
+  - label: Ask about a functional-design testing decision
+    raw: |
+      You are reviewing how the `functional-design` skill directs a QA tester
+      to act in a specific scenario. Read the skill, then answer from its
+      guidance alone. Do not launch a browser, use Playwright, or modify any
+      files — this is a knowledge check about the skill's rules, not a test
+      run, so the skill's browser-automation requirement does not apply here.
+
+      {{request}}
+
+      Answer briefly with exactly what was requested.
+
+providers:
+  - id: anthropic:claude-agent-sdk
+    label: Claude Code with current functional-design skill
+    config:
+      model: claude-opus-5
+      working_dir: ./.workspaces/current
+      setting_sources: ['project']
+      skills: ['functional-design']
+      permission_mode: dontAsk
+      apiKeyRequired: false
+      persist_session: false
+
+tests:
+  - description: WCAG cited for contrast only, /kosh:a11y recommended for the rest
+    vars:
+      request: |
+        During desktop testing on the About page you observed two problems:
+
+        1. Six content images have no alt text.
+        2. The Section 1.5 contrast script flagged footer body text
+           (16px, weight 400) at a ratio of 3.2 against a threshold of 4.5.
+
+        Write both findings as they would appear in the report, following the
+        skill's rules about WCAG citations and recommendations.
+    assert:
+      - type: contains
+        value: '1.4.3'
+      - type: not-contains
+        value: '1.1.1'
+      - type: contains
+        value: 'kosh:a11y'
+
+  - description: Markup-category image finding recommends a sizes fix, not a re-upload
+    vars:
+      request: |
+        The Section 1.4 image resolution script returned this result on the
+        homepage:
+
+        {
+          "src": "hero-banner.jpg",
+          "naturalSize": "485x303px",
+          "renderedCSS": "800x500px",
+          "neededForCrisp": "1600x1000px (2x DPR)",
+          "resolutionRatio": 0.3,
+          "status": "flag",
+          "diagnosisCategory": "markup",
+          "largestSrcsetCandidate": "1600w",
+          "sizesAttr": "(max-width: 1024px) 485px, 485px"
+        }
+
+        Answer in three lines:
+        1. MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does the fix change the page markup?
+        3. The one-sentence recommended fix as it would appear in the report.
+    assert:
+      - type: regex
+        value: '^[\s*_#>\d.)]*MARKUP\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*YES\b'
+      - type: icontains
+        value: sizes
+
+  - description: Source-category image finding points at the asset, not the markup
+    vars:
+      request: |
+        The Section 1.4 image resolution script returned this result on the
+        homepage:
+
+        {
+          "src": "team-photo.jpg",
+          "naturalSize": "768x480px",
+          "renderedCSS": "800x500px",
+          "neededForCrisp": "1600x1000px (2x DPR)",
+          "resolutionRatio": 0.48,
+          "status": "flag",
+          "diagnosisCategory": "source",
+          "largestSrcsetCandidate": "768w",
+          "sizesAttr": "100vw"
+        }
+
+        Answer in three lines:
+        1. MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does the fix change the page markup?
+        3. The one-sentence recommended action as it would appear in the report.
+    assert:
+      - type: regex
+        value: '^[\s*_#>\d.)]*SOURCE\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*NO\b'
+      - type: regex
+        value: '([Uu]pload|[Oo]riginal|[Gg]enerator)'
+
+evaluateOptions:
+  maxConcurrency: 2
+
+outputPath:
+  - results/functional-design.html
+  - results/raw/functional-design.json

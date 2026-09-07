@@ -6,6 +6,5 @@
     "name": "katodea"
   },
   "repository": "https://github.com/a8cteam51/kosh",
-  "commands": ["./commands/"],
   "mcpServers": "./.mcp.json"
 }

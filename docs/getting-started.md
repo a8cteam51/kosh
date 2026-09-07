@@ -52,7 +52,7 @@ If you accidentally skip this step, you'll get a permission prompt for every bro
 
 ## Step 3: Run a test
 
-kosh has five test commands. Each one takes a URL — the site you want to test.
+kosh has five tests. Each one takes a URL — the site you want to test.
 
 **Functional & design test:** Checks user journeys, layout, links, metadata, and content:
 ```
@@ -96,7 +96,7 @@ Open the HTML file in any browser to view it — double-click in Finder, or drag
 
 ## Going further
 
-The slash commands are a starting point. Once a test has run, you're in a live session with a browser and full context about what was found. You can keep the conversation going.
+The tests are a starting point. Once a test has run, you're in a live session with a browser and full context about what was found. You can keep the conversation going.
 
 ### Dig into a specific page or flow
 
