@@ -49,6 +49,7 @@ schemas/         JSON schemas for report validation
 scripts/         Report generation and merge scripts
 hooks/           Session hook that creates reports/data/ on startup
 evals/           Promptfoo regression checks for skill decision rules
+reports/data/archive/  Past runs' JSON, named to match the HTML they produced
 .mcp.json        Playwright MCP server configuration
 .claude/         Project settings and Playwright tool permissions
 ```

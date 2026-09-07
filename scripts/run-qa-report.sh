@@ -108,6 +108,22 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   echo -e "  ${YELLOW}Medium Priority Issues:${NC} $MEDIUM_COUNT"
   echo -e "  ${YELLOW}Low Priority Issues:${NC} $LOW_COUNT"
 
+  # Step 5: Archive the source JSON under the HTML's basename; qa-report-<type>.json is overwritten by every run.
+  ARCHIVE_DIR="$(dirname "$REPORT_FILE")/data/archive"
+  ARCHIVE_JSON="$ARCHIVE_DIR/$(basename "${REPORT_FILE%.html}").json"
+
+  # The HTML name carries only a date, so a same-day rerun moves the previous run aside under its own timestamp.
+  if [ -e "$ARCHIVE_JSON" ] && ! cmp -s "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
+    OLD_STAMP=$(node -p "JSON.parse(require('fs').readFileSync('$ARCHIVE_JSON','utf8')).timestamp" | tr -c 'A-Za-z0-9\n' '-')
+    mv "$ARCHIVE_JSON" "${ARCHIVE_JSON%.json}_$OLD_STAMP.json"
+  fi
+
+  if mkdir -p "$ARCHIVE_DIR" && cp "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
+    echo -e "${BLUE}Source data archived: $ARCHIVE_JSON${NC}"
+  else
+    echo -e "${YELLOW}Warning: could not archive source JSON to $ARCHIVE_JSON${NC}"
+  fi
+
   echo -e "${GREEN}Workflow complete! ✓${NC}"
 else
   echo -e "${RED}Error: Report file was not generated${NC}"
