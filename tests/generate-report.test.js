@@ -19,7 +19,7 @@ const sandbox = (t) => {
   return { root, reportsDir };
 };
 
-const render = ({ root, reportsDir }, screenshots) => {
+const render = ({ root, reportsDir }, screenshots, pages) => {
   const input = path.join(root, 'qa-report-functional.json');
   fs.writeFileSync(input, JSON.stringify({
     websiteName: 'Kosh Render Fixture',
@@ -27,7 +27,7 @@ const render = ({ root, reportsDir }, screenshots) => {
     timestamp: '2026-01-01T00:00:00Z',
     issues: {
       critical: [],
-      high: [{ category: 'Layout', issue: 'Broken hero', impact: 'Looks wrong', screenshots }],
+      high: [{ category: 'Layout', issue: 'Broken hero', impact: 'Looks wrong', screenshots, pages }],
       medium: [],
       low: [],
     },
@@ -111,4 +111,32 @@ test('a remote or scheme-carrying screenshot never reaches the HTML', (t) => {
   assert.ok(!html.includes('alert(1)'));
   assert.ok(!html.includes('<figure class="screenshot">'));
   assert.equal(stderr.match(/dropped \(not a path inside reports\/\)/g).length, urls.length);
+});
+
+test('a javascript: href hidden behind control characters is never linked', (t) => {
+  const hostile = [
+    'java\tscript:alert(1)',
+    'java\nscript:alert(1)',
+    'java\rscript:alert(1)',
+    'JaVa\tScRiPt:alert(1)',
+    '\u0001javascript:alert(1)',
+    ' \tjavascript:alert(1)',
+  ];
+
+  const { html } = render(sandbox(t), [], hostile);
+
+  assert.ok(!/<a href="[^"]*script:/i.test(html));
+  assert.equal(html.match(/alert\(1\)/g).length, hostile.length);
+});
+
+test('ordinary page links still render, with stray control characters removed', (t) => {
+  const pages = ['https://example.com/about', '/pricing', '#faq', 'https://example.com/search?q=a&page=2', 'https://example.com/contact\n'];
+
+  const { html } = render(sandbox(t), [], pages);
+
+  assert.ok(html.includes('<a href="https://example.com/about"'));
+  assert.ok(html.includes('<a href="/pricing"'));
+  assert.ok(html.includes('<a href="#faq"'));
+  assert.ok(html.includes('<a href="https://example.com/search?q=a&amp;page=2"'));
+  assert.ok(html.includes('<a href="https://example.com/contact"'));
 });
