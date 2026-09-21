@@ -56,7 +56,7 @@ const escAttr = escHtml;
 const renderProvenance = (provenance) =>
   provenance && typeof provenance === 'object' ? `<p>${escHtml(describeProvenance(provenance))}</p>` : '';
 
-// sanitizeHref returns the input only if it parses as a safe href:
+// sanitizeHref returns the input, control characters removed, only if it parses as a safe href:
 // - http:// or https:// schemes
 // - relative paths, fragments, no-scheme URLs (no colon-scheme prefix)
 // Anything else (javascript:, data:, vbscript:, file:, etc.) returns null.
@@ -64,7 +64,8 @@ const renderProvenance = (provenance) =>
 // produce an anchor that could execute script.
 const sanitizeHref = (value) => {
   if (value == null) return null;
-  const str = String(value).trim();
+  // Browsers drop tabs, newlines and leading control characters before parsing, so `java\tscript:` must not read as relative.
+  const str = String(value).replace(/[\u0000-\u001F\u007F]/g, '').trim();
   if (!str) return null;
   const schemeMatch = str.match(/^([a-z][a-z0-9+\-.]*):/i);
   if (schemeMatch) {
