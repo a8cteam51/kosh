@@ -191,9 +191,10 @@ const renderScreenshots = (screenshots) => {
       const filename = String(relPath).split('/').pop();
       const dataUri = inlineScreenshot(relPath);
       if (!dataUri) {
-        // A remote or scheme-carrying src would load the moment the report opens, so the fallback is local paths only.
-        const keep = LOCAL_RELATIVE_PATH.test(String(relPath));
-        console.warn(`Warning: screenshot not inlined, ${keep ? 'left as an external reference' : 'dropped (not a local relative path)'}: ${relPath}`);
+        // A remote or scheme-carrying src would load the moment the report opens, so the fallback only keeps plain paths inside reports/.
+        const ref = String(relPath);
+        const keep = LOCAL_RELATIVE_PATH.test(ref) && !ref.split('/').includes('..');
+        console.warn(`Warning: screenshot not inlined, ${keep ? 'left as an external reference' : 'dropped (not a path inside reports/)'}: ${relPath}`);
         if (!keep) return '';
       }
       const imgTag = `<img src="${escAttr(dataUri || relPath)}" alt="${escAttr(filename)}" loading="lazy">`;

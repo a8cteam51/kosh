@@ -68,14 +68,17 @@ test('a missing screenshot keeps its external reference and warns', (t) => {
   assert.ok(!stdout.includes('Screenshots inlined'));
 });
 
-test('an image reached through ../ is not inlined', (t) => {
+test('a path that climbs out of reports/ is neither inlined nor referenced', (t) => {
   const box = sandbox(t);
   fs.writeFileSync(path.join(box.root, 'outside.png'), PNG);
 
-  const { html, stderr } = render(box, ['../outside.png']);
+  const climbing = ['../outside.png', 'screenshots/../../outside.png'];
+
+  const { html, stderr } = render(box, climbing);
 
   assert.ok(!html.includes('src="data:'));
-  assert.match(stderr, /not inlined/);
+  assert.ok(!html.includes('outside.png'));
+  assert.equal(stderr.match(/dropped \(not a path inside reports\/\)/g).length, climbing.length);
 });
 
 test('an absolute path is neither inlined nor referenced', (t) => {
@@ -87,7 +90,7 @@ test('an absolute path is neither inlined nor referenced', (t) => {
 
   assert.ok(!html.includes('src="data:'));
   assert.ok(!html.includes(outside));
-  assert.match(stderr, /dropped \(not a local relative path\)/);
+  assert.match(stderr, /dropped \(not a path inside reports\/\)/);
 });
 
 test('a non-image file inside reports/ is not inlined', (t) => {
@@ -107,5 +110,5 @@ test('a remote or scheme-carrying screenshot never reaches the HTML', (t) => {
   assert.ok(!html.includes('tracker.example'));
   assert.ok(!html.includes('alert(1)'));
   assert.ok(!html.includes('<figure class="screenshot">'));
-  assert.equal(stderr.match(/dropped \(not a local relative path\)/g).length, urls.length);
+  assert.equal(stderr.match(/dropped \(not a path inside reports\/\)/g).length, urls.length);
 });
