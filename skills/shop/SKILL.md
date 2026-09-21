@@ -661,11 +661,14 @@ Remember: commerce-flow findings only. Console and network errors belong inside 
 
 Structure your data into `reports/data/qa-report-shop.json`:
 
+- ✅ Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `scripts/run-qa-report.sh` adds the plugin version and skill hash.
+
 ```json
 {
   "url": "https://example.com",
   "websiteName": "Example",
   "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+  "provenance": { "model": "<your exact model ID>" },
   "environment": "production",
   "testMethodology": "Guest shopping journey via Playwright MCP: catalog browse, two products added to cart, quantity update and item removal verified against cart totals, checkout form completed with test data and stopped at the payment step. No order was placed.",
   "visitedPages": [

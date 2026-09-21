@@ -26,6 +26,7 @@ NC='\033[0m' # No Color
 QA_REPORT_JSON="${1:-reports/data/qa-report.json}"
 REPORTS_DIR="./reports"
 SCRIPT_PATH="$(dirname "$0")/generate-report.js"
+STAMP_SCRIPT_PATH="$(dirname "$0")/stamp-provenance.js"
 
 # Extract test type flags (everything after the JSON file argument)
 TEST_TYPE_FLAGS="${@:2}"
@@ -84,6 +85,10 @@ if [ -z "$TEST_TYPE_FLAGS" ]; then
 else
   echo -e "${YELLOW}  Test type: $TEST_TYPE_FLAGS${NC}"
 fi
+
+# A missing stamp costs comparability, not the report, so it warns rather than exits.
+node "$STAMP_SCRIPT_PATH" "$QA_REPORT_JSON" $TEST_TYPE_FLAGS \
+  || echo -e "${YELLOW}Warning: could not stamp provenance on $QA_REPORT_JSON${NC}"
 
 # Capture the generator's output so Step 4 reads back the path it prints rather than
 # rebuilding the filename with a slug rule that can drift from the generator's.
