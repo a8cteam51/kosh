@@ -191,7 +191,7 @@ Run this script on every page to programmatically flag images whose available pi
 
     const srcUrl = img.currentSrc || img.src || '';
     // SVGs scale losslessly.
-    if (srcUrl.toLowerCase().endsWith('.svg') || srcUrl.includes('image/svg')) return;
+    if (/\.svg$/i.test(srcUrl.split(/[?#]/)[0]) || srcUrl.includes('image/svg')) return;
 
     const cs = getComputedStyle(img);
     const objectFit = cs.objectFit;

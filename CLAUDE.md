@@ -53,7 +53,7 @@ schemas/         → JSON schemas that define report structure
 scripts/         → report generation and merge scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
-tests/           → `node --test` checks for the scripts, no dependencies
+tests/           → `node --test` checks for the scripts and skill-embedded snippets, no dependencies
 docs/            → user-facing guides (getting-started.md)
 .mcp.json        → Playwright MCP server configuration
 .claude/         → project settings and Playwright tool permissions
