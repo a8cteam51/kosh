@@ -40,6 +40,9 @@ const report = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
 
 // ===== Shared helpers (used by both QA renderer and renderAeoReport) =====
 
+// KOSH_REPORTS_DIR lets tests render into a temp directory instead of the real reports/.
+const reportsDir = path.resolve(process.env.KOSH_REPORTS_DIR || path.join(__dirname, '../reports'));
+
 const escHtml = (val) =>
   String(val ?? '')
     .replace(/&/g, '&amp;')
@@ -168,21 +171,40 @@ if (testTypeLabel) {
   runTypesLabel = parts.join(' + ');
 }
 
+const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
+const LOCAL_RELATIVE_PATH = /^(?!\/)[\w\-. /]+$/;
+let inlinedCount = 0;
+
+// Paths come from the report JSON: this blocks `../` and absolute paths, not symlinks planted inside reports/.
+const inlineScreenshot = (relPath) => {
+  const file = path.resolve(reportsDir, String(relPath));
+  const mime = IMAGE_MIME[path.extname(file).toLowerCase()];
+  if (!mime || !file.startsWith(reportsDir + path.sep) || !fs.existsSync(file)) return null;
+  inlinedCount += 1;
+  return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
+};
+
 const renderScreenshots = (screenshots) => {
   if (!Array.isArray(screenshots) || screenshots.length === 0) return '';
   const figures = screenshots
     .map((relPath) => {
-      const safePath = escAttr(relPath);
-      const filename = relPath.split('/').pop();
-      const safeHref = sanitizeHref(relPath);
-      const imgTag = `<img src="${escAttr(safePath)}" alt="${escAttr(filename)}" loading="lazy">`;
-      const anchor = safeHref
-        ? `<a href="${escAttr(safeHref)}" target="_blank" rel="noopener noreferrer">${imgTag}</a>`
-        : imgTag;
-      return `<figure class="screenshot">${anchor}<figcaption>${escHtml(filename)}</figcaption></figure>`;
+      const filename = String(relPath).split('/').pop();
+      const dataUri = inlineScreenshot(relPath);
+      if (!dataUri) {
+        // A remote or scheme-carrying src would load the moment the report opens, so the fallback is local paths only.
+        const keep = LOCAL_RELATIVE_PATH.test(String(relPath));
+        console.warn(`Warning: screenshot not inlined, ${keep ? 'left as an external reference' : 'dropped (not a local relative path)'}: ${relPath}`);
+        if (!keep) return '';
+      }
+      const imgTag = `<img src="${escAttr(dataUri || relPath)}" alt="${escAttr(filename)}" loading="lazy">`;
+      // A data: URI can't be a link target, so an inlined image expands in place instead.
+      const media = dataUri
+        ? `<details class="screenshot__expand"><summary title="Expand screenshot">${imgTag}</summary></details>`
+        : `<a href="${escAttr(relPath)}" target="_blank" rel="noopener noreferrer">${imgTag}</a>`;
+      return `<figure class="screenshot">${media}<figcaption>${escHtml(filename)}</figcaption></figure>`;
     })
     .join('');
-  return `<div class="screenshots">${figures}</div>`;
+  return figures ? `<div class="screenshots">${figures}</div>` : '';
 };
 
 const renderPages = (pages) => {
@@ -603,6 +625,29 @@ const styles = `
     max-height: 320px;
     object-fit: cover;
   }
+  .screenshot:has(.screenshot__expand[open]) {
+    grid-column: 1 / -1;
+  }
+  .screenshot__expand summary {
+    display: block;
+    cursor: zoom-in;
+  }
+  .screenshot__expand summary::-webkit-details-marker {
+    display: none;
+  }
+  .screenshot__expand summary:focus-visible {
+    outline: 2px solid ${t.accent};
+    outline-offset: -2px;
+  }
+  .screenshot__expand[open] summary {
+    cursor: zoom-out;
+  }
+  .screenshot__expand[open] img {
+    width: auto;
+    max-width: 100%;
+    max-height: none;
+    margin: 0 auto;
+  }
   .screenshot figcaption {
     padding: 0.375rem 0.625rem;
     font-size: 0.75rem;
@@ -708,7 +753,6 @@ const safeName = String(websiteName).toUpperCase().replace(/\s+/g, '_').replace(
 const outputFilename = testTypeLabel
   ? `${safeName}_${testTypeLabel}_QA_REPORT_${timestamp}.html`
   : `${safeName}_QA_REPORT_${timestamp}.html`;
-const reportsDir = path.join(__dirname, '../reports');
 
 if (!fs.existsSync(reportsDir)) {
   fs.mkdirSync(reportsDir, { recursive: true });
@@ -718,6 +762,11 @@ const outputPath = path.join(reportsDir, outputFilename);
 fs.writeFileSync(outputPath, html);
 // run-qa-report.sh parses this exact "HTML report generated: " prefix — don't reword.
 console.log(`HTML report generated: ${outputPath}`);
+if (inlinedCount > 0) {
+  const bytes = Buffer.byteLength(html);
+  const size = bytes < 1048576 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  console.log(`Screenshots inlined: ${inlinedCount}, report size ${size}`);
+}
 
 // ============================================================
 // AEO renderer (HTML output)
@@ -1350,10 +1399,9 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
   }
   const filenameTag = cliTestTypeLabel || 'AEO';
   const aeoOutputFilename = `${safeName}_${filenameTag}_QA_REPORT_${aeoTimestamp}.html`;
-  const aeoReportsDir = path.join(__dirname, '../reports');
-  if (!fs.existsSync(aeoReportsDir)) fs.mkdirSync(aeoReportsDir, { recursive: true });
+  if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
 
-  const aeoOutputPath = path.join(aeoReportsDir, aeoOutputFilename);
+  const aeoOutputPath = path.join(reportsDir, aeoOutputFilename);
   fs.writeFileSync(aeoOutputPath, html);
   // run-qa-report.sh parses this exact "HTML report generated: " prefix — don't reword.
   console.log(`HTML report generated: ${aeoOutputPath}`);
