@@ -55,8 +55,8 @@ test('a report from before provenance existed is left untouched', () => {
 });
 
 test('model-written version, plausible hash and fake seal do not block the real stamp', () => {
-  const forged = { model: 'claude-test-1', pluginVersion: '9.9.9', skills: { aeo: 'a'.repeat(64) }, seal: 'b'.repeat(64) };
-  const report = { timestamp: '2026-09-21T12:00:00Z', provenance: forged };
+  const invented = { model: 'claude-test-1', pluginVersion: '9.9.9', skills: { aeo: 'a'.repeat(64) }, seal: 'b'.repeat(64) };
+  const report = { timestamp: '2026-09-21T12:00:00Z', provenance: invented };
 
   assert.equal(stamp(report, ['--aeo']), 'stamped');
   assert.notEqual(report.provenance.pluginVersion, '9.9.9');

@@ -23,7 +23,7 @@ function hashSkill(dir) {
   return hash.digest('hex');
 }
 
-// Bound to the run's timestamp: a model can copy a hash or a whole old block, but not produce the matching seal.
+// Catches accidental copy-forward and echoed blocks (new run, new timestamp, seal mismatch); unkeyed, so not proof against deliberate forgery.
 function sealFor(report, { pluginVersion, skills }) {
   return crypto.createHash('sha256')
     .update(JSON.stringify([report.timestamp, pluginVersion, Object.entries(skills || {}).sort()]))
