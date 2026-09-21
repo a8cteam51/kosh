@@ -27,7 +27,7 @@ scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from fi
 scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo has no filename detection
 node scripts/generate-report.js reports/data/qa-report-aeo.json   # renderer only, skips the stamp and the archive
 scripts/merge-qa-reports.sh                                       # or /kosh:merge
-node --test "tests/*.test.js"                                     # script tests, no dependencies
+node --test "tests/*.test.js"                                     # script and snippet tests, no dependencies
 ```
 
 `run-qa-report.sh` stamps a `provenance` block into the source JSON before rendering: the skill writes `provenance.model` (self-reported), and `scripts/stamp-provenance.js` adds `pluginVersion`, a SHA-256 of each skill directory (references included), and a `seal` over those plus the report's `timestamp`. A valid seal means the block is never restamped, so re-rendering an archived run keeps the provenance of the run that produced it; a model-invented or copied-forward block fails the seal and is restamped. The seal is an unkeyed hash, so it guards against accidents, not deliberate tampering — anything with a shell can recompute it. A report with no `provenance` block at all is left untouched with a warning — it predates the feature, or the skill skipped `provenance.model`. The renderer prints the block as one footer line, and nothing for reports that predate it. The merged report carries no provenance — its JSON is a temp file that is deleted after rendering.
