@@ -92,7 +92,7 @@ The HTML report is the easiest way to review findings. It groups issues by sever
 - **Medium:** Things worth addressing but not urgent
 - **Low:** Minor improvements or suggestions
 
-Open the HTML file in any browser to view it — double-click in Finder, or drag it into a browser window. The CSS is inlined so it renders the same anywhere; any screenshots attached to findings load from the adjacent `reports/screenshots/` directory, so keep the two together when sharing the report.
+Open the HTML file in any browser to view it — double-click in Finder, or drag it into a browser window. The CSS and any screenshots attached to findings are embedded in the file, so it renders the same anywhere and you can share it on its own — drop it into Slack or email and the recipient sees everything. Click a screenshot to expand it to full size.
 
 ## Going further
 
