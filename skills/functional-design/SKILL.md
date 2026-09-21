@@ -214,8 +214,19 @@ Run this script on every page to programmatically flag images whose available pi
       return;
     }
 
-    const naturalW = img.naturalWidth;
-    const naturalH = img.naturalHeight;
+    // naturalWidth/Height are density-corrected (a 2x pick reports half its real pixels), but a fresh Image reads an already-loaded URL synchronously at density 1.
+    const picksFromSrcset = Boolean(srcset) || pictureSourceCount > 0;
+    const probe = new Image();
+    if (picksFromSrcset) {
+      probe.crossOrigin = img.crossOrigin; // The loaded-image cache is keyed by CORS mode, so a mismatch misses.
+      probe.src = srcUrl;
+    }
+    const measured = probe.naturalWidth > 0;
+    const naturalW = measured ? probe.naturalWidth : img.naturalWidth;
+    const naturalH = measured ? probe.naturalHeight : img.naturalHeight;
+    const unmeasuredNote = picksFromSrcset && !measured
+      ? ' The real pixel size of this srcset pick could not be read, so `naturalSize` is the density-corrected figure the DOM reports and may under-count — fetch the picked src and check its real dimensions before reporting.'
+      : '';
     const neededW = renderedW * dpr;
     const neededH = renderedH * dpr;
     const ratio = Math.min(naturalW / neededW, naturalH / neededH);
@@ -276,7 +287,7 @@ Run this script on every page to programmatically flag images whose available pi
       resolutionRatio: +ratio.toFixed(2),
       status: ratio < 0.75 ? 'flag' : 'needs visual review',
       diagnosisCategory: diagnosis.category,
-      diagnosis: diagnosis.explanation + objectFitNote + pictureNote,
+      diagnosis: diagnosis.explanation + objectFitNote + pictureNote + unmeasuredNote,
       objectFit,
       largestSrcsetCandidate: largestCandidate ? `${largestCandidate}w` : 'none',
       sizesAttr: sizesAttr || 'missing',
