@@ -105,6 +105,36 @@ tests:
       - type: regex
         value: '([Uu]pload|[Oo]riginal|[Gg]enerator)'
 
+  - description: Request-category image finding fixes the requested size, not the upload
+    vars:
+      request: |
+        The Section 1.4 image resolution script returned this result on a
+        blog post:
+
+        {
+          "src": "related-thumb.jpg?resize=350%2C200&ssl=1",
+          "naturalSize": "350x200px",
+          "renderedCSS": "305x172px",
+          "neededForCrisp": "610x344px (2x DPR)",
+          "resolutionRatio": 0.57,
+          "status": "flag",
+          "diagnosisCategory": "request",
+          "largestSrcsetCandidate": "none",
+          "sizesAttr": "missing"
+        }
+
+        Answer in three lines:
+        1. REQUEST, MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does this evidence alone justify recommending a re-upload?
+        3. The one-sentence recommended fix as it would appear in the report.
+    assert:
+      - type: regex
+        value: '^[\s*_#>\d.)]*REQUEST\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*NO\b'
+      - type: regex
+        value: '([Tt]emplate|[Bb]lock|requested|requests)'
+
 evaluateOptions:
   maxConcurrency: 2
 
