@@ -19,6 +19,30 @@
       "format": "date-time",
       "description": "ISO 8601 timestamp of when the analysis was run."
     },
+    "provenance": {
+      "type": "object",
+      "description": "What produced this report, so runs can be compared across plugin versions, skill edits, and models.",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Exact model ID the skill ran as, self-reported by the model; \"unknown\" when its system prompt does not state one. The only provenance field the skill writes."
+        },
+        "pluginVersion": {
+          "type": "string",
+          "description": "kosh version from .claude-plugin/plugin.json. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "skills": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "description": "SHA-256 of each skill directory that produced the report, keyed by skill name. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "seal": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 over the report timestamp, pluginVersion and skills, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
+        }
+      }
+    },
     "mode": {
       "type": "string",
       "enum": ["aeo"],

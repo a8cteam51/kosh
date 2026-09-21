@@ -1808,11 +1808,14 @@ Each criterion follows `{signals: {key: {status, notes}, ...}}` where `status` i
 
 Minimal top-level shape:
 
+- ✅ Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `scripts/run-qa-report.sh` adds the plugin version and skill hash.
+
 ```json
 {
   "url": "https://example.com",
   "websiteName": "Example",
   "timestamp": "ISO-8601",
+  "provenance": { "model": "<your exact model ID>" },
   "mode": "aeo",
   "aeoRubricVersion": "1.0",
   "siteType": "mediaBlog",

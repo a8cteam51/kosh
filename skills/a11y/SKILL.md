@@ -646,11 +646,14 @@ After testing all pages, confirm:
 
 Populate `reports/data/qa-report-accessibility.json`:
 
+- ✅ Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `scripts/run-qa-report.sh` adds the plugin version and skill hash.
+
 ```json
 {
   "url": "https://example.com",
   "websiteName": "Example",
   "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+  "provenance": { "model": "<your exact model ID>" },
   "environment": "production",
   "wcag_standard": "WCAG 2.2 Level AA",
   "visitedPages": [

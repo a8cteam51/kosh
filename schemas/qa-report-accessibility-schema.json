@@ -2,6 +2,12 @@
   "url": "https://example.com",
   "websiteName": "Example",
   "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+  "provenance": {
+    "model": "claude-sonnet-5",
+    "pluginVersion": "added by scripts/run-qa-report.sh — do not write this field",
+    "skills": {"a11y": "sha256 of the skill directory, added by scripts/run-qa-report.sh — do not write this field"},
+    "seal": "added by scripts/run-qa-report.sh — do not write this field"
+  },
   "environment": "production",
   "mobile": {
     "viewport": "375x812",
