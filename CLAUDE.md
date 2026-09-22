@@ -27,7 +27,7 @@ scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from fi
 scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo has no filename detection
 node scripts/generate-report.js reports/data/qa-report-aeo.json   # renderer only, skips the stamp and the archive
 scripts/merge-qa-reports.sh                                       # or /kosh:merge
-node --test "tests/*.test.js"                                     # script, snippet and JSON-file tests, no dependencies
+node --test "tests/*.test.js"                                     # script, snippet, JSON-file and schema-drift tests, no dependencies
 ```
 
 `.github/workflows/ci.yml` runs that same `node --test` line on every PR and on pushes to `trunk` — no install, no API calls. The promptfoo evals stay manual because they cost money.
@@ -57,7 +57,7 @@ schemas/         → JSON schemas that define report structure
 scripts/         → report generation and merge scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
-tests/           → `node --test` checks for the scripts, skill-embedded snippets and tracked JSON files, no dependencies
+tests/           → `node --test` checks for the scripts, skill-embedded snippets, tracked JSON files and skill ↔ schema drift, no dependencies
 docs/            → user-facing guides (getting-started.md)
 .github/         → the CI workflow (runs tests/ on every PR)
 .mcp.json        → Playwright MCP server configuration
