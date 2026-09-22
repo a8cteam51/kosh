@@ -589,7 +589,7 @@ Programmatic check:
 // Use the relevance map from Section 0.4 to pick the expected primary type.
 // PRIMARY_CANDIDATES is the type-defining schema list (excludes Organization/FAQPage/Review).
 const PRIMARY_CANDIDATES = ['Person','Article','BlogPosting','NewsArticle','Product','Event','HowTo','LocalBusiness','Course','Recipe','SoftwareApplication'];
-const relevance = /* applicableSchemas from 0.4 */;
+const relevance = applicableSchemas; // the relevance map from Section 0.4
 const primaryCandidates = Object.entries(relevance)
   .filter(([k,v]) => v === 'high' && PRIMARY_CANDIDATES.includes(k))
   .sort();
@@ -653,7 +653,7 @@ const allPresentTypes = new Set([...jsonLdTypes, ...microdataTypes, ...rdfaTypes
 // have their own standalone signal (organizationSchema, faqSchema, reviewSchema) and are
 // excluded here so they aren't double-counted in this coverage ratio too (see the note
 // at the end of Section 0.4).
-const relevance = /* applicableSchemas from 0.4 */;
+const relevance = applicableSchemas; // the relevance map from Section 0.4
 const STANDALONE_SIGNALS = ['Organization', 'FAQPage', 'Review'];
 const inScope = Object.entries(relevance).filter(([k, v]) => (v === 'high' || v === 'medium') && !STANDALONE_SIGNALS.includes(k));
 const matched = inScope.filter(([k, v]) => allPresentTypes.has(k) ||
