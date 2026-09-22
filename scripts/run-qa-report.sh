@@ -23,8 +23,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Configuration
-QA_REPORT_JSON="${1:-reports/data/qa-report.json}"
-REPORTS_DIR="./reports"
+QA_REPORT_JSON="$1"
 SCRIPT_PATH="$(dirname "$0")/generate-report.js"
 STAMP_SCRIPT_PATH="$(dirname "$0")/stamp-provenance.js"
 
@@ -32,21 +31,19 @@ STAMP_SCRIPT_PATH="$(dirname "$0")/stamp-provenance.js"
 TEST_TYPE_FLAGS="${@:2}"
 
 # Validate inputs
+if [ -z "$QA_REPORT_JSON" ]; then
+  echo "Usage: ./run-qa-report.sh <path-to-json> [--functional|--performance|--accessibility|--shop|--aeo]"
+  exit 1
+fi
+
 if [ ! -f "$QA_REPORT_JSON" ]; then
   echo -e "${RED}Error: JSON file not found at $QA_REPORT_JSON${NC}"
-  echo "Usage: ./run-qa-report.sh [path-to-qa-report.json]"
   exit 1
 fi
 
 if [ ! -f "$SCRIPT_PATH" ]; then
   echo -e "${RED}Error: generate-report.js script not found at $SCRIPT_PATH${NC}"
   exit 1
-fi
-
-# Create reports directory if it doesn't exist
-if [ ! -d "$REPORTS_DIR" ]; then
-  mkdir -p "$REPORTS_DIR"
-  echo -e "${BLUE}Created reports directory${NC}"
 fi
 
 # Step 1: Validate JSON structure
