@@ -40,7 +40,7 @@ const mergedReport = {
   timestamp: functional.timestamp,
   environment: functional.environment || performance.environment || accessibility.environment,
   testMethodology: functional.testMethodology,
-  visitedPages: functional.visitedPages,
+  visitedPages: [...new Set([functional, performance, accessibility].flatMap((r) => r.visitedPages || []))],
 
   // Merge viewport data from all three reports
   mobile: {
