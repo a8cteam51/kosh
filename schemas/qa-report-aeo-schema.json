@@ -371,35 +371,35 @@
     "criterionSignalPairing": {
       "description": "Discriminated union enforcing that the criterion + signal pair belongs together. Each variant fixes the criterion key and restricts the signal to that criterion's canonical subset, so `{ criterion: 'llmsTxt', signal: 'canonicalUrls' }` fails validation instead of rendering as a nonsense finding. Used by both `issue` and `actionablePrompt` via `allOf`.",
       "oneOf": [
-        { "properties": {
+        { "type": "object", "properties": {
             "criterion": { "const": "technicalHealth" },
             "signal":    { "enum": ["robotsAndCrawlerAccess", "noNoindex", "httpsNoMixedContent", "sitemapLastmod", "nojsAccessible", "canonicalUrls"] }
         } },
-        { "properties": {
+        { "type": "object", "properties": {
             "criterion": { "const": "structuredData" },
             "signal":    { "enum": ["organizationSchema", "primaryEntitySchema", "faqSchema", "relevantSchemasApplied", "jsonLdFormat", "openGraphTags", "reviewSchema"] }
         } },
-        { "properties": {
+        { "type": "object", "properties": {
             "criterion": { "const": "aeoReadiness" },
             "signal":    { "enum": ["directAnswers", "whoWhatWho", "featuredSnippetStructure", "answerCapsules", "faqSectionPresent", "faqSchemaApplied", "questionFramedHeadings", "titleAndMetaQuestionMatch"] }
         } },
-        { "properties": {
+        { "type": "object", "properties": {
             "criterion": { "const": "eeatSignals" },
             "signal":    { "enum": ["namedTeamMembers", "authorCredentials", "authorBylines", "demonstratedExpertise", "externalCitations", "certificationBadges", "namedExternalRelationships", "tenureIndicators"] }
         } },
-        { "properties": {
+        { "type": "object", "properties": {
             "criterion": { "const": "contentFreshness" },
             "signal":    { "enum": ["copyrightYearCurrent", "blogNewsRecent", "dateStampsOnContent", "contentUpdateRecency", "sitemapLastmodRecent", "recentFeaturedWork", "currentDomainReferences"] }
         } },
-        { "properties": {
+        { "type": "object", "properties": {
             "criterion": { "const": "entityClarity" },
             "signal":    { "enum": ["entityIdentifiable", "primaryFocusSpecificity", "socialProfileLinks", "geographicMarketClarity", "consistentIdentity"] }
         } },
-        { "properties": {
+        { "type": "object", "properties": {
             "criterion": { "const": "contentSpecificity" },
             "signal":    { "enum": ["primaryOfferingDetail", "namedSpecificEntities", "namedSubjectAreas", "specificOutcomes", "passageExtractionQuality"] }
         } },
-        { "properties": {
+        { "type": "object", "properties": {
             "criterion": { "const": "llmsTxt" },
             "signal":    { "enum": ["llmsTxtPresent", "llmsFullTxtPresent", "llmsTxtContent"] }
         } }

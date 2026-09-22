@@ -4,9 +4,10 @@ kosh is a Claude Code plugin that runs functional, performance, accessibility, s
 
 ## Commands
 
-No build step and no root `package.json` — the scripts are plain `node` and `bash`. `evals/` has its own `package.json` for promptfoo.
+No build step — the scripts are plain `node` and `bash`. The root `package.json` has one dependency, `ajv`, for report validation; `evals/` has its own `package.json` for promptfoo.
 
 ```bash
+npm install              # once after cloning, and after any pull
 claude --plugin-dir .    # launch Claude Code with the plugin loaded
 ```
 
@@ -27,10 +28,12 @@ scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from fi
 scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo has no filename detection
 node scripts/generate-report.js reports/data/qa-report-aeo.json   # renderer only, skips the stamp and the archive
 scripts/merge-qa-reports.sh                                       # or /kosh:merge
-node --test "tests/*.test.js"                                     # script, snippet, JSON-file and schema-drift tests, no dependencies
+node --test "tests/*.test.js"                                     # script, snippet, JSON-file, schema-drift and validation tests
 ```
 
-`.github/workflows/ci.yml` runs that same `node --test` line on every PR and on pushes to `trunk` — no install, no API calls. The promptfoo evals stay manual because they cost money.
+`.github/workflows/ci.yml` runs `npm ci` and that same `node --test` line on every PR and on pushes to `trunk` — no API calls. The promptfoo evals stay manual because they cost money.
+
+`run-qa-report.sh` validates the report against its schema (`scripts/validate-report.js`, ajv) before anything else touches it, and refuses to render a report that doesn't match: nothing is stamped, rendered or archived, and ajv's errors name each field, so the skill that wrote the JSON can fix it and re-run. Only a schema file that declares `$schema` is validated — shop and aeo today; functional, performance and accessibility are still example documents and pass through with a note. Schemas must compile in ajv strict mode. `node scripts/generate-report.js` skips validation, so it is how to re-render an archived report in an older shape.
 
 `run-qa-report.sh` stamps a `provenance` block into the source JSON before rendering: the skill writes `provenance.model` (self-reported), and `scripts/stamp-provenance.js` adds `pluginVersion`, a SHA-256 of each skill directory (references included), and a `seal` over those plus the report's `timestamp`. A valid seal means the block is never restamped, so re-rendering an archived run keeps the provenance of the run that produced it; a model-invented or copied-forward block fails the seal and is restamped. The seal is an unkeyed hash, so it guards against accidents, not deliberate tampering — anything with a shell can recompute it. A report with no `provenance` block at all is left untouched with a warning — it predates the feature, or the skill skipped `provenance.model`. The renderer prints the block as one footer line, and nothing for reports that predate it. The merged report carries no provenance — its JSON is a temp file that is deleted after rendering.
 
@@ -57,7 +60,7 @@ schemas/         → JSON schemas that define report structure
 scripts/         → report generation and merge scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
-tests/           → `node --test` checks for the scripts, skill-embedded snippets, tracked JSON files and skill ↔ schema drift, no dependencies
+tests/           → `node --test` checks for the scripts, skill-embedded snippets, tracked JSON files, skill ↔ schema drift and report validation
 docs/            → user-facing guides (getting-started.md)
 .github/         → the CI workflow (runs tests/ on every PR)
 .mcp.json        → Playwright MCP server configuration
