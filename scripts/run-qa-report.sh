@@ -31,9 +31,13 @@ STAMP_SCRIPT_PATH="$(dirname "$0")/stamp-provenance.js"
 TEST_TYPE_FLAGS="${@:2}"
 
 # Validate inputs
+if [ -z "$QA_REPORT_JSON" ]; then
+  echo "Usage: ./run-qa-report.sh <path-to-json> [--functional|--performance|--accessibility|--shop|--aeo]"
+  exit 1
+fi
+
 if [ ! -f "$QA_REPORT_JSON" ]; then
   echo -e "${RED}Error: JSON file not found at $QA_REPORT_JSON${NC}"
-  echo "Usage: ./run-qa-report.sh [path-to-qa-report.json]"
   exit 1
 fi
 

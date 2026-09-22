@@ -20,8 +20,13 @@ const fs = require('fs');
 const path = require('path');
 const { describeProvenance } = require('./stamp-provenance.js');
 
-const inputFile = process.argv[2] || path.join(__dirname, '../reports/data/qa-report.json');
+const inputFile = process.argv[2];
 const args = process.argv.slice(3);
+
+if (!inputFile) {
+  console.error('Usage: node generate-report.js <report.json> [--functional|--performance|--accessibility|--shop|--aeo]');
+  process.exit(1);
+}
 
 const testTypeLabel =
   args.includes('--functional')    ? 'FUNCTIONAL'

@@ -42,7 +42,7 @@ From inside the `kosh` folder, run:
 claude --plugin-dir .
 ```
 
-This starts Claude Code with kosh loaded as a plugin. Stay inside the `kosh` folder for the whole session: the tests save their results relative to the folder you're in, so starting from anywhere else scatters the files and skips the HTML report.
+This starts Claude Code with kosh loaded as a plugin. Stay inside the `kosh` folder for the whole session: the tests save their results relative to the folder you're in, so starting from anywhere else puts them in the wrong place.
 
 ### Trust the project settings
 

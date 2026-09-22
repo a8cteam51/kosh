@@ -12,12 +12,13 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Configuration — the defaults resolve from the script's location, like generate-report.js does, so the cwd doesn't matter.
-REPORTS_DIR="${KOSH_REPORTS_DIR:-$(dirname "$0")/../reports}"
+# Configuration — the defaults resolve from the script's real location, like generate-report.js does, so the cwd doesn't matter.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+REPORTS_DIR="${KOSH_REPORTS_DIR:-$SCRIPT_DIR/../reports}"
 FUNCTIONAL_JSON="${1:-$REPORTS_DIR/data/qa-report-functional.json}"
 PERFORMANCE_JSON="${2:-$REPORTS_DIR/data/qa-report-performance.json}"
 ACCESSIBILITY_JSON="${3:-$REPORTS_DIR/data/qa-report-accessibility.json}"
-MERGE_SCRIPT_PATH="$(dirname "$0")/merge-qa-reports.js"
+MERGE_SCRIPT_PATH="$SCRIPT_DIR/merge-qa-reports.js"
 
 echo -e "${BLUE}=== QA Reports Merge Workflow ===${NC}\n"
 
@@ -81,6 +82,7 @@ fi
 # Run merge script to create merged JSON
 echo -e "${BLUE}Step 4: Merging QA reports...${NC}"
 MERGED_JSON=$(mktemp)
+trap 'rm -f "$MERGED_JSON"' EXIT
 
 node "$MERGE_SCRIPT_PATH" "$FUNCTIONAL_JSON" "$PERFORMANCE_JSON" "$ACCESSIBILITY_JSON" > "$MERGED_JSON"
 
@@ -89,10 +91,9 @@ echo -e "${GREEN}✓ Reports merged successfully${NC}"
 # Run generate-report.js to create final HTML report
 echo -e "${BLUE}Step 5: Generating HTML report...${NC}"
 
-GENERATE_SCRIPT_PATH="$(dirname "$0")/generate-report.js"
+GENERATE_SCRIPT_PATH="$SCRIPT_DIR/generate-report.js"
 if [ ! -f "$GENERATE_SCRIPT_PATH" ]; then
   echo -e "${RED}Error: generate-report.js script not found${NC}"
-  rm -f "$MERGED_JSON"
   exit 1
 fi
 
@@ -118,11 +119,7 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   echo -e "  ${YELLOW}Low Priority Issues:${NC} $LOW_COUNT"
 
   echo -e "${GREEN}Merge workflow complete! ✓${NC}"
-
-  # Cleanup temporary merged JSON
-  rm -f "$MERGED_JSON"
 else
   echo -e "${RED}Error: Report file was not generated${NC}"
-  rm -f "$MERGED_JSON"
   exit 1
 fi
