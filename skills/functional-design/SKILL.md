@@ -163,7 +163,7 @@ Private sites require access, not just a login: if the WordPress.com account has
 - ✅ Images scale appropriately without pixelation
 - Document: Any images that appear low-res or need replacement
 
-Run this script on every page to programmatically flag images whose available pixels are less than the slot needs at the current device pixel ratio. For each flagged image the script returns one of three diagnoses — `source` (the asset or srcset doesn't offer a large-enough candidate; upload/CMS fix), `markup` (the srcset has a large-enough candidate but the page told the browser to pick a smaller one; markup fix, usually `sizes`) or `request` (no larger srcset candidate to pick, and the picked src asks an image CDN through `resize=`, `fit=` or `w=` for a derivative smaller than the slot needs, which the CDN delivered in full; template fix). When `object-fit: cover`/`contain` is in effect, the script appends a note to the diagnosis so the reader knows the visible image is cropped — but this doesn't suppress the finding, because cover still scales the source up to fill the slot. When the image hasn't loaded yet, the script returns `status: "unknown"` rather than guessing.
+Run this script on every page to programmatically flag images whose available pixels are less than the slot needs at the current device pixel ratio. For each flagged image the script returns one of three diagnoses — `source` (the asset or srcset doesn't offer a large-enough candidate; upload/CMS fix), `markup` (the srcset has a large-enough candidate but the page told the browser to pick a smaller one; markup fix, usually `sizes`) or `request` (no larger srcset candidate to pick, and the picked src asks an image CDN through `resize=`, `fit=` or `w=` for a derivative smaller than the slot needs, and the CDN delivered that size, give or take its own rounding; template fix). When `object-fit: cover`/`contain` is in effect, the script appends a note to the diagnosis so the reader knows the visible image is cropped — but this doesn't suppress the finding, because cover still scales the source up to fill the slot. When the image hasn't loaded yet, the script returns `status: "unknown"` rather than guessing.
 
 ```javascript
 (() => {
@@ -234,19 +234,23 @@ Run this script on every page to programmatically flag images whose available pi
 
     const sizesIsAuto = /\bauto\b/i.test(sizesAttr || '');
 
-    // A CDN that delivers exactly the size the URL asks for is capped by the request; one that returns less is capped by the upload.
+    // A CDN that delivers the size the URL asks for is capped by the request; one that returns less is capped by the upload.
     const params = new URLSearchParams(srcUrl.split('#')[0].split('?')[1] || '');
     const resizeKey = ['resize', 'fit', 'w'].find(k => params.has(k));
-    const resizeValue = params.get(resizeKey) || '';
+    const resizeValue = resizeKey ? params.get(resizeKey) : '';
     const [reqW, reqH] = resizeValue.split(',').map(n => parseInt(n, 10));
-    const requestCaps = (reqW === naturalW || reqH === naturalH) && (reqW < neededW || reqH < neededH);
+    // Photon floors one axis and derives the other from it, so the shortfall is at most the aspect ratio.
+    const tolerance = Math.ceil(Math.max(naturalW / naturalH, naturalH / naturalW));
+    const within = (req, got) => req - got >= 0 && req - got <= tolerance;
+    const deliveredInFull = within(reqW, naturalW) || within(reqH, naturalH);
+    const requestCaps = deliveredInFull && (reqW < neededW || reqH < neededH);
     const noCandidates = srcset ? 'The srcset has no width (`w`) descriptors, so there is no larger candidate to pick' : 'No srcset present';
 
     let diagnosis;
     if (!candidates.length && requestCaps) {
       diagnosis = {
         category: 'request',
-        explanation: `${noCandidates}, and the picked src asks the image CDN for a derivative capped by \`${resizeKey}=${resizeValue}\`, which it delivered in full (${naturalW}x${naturalH}px), but the slot needs ${Math.round(neededW)}x${Math.round(neededH)}px at ${dpr}x DPR — the request caps the image before the upload does. Fix the size the template or block requests. Do NOT recommend re-uploading unless the original, fetched with the resize parameters stripped, is itself smaller than the slot needs.`
+        explanation: `${noCandidates}, and the picked src asks the image CDN for a derivative capped by \`${resizeKey}=${resizeValue}\` and got back ${naturalW}x${naturalH}px, but the slot needs ${Math.round(neededW)}x${Math.round(neededH)}px at ${dpr}x DPR — the request caps the image before the upload does. Fix the size the template or block requests. Do NOT recommend re-uploading unless the original, fetched with the resize parameters stripped, is itself smaller than the slot needs.`
       };
     } else if (!candidates.length) {
       diagnosis = {
@@ -306,7 +310,7 @@ Reading the results:
 - **`status: "flag"` (`resolutionRatio` < 0.75)** — the image is being rendered at more than 133% of the picked candidate's natural size. Use the `diagnosisCategory` to decide what to flag:
   - `source` → "the asset (or its srcset) doesn't offer a large-enough candidate." Action: investigate the upload, the srcset generator, and the src URL to find which is the constraint, then fix that one.
   - `markup` → "the asset is fine; the page told the browser to pick the wrong candidate." Action: fix `sizes` (or `width`/`srcset`) in the block markup. Do NOT recommend re-uploading.
-  - `request` → "there is no larger srcset candidate to pick, and the picked src asks the image CDN for a derivative smaller than the slot needs (`?resize=350,200`, `?w=1024`), which the CDN delivered in full." Action: fix the size the template or block requests. Do NOT recommend re-uploading on this evidence alone.
+  - `request` → "there is no larger srcset candidate to pick, and the picked src asks the image CDN for a derivative smaller than the slot needs (`?resize=350,200`, `?w=1024`), and the CDN delivered that size, give or take a pixel or two of its own rounding." Action: fix the size the template or block requests. Do NOT recommend re-uploading on this evidence alone.
   - `unknown` → the `<img>` is inside a `<picture>` element with `<source srcset>` siblings that the script doesn't read. The resolution shortfall is real, but either source or markup could be responsible. Action: read the `<source>` srcsets in the markup before publishing a finding.
 - **`status: "needs visual review"` (0.75 ≤ `resolutionRatio` < 1.0)** — marginal. Note in the report without making a pass/fail call yourself.
 - **`status: "unknown"`** — image hadn't loaded when the script ran (lazy-load before scroll, etc.). Scroll the image into view, wait 1-2s, and re-run before reporting.

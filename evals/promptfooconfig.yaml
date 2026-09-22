@@ -135,6 +135,36 @@ tests:
       - type: regex
         value: '([Tt]emplate|[Bb]lock|requested|requests)'
 
+  - description: Request-category finding still owns the fix when the CDN rounded a pixel off the requested size
+    vars:
+      request: |
+        The Section 1.4 image resolution script returned this result on a
+        blog post:
+
+        {
+          "src": "workflow-diagram.png?w=1024",
+          "naturalSize": "1023x644px",
+          "renderedCSS": "710x447px",
+          "neededForCrisp": "1420x894px (2x DPR)",
+          "resolutionRatio": 0.72,
+          "status": "flag",
+          "diagnosisCategory": "request",
+          "largestSrcsetCandidate": "none",
+          "sizesAttr": "missing"
+        }
+
+        Answer in three lines:
+        1. REQUEST, MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does this evidence alone justify recommending a re-upload?
+        3. The one-sentence recommended fix as it would appear in the report.
+    assert:
+      - type: regex
+        value: '^[\s*_#>\d.)]*REQUEST\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*NO\b'
+      - type: regex
+        value: '([Tt]emplate|[Bb]lock|requested|requests)'
+
 evaluateOptions:
   maxConcurrency: 2
 
