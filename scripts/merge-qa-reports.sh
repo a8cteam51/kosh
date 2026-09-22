@@ -12,11 +12,11 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Configuration
-FUNCTIONAL_JSON="${1:-reports/data/qa-report-functional.json}"
-PERFORMANCE_JSON="${2:-reports/data/qa-report-performance.json}"
-ACCESSIBILITY_JSON="${3:-reports/data/qa-report-accessibility.json}"
-REPORTS_DIR="./reports"
+# Configuration — the defaults resolve from the script's location, like generate-report.js does, so the cwd doesn't matter.
+REPORTS_DIR="${KOSH_REPORTS_DIR:-$(dirname "$0")/../reports}"
+FUNCTIONAL_JSON="${1:-$REPORTS_DIR/data/qa-report-functional.json}"
+PERFORMANCE_JSON="${2:-$REPORTS_DIR/data/qa-report-performance.json}"
+ACCESSIBILITY_JSON="${3:-$REPORTS_DIR/data/qa-report-accessibility.json}"
 MERGE_SCRIPT_PATH="$(dirname "$0")/merge-qa-reports.js"
 
 echo -e "${BLUE}=== QA Reports Merge Workflow ===${NC}\n"
@@ -72,12 +72,6 @@ TIMESTAMP=$(node -e "console.log(require('fs').readFileSync('$FUNCTIONAL_JSON', 
 echo -e "${GREEN}  Website: $WEBSITE_NAME${NC}"
 echo -e "${GREEN}  Timestamp: $TIMESTAMP${NC}"
 
-# Create reports directory if it doesn't exist
-if [ ! -d "$REPORTS_DIR" ]; then
-  mkdir -p "$REPORTS_DIR"
-  echo -e "${BLUE}Created reports directory${NC}"
-fi
-
 # Check if merge script exists
 if [ ! -f "$MERGE_SCRIPT_PATH" ]; then
   echo -e "${RED}Error: Merge script not found at $MERGE_SCRIPT_PATH${NC}"
@@ -102,17 +96,12 @@ if [ ! -f "$GENERATE_SCRIPT_PATH" ]; then
   exit 1
 fi
 
-node "$GENERATE_SCRIPT_PATH" "$MERGED_JSON"
+# Read back the path the generator prints rather than rebuilding it with a slug rule that can drift from the generator's.
+GENERATE_OUTPUT=$(node "$GENERATE_SCRIPT_PATH" "$MERGED_JSON")
+echo "$GENERATE_OUTPUT"
 
-# Verify output was created
-WEBSITE_NAME_UPPER=$(printf '%s' "$WEBSITE_NAME" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_' | tr -s '_')
-WEBSITE_NAME_UPPER="${WEBSITE_NAME_UPPER#_}"
-WEBSITE_NAME_UPPER="${WEBSITE_NAME_UPPER%_}"
-[ -z "$WEBSITE_NAME_UPPER" ] && WEBSITE_NAME_UPPER="REPORT"
-REPORT_DATE=$(echo "$TIMESTAMP" | cut -d'T' -f1)
-REPORT_FILE="$REPORTS_DIR/${WEBSITE_NAME_UPPER}_QA_REPORT_${REPORT_DATE}.html"
-
-if [ -f "$REPORT_FILE" ]; then
+REPORT_FILE=$(printf '%s\n' "$GENERATE_OUTPUT" | sed -n 's/^HTML report generated: //p' | tail -1)
+if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   echo -e "${GREEN}✓ Report successfully generated!${NC}"
   echo -e "${BLUE}Report location: $REPORT_FILE${NC}"
 
