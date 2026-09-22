@@ -1,17 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const fs = require('fs');
 const path = require('path');
+const { fences } = require('./fences.js');
 
 const SKILL = path.join(__dirname, '../skills/functional-design/SKILL.md');
 
-const blocks = fs.readFileSync(SKILL, 'utf8')
-  .split('```javascript')
-  .slice(1)
-  .map((chunk) => chunk.split('```')[0])
-  .filter((code) => code.includes('resolutionRatio:'));
+const blocks = fences(SKILL).filter(({ code }) => code.includes('resolutionRatio:'));
 assert.equal(blocks.length, 1, 'expected exactly one javascript block containing "resolutionRatio:" in functional-design/SKILL.md');
-const [script] = blocks;
+const [{ code: script }] = blocks;
 
 // Defaults: a 100x50 source in a 200x100 slot at 2x DPR, flagged unless the SVG guard skips it.
 const stubImg = (src, { natural = [100, 50], slot = [200, 100], srcset = null, pictureSources = 0, crossOrigin = null } = {}) => ({

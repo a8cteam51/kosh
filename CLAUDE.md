@@ -27,8 +27,10 @@ scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from fi
 scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo has no filename detection
 node scripts/generate-report.js reports/data/qa-report-aeo.json   # renderer only, skips the stamp and the archive
 scripts/merge-qa-reports.sh                                       # or /kosh:merge
-node --test "tests/*.test.js"                                     # script and snippet tests, no dependencies
+node --test "tests/*.test.js"                                     # script, snippet and JSON-file tests, no dependencies
 ```
+
+`.github/workflows/ci.yml` runs that same `node --test` line on every PR and on pushes to `trunk` — no install, no API calls. The promptfoo evals stay manual because they cost money.
 
 `run-qa-report.sh` stamps a `provenance` block into the source JSON before rendering: the skill writes `provenance.model` (self-reported), and `scripts/stamp-provenance.js` adds `pluginVersion`, a SHA-256 of each skill directory (references included), and a `seal` over those plus the report's `timestamp`. A valid seal means the block is never restamped, so re-rendering an archived run keeps the provenance of the run that produced it; a model-invented or copied-forward block fails the seal and is restamped. The seal is an unkeyed hash, so it guards against accidents, not deliberate tampering — anything with a shell can recompute it. A report with no `provenance` block at all is left untouched with a warning — it predates the feature, or the skill skipped `provenance.model`. The renderer prints the block as one footer line, and nothing for reports that predate it. The merged report carries no provenance — its JSON is a temp file that is deleted after rendering.
 
@@ -53,8 +55,9 @@ schemas/         → JSON schemas that define report structure
 scripts/         → report generation and merge scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
-tests/           → `node --test` checks for the scripts and skill-embedded snippets, no dependencies
+tests/           → `node --test` checks for the scripts, skill-embedded snippets and tracked JSON files, no dependencies
 docs/            → user-facing guides (getting-started.md)
+.github/         → the CI workflow (runs tests/ on every PR)
 .mcp.json        → Playwright MCP server configuration
 .claude/         → project settings and Playwright tool permissions
 .claude-plugin/  → plugin manifest (plugin.json)
