@@ -9,6 +9,14 @@
     "seal": "added by scripts/run-qa-report.sh — do not write this field"
   },
   "environment": "production",
+  "testMethodology": "Manual QA testing following multi-page user journey simulation...",
+  "visitedPages": [
+    "https://example.com/",
+    "https://example.com/about/",
+    "https://example.com/products/",
+    "https://example.com/blog/",
+    "https://example.com/contact/"
+  ],
   "mobile": {
     "viewport": "375x812",
     "title": "Page Title",
