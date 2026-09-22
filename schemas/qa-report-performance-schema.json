@@ -9,6 +9,13 @@
     "seal": "added by scripts/run-qa-report.sh — do not write this field"
   },
   "environment": "production",
+  "visitedPages": [
+    "https://example.com/",
+    "https://example.com/about/",
+    "https://example.com/services/",
+    "https://example.com/blog/",
+    "https://example.com/contact/"
+  ],
   "mobile": {
     "viewport": "375x812",
     "title": "Page Title",

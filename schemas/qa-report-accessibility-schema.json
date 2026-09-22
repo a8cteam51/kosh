@@ -9,6 +9,13 @@
     "seal": "added by scripts/run-qa-report.sh — do not write this field"
   },
   "environment": "production",
+  "visitedPages": [
+    "https://example.com/",
+    "https://example.com/about/",
+    "https://example.com/services/",
+    "https://example.com/blog/",
+    "https://example.com/contact/"
+  ],
   "mobile": {
     "viewport": "375x812",
     "title": "Page Title",
@@ -19,7 +26,8 @@
       {"type": "color_contrast", "element": "Element description", "severity": "medium"},
       {"type": "keyboard_nav", "element": "Element description", "severity": "high"},
       {"type": "heading_hierarchy", "element": "Element description", "severity": "low"}
-    ]
+    ],
+    "focusableElements": 38
   },
   "desktop": {
     "viewport": "1920x1080",
@@ -27,7 +35,8 @@
     "url": "https://example.com",
     "a11y": [
       {"type": "missing_alt_text", "element": "Image description", "severity": "medium"}
-    ]
+    ],
+    "focusableElements": 54
   },
   "wcag_standard": "WCAG 2.2 Level AA",
   "issues": {
