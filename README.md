@@ -21,7 +21,7 @@ Each test visits 4–6+ pages, simulates real user behavior, and outputs a struc
 ```bash
 git clone https://github.com/a8cteam51/kosh.git
 cd kosh
-npm install
+npm ci
 claude --plugin-dir .
 ```
 

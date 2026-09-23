@@ -5,16 +5,8 @@
 const fs = require('fs');
 const path = require('path');
 
-let Ajv;
-try {
-  Ajv = require('ajv');
-} catch {
-  console.error('✗ ajv is not installed: run `npm install` in the kosh folder, then re-run.');
-  process.exit(1);
-}
-
 const SCHEMAS = path.join(__dirname, '../schemas');
-const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i;
+const DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i;
 
 // Only a schema file that declares $schema is JSON Schema; the rest are still example documents.
 function schemaFor(type) {
@@ -24,18 +16,30 @@ function schemaFor(type) {
   return schema.$schema ? schema : null;
 }
 
+// Date.parse rolls Feb 30 over to Mar 2 and accepts 24:00, so the day and hour are checked here.
+function isDateTime(value) {
+  const match = DATE_TIME.exec(value);
+  if (!match || Number.isNaN(Date.parse(value))) return false;
+  const [, year, month, day, hour] = match.map(Number);
+  return hour < 24 && day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
 function describe(error) {
-  const detail = error.params.additionalProperty ?? error.params.allowedValues?.join(', ');
-  return `${error.instancePath || '/'} ${error.message}${detail ? `: ${detail}` : ''}`;
+  const { additionalProperty, allowedValues, allowedValue } = error.params;
+  const detail = additionalProperty ?? allowedValues?.join(', ') ?? allowedValue;
+  return `${error.instancePath || '/'} ${error.message}${detail === undefined ? '' : `: ${detail}`}`;
 }
 
 // null when the type has no JSON Schema yet, otherwise every mismatch (empty when valid).
 function validate(report, type) {
   const schema = schemaFor(type);
   if (!schema) return null;
+  // Required here, not at the top, so types that are never validated render without ajv installed.
+  const Ajv = require('ajv');
   const ajv = new Ajv({ allErrors: true, strict: true });
-  ajv.addFormat('uri', (value) => URL.canParse(value));
-  ajv.addFormat('date-time', (value) => DATE_TIME.test(value) && !Number.isNaN(Date.parse(value)));
+  // URL.canParse trims surrounding whitespace, so whitespace is rejected first.
+  ajv.addFormat('uri', (value) => !/\s/.test(value) && URL.canParse(value));
+  ajv.addFormat('date-time', isDateTime);
   const check = ajv.compile(schema);
   return check(report) ? [] : check.errors.map(describe);
 }
@@ -43,18 +47,30 @@ function validate(report, type) {
 if (require.main === module) {
   const [reportPath, ...flags] = process.argv.slice(2);
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  const types = flags.map((flag) => flag.replace(/^--/, ''));
   let failed = false;
 
-  for (const type of flags.map((flag) => flag.replace(/^--/, ''))) {
+  if (types.length === 0) console.log('Schema: no test type given, not validated.');
+
+  for (const type of types) {
     const schemaPath = `schemas/qa-report-${type}-schema.json`;
-    const errors = validate(report, type);
+    let errors;
+    try {
+      errors = validate(report, type);
+    } catch (error) {
+      console.error(error.code === 'MODULE_NOT_FOUND'
+        ? '✗ ajv is not installed: run `npm ci` in the kosh folder, then re-run.'
+        : `✗ Could not validate against ${schemaPath}: ${error.message}\nThis is a problem with kosh, not with the report: leave the JSON as it is and tell the user.`);
+      process.exit(1);
+    }
+
     if (errors === null) {
       console.log(`Schema: no JSON Schema for ${type} yet, not validated.`);
     } else if (errors.length === 0) {
       console.log(`✓ Schema: valid against ${schemaPath}`);
     } else {
       failed = true;
-      console.error(`✗ ${reportPath} does not match ${schemaPath}:\n${errors.map((e) => `  ${e}`).join('\n')}`);
+      console.error(`✗ ${reportPath} does not match ${schemaPath}:\n${errors.map((e) => `  ${e}`).join('\n')}\nFix these fields in ${reportPath}, then re-run.`);
     }
   }
   process.exit(failed ? 1 : 0);

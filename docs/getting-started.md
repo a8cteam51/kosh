@@ -39,7 +39,7 @@ If you don't have it yet, you can install it with `brew install gh` and then run
 Still inside the `kosh` folder, run:
 
 ```bash
-npm install
+npm ci
 ```
 
 This installs the one library kosh uses to check each report's JSON before turning it into HTML. Run it again whenever you pull an update.
