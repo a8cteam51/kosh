@@ -15,7 +15,7 @@ npm run eval -- --repeat 5   # repeat every case 5 times to measure stability
 
 Requires Node 20.20+ or 22.22+ and a Claude Code login. The provider is the Claude Agent SDK, so no API key is needed.
 
-Every case runs on two providers, `Opus 5` (`claude-opus-5`) and `Opus 5.5` (`claude-opus-5-5`), so a pass costs twice what one model does. Both pin `model` and `effort` in `promptfooconfig.yaml`. Without a model pin, the Claude Code CLI's default applies, which changes across versions and machines. Without an effort pin, the Agent SDK's default (`high`) applies, not your own `effortLevel`: the provider loads project settings only. Each case's `modelUsage` in the raw JSON records what actually served it.
+Every case runs on two providers, `Opus 5` (`claude-opus-5`) and `Opus 5.5` (`claude-opus-5-5`), so a pass costs twice what one model does. Both pin `model` and `effort` in `promptfooconfig.yaml`. Without a model pin, the Claude Code CLI's default applies, which changes across versions and machines. Without an effort pin, the Agent SDK's default (`high`) applies, not the `effortLevel` in your own Claude Code settings, because the provider loads project settings only. Each case's `modelUsage` in the raw JSON records what actually served it.
 
 The provider runs the Claude Code binary bundled in `@anthropic-ai/claude-agent-sdk`, not your installed `claude`, so it only knows the models that bundled version knows. A model newer than the pinned SDK fails with `Claude Code <version> does not support this model` until you bump the SDK (`npm install --save-dev @anthropic-ai/claude-agent-sdk@latest`, then commit the lockfile). The SDK's patch version tracks the bundled Claude Code's: SDK 0.3.280 ships Claude Code 2.1.280.
 
