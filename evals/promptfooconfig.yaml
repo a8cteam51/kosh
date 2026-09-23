@@ -15,9 +15,21 @@ prompts:
 
 providers:
   - id: anthropic:claude-agent-sdk
-    label: Claude Code with current functional-design skill
+    label: Opus 5
     config:
       model: claude-opus-5
+      effort: xhigh
+      working_dir: ./.workspaces/current
+      setting_sources: ['project']
+      skills: ['functional-design']
+      permission_mode: dontAsk
+      apiKeyRequired: false
+      persist_session: false
+  - id: anthropic:claude-agent-sdk
+    label: Opus 5.5
+    config:
+      model: claude-opus-5-5
+      effort: xhigh
       working_dir: ./.workspaces/current
       setting_sources: ['project']
       skills: ['functional-design']
