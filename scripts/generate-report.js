@@ -8,7 +8,10 @@
  * severity, collapsible sections, and inline screenshots when findings reference them.
  *
  * Usage:
- *   node generate-report.js <json-file> [--functional|--performance|--accessibility|--shop|--aeo]
+ *   node generate-report.js <json-file> [--functional|--performance|--accessibility|--shop|--aeo] [--skip-validation]
+ *
+ * The report is validated against its schema before anything is rendered;
+ * --skip-validation renders an archived report whose shape predates its schema.
  *
  * AEO reports are auto-detected from `report.mode === "aeo"`; --aeo forces the
  * AEO branch explicitly. The test-type flag affects the output filename.
@@ -19,12 +22,13 @@
 const fs = require('fs');
 const path = require('path');
 const { describeProvenance } = require('./stamp-provenance.js');
+const { checkReport, typesFor } = require('./validate-report.js');
 
 const inputFile = process.argv[2];
 const args = process.argv.slice(3);
 
 if (!inputFile) {
-  console.error('Usage: node generate-report.js <report.json> [--functional|--performance|--accessibility|--shop|--aeo]');
+  console.error('Usage: node generate-report.js <report.json> [--functional|--performance|--accessibility|--shop|--aeo] [--skip-validation]');
   process.exit(1);
 }
 
@@ -141,6 +145,9 @@ if (looksLikeAeo && qaFlagSet) {
 }
 if (looksLikeAeo && !modeIsAeo) {
   console.error('Error: report has AEO-shaped `criteria` but is missing `mode: "aeo"`. Add the field or pass --aeo to force.');
+  process.exit(1);
+}
+if (!args.includes('--skip-validation') && !checkReport(report, inputFile, typesFor(args, report))) {
   process.exit(1);
 }
 if (modeIsAeo || aeoFlagSet) {

@@ -47,7 +47,8 @@ const shopReport = (edit = () => {}) => {
 
 // The filename is what run-qa-report.sh detects the test type from. `prepare` runs a copy of
 // scripts/ and schemas/ outside the repo, where the repo's node_modules can't be resolved.
-const run = (t, filename, report, { space = 2, prepare } = {}) => {
+// `generatorFlags` calls generate-report.js directly instead, the way the renderer-only command does.
+const run = (t, filename, report, { space = 2, prepare, generatorFlags } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-validate-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   if (prepare) {
@@ -58,8 +59,11 @@ const run = (t, filename, report, { space = 2, prepare } = {}) => {
   const json = path.join(root, filename);
   const written = JSON.stringify(report, null, space);
   fs.writeFileSync(json, written);
-  const script = path.join(prepare ? root : ROOT, 'scripts/run-qa-report.sh');
-  const { status, stdout, stderr, error } = spawnSync(script, [json], { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: reportsDir } });
+  const scripts = path.join(prepare ? root : ROOT, 'scripts');
+  const [command, commandArgs] = generatorFlags
+    ? ['node', [path.join(scripts, 'generate-report.js'), json, ...generatorFlags]]
+    : [path.join(scripts, 'run-qa-report.sh'), [json]];
+  const { status, stdout, stderr, error } = spawnSync(command, commandArgs, { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: reportsDir } });
   assert.ifError(error);
   return { status, output: (stdout + stderr).replace(/\x1b\[[0-9;]*m/g, ''), json, written, reportsDir };
 };
@@ -97,21 +101,43 @@ test('a const mismatch names the expected value', () => {
   assert.ok(errors.includes('/issues/critical/0/criterion must be equal to constant: structuredData'), errors.join('\n'));
 });
 
-test('a report that fails its schema is refused: nothing rendered, stamped or archived', (t) => {
+test('a report that fails its schema is refused: nothing rendered or archived', (t) => {
   const report = shopReport((r) => {
     r.explorationPass[0].outcome = 'fine';
     delete r.shop.cartOperations.totalsVerified;
   });
 
-  const { status, output, json, written, reportsDir } = run(t, 'qa-report-shop.json', report);
+  const { status, output, reportsDir } = run(t, 'qa-report-shop.json', report);
 
   assert.notEqual(status, 0, output);
   assert.match(output, /\/explorationPass\/0\/outcome must be equal to one of the allowed values: no-issue, finding-raised, inconclusive, out-of-scope/);
   assert.match(output, /\/shop\/cartOperations must have required property 'totalsVerified'/);
   assert.match(output, /Fix these fields in .*qa-report-shop\.json, then re-run\./);
-  assert.match(output, /nothing was rendered/);
-  assert.equal(fs.readFileSync(json, 'utf8'), written);
+  assert.match(output, /Nothing was rendered\./);
   assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+});
+
+test('the renderer refuses a report that fails its schema when called directly', (t) => {
+  const { status, output, reportsDir } = run(t, 'report.json', shopReport((r) => { delete r.shop; }), { generatorFlags: ['--shop'] });
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /\/ must have required property 'shop'/);
+  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+});
+
+test('--skip-validation renders a report its schema would refuse', (t) => {
+  const { status, output } = run(t, 'report.json', shopReport((r) => { delete r.shop; }), { generatorFlags: ['--shop', '--skip-validation'] });
+
+  assert.equal(status, 0, output);
+  assert.match(output, /^HTML report generated: /m);
+  assert.doesNotMatch(output, /Schema:/);
+});
+
+test('the renderer validates an aeo report from its mode when called without a flag', (t) => {
+  const { status, output } = run(t, 'report.json', { ...plainReport, mode: 'aeo' }, { generatorFlags: [] });
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /does not match schemas\/qa-report-aeo-schema\.json/);
 });
 
 test('a report that matches its schema is rendered', (t) => {

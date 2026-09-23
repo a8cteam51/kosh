@@ -26,7 +26,6 @@ NC='\033[0m' # No Color
 QA_REPORT_JSON="$1"
 SCRIPT_PATH="$(dirname "$0")/generate-report.js"
 STAMP_SCRIPT_PATH="$(dirname "$0")/stamp-provenance.js"
-VALIDATE_SCRIPT_PATH="$(dirname "$0")/validate-report.js"
 
 # Extract test type flags (everything after the JSON file argument)
 TEST_TYPE_FLAGS="${@:2}"
@@ -84,12 +83,6 @@ if [ -z "$TEST_TYPE_FLAGS" ]; then
   echo -e "${YELLOW}  Note: No test type flags specified. Including all available test data.${NC}"
 else
   echo -e "${YELLOW}  Test type: $TEST_TYPE_FLAGS${NC}"
-fi
-
-# Runs before the stamp so a refused report is left exactly as the skill wrote it.
-if ! node "$VALIDATE_SCRIPT_PATH" "$QA_REPORT_JSON" $TEST_TYPE_FLAGS; then
-  echo -e "${RED}Error: nothing was rendered.${NC}"
-  exit 1
 fi
 
 # A missing stamp costs comparability, not the report, so it warns rather than exits.

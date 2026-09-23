@@ -1,7 +1,3 @@
-#!/usr/bin/env node
-
-// Usage: node validate-report.js <report.json> [--functional|--performance|--accessibility|--shop|--aeo]
-
 const fs = require('fs');
 const path = require('path');
 
@@ -44,13 +40,16 @@ function validate(report, type) {
   return check(report) ? [] : check.errors.map(describe);
 }
 
-if (require.main === module) {
-  const [reportPath, ...flags] = process.argv.slice(2);
-  const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+// The flagged test types, or aeo when no type is flagged and the report says `mode: "aeo"`.
+function typesFor(flags, report) {
   const types = flags.map((flag) => flag.replace(/^--/, ''));
-  let failed = false;
+  return types.length || report.mode !== 'aeo' ? types : ['aeo'];
+}
 
+// Prints the outcome for each type; false when the report must not be rendered.
+function checkReport(report, reportPath, types) {
   if (types.length === 0) console.log('Schema: no test type given, not validated.');
+  let ok = true;
 
   for (const type of types) {
     const schemaPath = `schemas/qa-report-${type}-schema.json`;
@@ -58,10 +57,11 @@ if (require.main === module) {
     try {
       errors = validate(report, type);
     } catch (error) {
+      ok = false;
       console.error(error.code === 'MODULE_NOT_FOUND'
         ? '✗ ajv is not installed: run `npm ci` in the kosh folder, then re-run.'
         : `✗ Could not validate against ${schemaPath}: ${error.message}\nThis is a problem with kosh, not with the report: leave the JSON as it is and tell the user.`);
-      process.exit(1);
+      continue;
     }
 
     if (errors === null) {
@@ -69,11 +69,13 @@ if (require.main === module) {
     } else if (errors.length === 0) {
       console.log(`✓ Schema: valid against ${schemaPath}`);
     } else {
-      failed = true;
+      ok = false;
       console.error(`✗ ${reportPath} does not match ${schemaPath}:\n${errors.map((e) => `  ${e}`).join('\n')}\nFix these fields in ${reportPath}, then re-run.`);
     }
   }
-  process.exit(failed ? 1 : 0);
+
+  if (!ok) console.error('Nothing was rendered.');
+  return ok;
 }
 
-module.exports = { validate };
+module.exports = { checkReport, typesFor, validate };
