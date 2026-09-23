@@ -4,8 +4,8 @@ prompts:
   - label: Ask about a functional-design testing decision
     raw: |
       You are reviewing how the `functional-design` skill directs a QA tester
-      to act in a specific scenario. Read the skill, then answer from its
-      guidance alone. Do not launch a browser, use Playwright, or modify any
+      to act in a specific scenario. Load the `functional-design` skill with
+      the Skill tool, then answer from its guidance alone. Do not launch a browser, use Playwright, or modify any
       files — this is a knowledge check about the skill's rules, not a test
       run, so the skill's browser-automation requirement does not apply here.
 
@@ -22,6 +22,7 @@ providers:
       working_dir: ./.workspaces/current
       setting_sources: ['project']
       skills: ['functional-design']
+      disallowed_tools: ['Read', 'Grep', 'Glob', 'Bash']
       permission_mode: dontAsk
       apiKeyRequired: false
       persist_session: false
@@ -33,22 +34,34 @@ providers:
       working_dir: ./.workspaces/current
       setting_sources: ['project']
       skills: ['functional-design']
+      disallowed_tools: ['Read', 'Grep', 'Glob', 'Bash']
       permission_mode: dontAsk
       apiKeyRequired: false
       persist_session: false
+
+defaultTest:
+  assert:
+    - type: skill-used
+      value: functional-design
 
 tests:
   - description: WCAG cited for contrast only, /kosh:a11y recommended for the rest
     vars:
       request: |
-        During desktop testing on the About page you observed two problems:
+        During desktop testing on the About page, https://example.com/about/,
+        you observed two problems:
 
         1. Six content images have no alt text.
         2. The Section 1.5 contrast script flagged footer body text
            (16px, weight 400) at a ratio of 3.2 against a threshold of 4.5.
+           You saved a screenshot of the footer at
+           reports/screenshots/about-footer-desktop.png.
 
         Write both findings as they would appear in the report, following the
         skill's rules about WCAG citations and recommendations.
+    options:
+      # Grade only the report entries: commentary around them can name the criterion it chose not to cite.
+      transform: '[...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((block) => block[1]).join("\n")'
     assert:
       - type: contains
         value: '1.4.3'

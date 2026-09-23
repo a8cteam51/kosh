@@ -39,6 +39,8 @@ Each run:
 
 Append to `tests:` in `promptfooconfig.yaml`. Keep each case to one rule and one scenario, and ask for the answer in a shape you can assert on: a leading keyword, a report excerpt, a yes/no.
 
+Give the scenario every fact a real run would have: the page URL (on `example.com`), screenshot paths, the script output. A missing fact gets invented, and invented values differ between runs and models. Leave the judgments the case isn't testing, such as severity, to the model; they aren't asserted, and pinning them tests less of the skill.
+
 ```yaml
   - description: What the rule is and what the case pins
     vars:
@@ -54,13 +56,13 @@ Append to `tests:` in `promptfooconfig.yaml`. Keep each case to one rule and one
 
 Useful assertion types: `contains`, `not-contains`, `icontains`, `regex`. See the [promptfoo assertion reference](https://www.promptfoo.dev/docs/configuration/expected-outputs/) for the rest.
 
-To eval a different skill, change the skill name in `scripts/reset-workspace.mjs` and the `skills:` list in `promptfooconfig.yaml`.
+To eval a different skill, change the skill name in `scripts/reset-workspace.mjs`, and in `promptfooconfig.yaml` the prompt, the `skills:` lists and the `skill-used` value.
 
 ## Design
 
 Two layers, kept separate:
 
 - **Snippet layer.** The fenced `javascript` blocks in the skills run against jsdom fixtures. Plain `node --test`, no model calls. Belongs in `tests/` at the repo root, not here.
-- **Judgment layer.** This directory. Recorded probe output plus the skill's rules go in, and the assertion checks the status, severity, or recommendation that comes out.
+- **Judgment layer.** This directory. Recorded probe output plus the skill's rules go in, and the assertion checks the status, severity, or recommendation that comes out. Each case loads the whole skill through the Skill tool, the way a real run does, so the evals see its structure and not just the section that matches a search: a rule buried, contradicted or moved during a rewrite shows up here. `Read`, `Grep`, `Glob` and `Bash` are disallowed because the skill file stays readable on disk, and a `skill-used` assertion on every case (`defaultTest`) fails any answer given without loading it.
 
 Anchor assertions on report JSON fields where you can, since the schemas are the stable contract. Keep fixtures as plain files so they port to `claude plugin eval` mocks later. Do not build a `claude -p` replay runner here; end-to-end runs with recorded Playwright MCP mocks are what plugin eval provides.
