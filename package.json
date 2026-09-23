@@ -1,0 +1,7 @@
+{
+  "name": "kosh",
+  "private": true,
+  "dependencies": {
+    "ajv": "^8.20.0"
+  }
+}

@@ -4,9 +4,10 @@ kosh is a Claude Code plugin that runs functional, performance, accessibility, s
 
 ## Commands
 
-No build step and no root `package.json` — the scripts are plain `node` and `bash`. `evals/` has its own `package.json` for promptfoo.
+No build step — the scripts are plain `node` and `bash`. The root `package.json` has one dependency, `ajv`, for report validation; `evals/` has its own `package.json` for promptfoo. Install with `npm ci`, which never rewrites the committed lockfile — a rewritten one would block the user's next `git pull`. `npm install <pkg>` is only for adding a dependency.
 
 ```bash
+npm ci                   # once after cloning, and after any pull
 claude --plugin-dir .    # launch Claude Code with the plugin loaded
 ```
 
@@ -24,13 +25,15 @@ Render a report to self-contained HTML:
 
 ```bash
 scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from filename
-scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo has no filename detection
-node scripts/generate-report.js reports/data/qa-report-aeo.json   # renderer only, skips the stamp and the archive
+scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo comes from the flag or mode: "aeo"
+node scripts/generate-report.js reports/data/qa-report-aeo.json   # renderer only: validates, skips the stamp and the archive
 scripts/merge-qa-reports.sh                                       # or /kosh:merge
-node --test "tests/*.test.js"                                     # script, snippet, JSON-file and schema-drift tests, no dependencies
+node --test "tests/*.test.js"                                     # script, snippet, JSON-file, schema-drift and validation tests
 ```
 
-`.github/workflows/ci.yml` runs that same `node --test` line on every PR and on pushes to `trunk` — no install, no API calls. The promptfoo evals stay manual because they cost money.
+`.github/workflows/ci.yml` runs `npm ci` and that same `node --test` line on every PR and on pushes to `trunk` — no API calls. The promptfoo evals stay manual because they cost money.
+
+`generate-report.js` validates the report against its schema (`scripts/validate-report.js`, ajv) before rendering, so the check runs on every render path: `run-qa-report.sh`, the merge, and a direct call. A report that doesn't match is refused — nothing is rendered or archived, and ajv's errors name each field, so the skill that wrote the JSON can fix it and re-run. `run-qa-report.sh` stamps provenance first, so a refused report comes back stamped with its own fields untouched. The types checked are the flagged ones plus any the content shows — `mode: "aeo"` or a `shop` block — so leaving a flag out or passing the wrong one doesn't skip the check. Only a schema file that declares `$schema` is validated — shop and aeo today; functional, performance and accessibility, and so the merged report, are still example documents and pass through with a note. Schemas must compile in ajv strict mode. `node scripts/generate-report.js <json> --skip-validation` renders without the check, which is how to re-render an archived report in an older shape; it's a renderer flag, not a `run-qa-report.sh` one, since the wrapper would also re-stamp and re-archive.
 
 `run-qa-report.sh` stamps a `provenance` block into the source JSON before rendering: the skill writes `provenance.model` (self-reported), and `scripts/stamp-provenance.js` adds `pluginVersion`, a SHA-256 of each skill directory (references included), and a `seal` over those plus the report's `timestamp`. A valid seal means the block is never restamped, so re-rendering an archived run keeps the provenance of the run that produced it; a model-invented or copied-forward block fails the seal and is restamped. The seal is an unkeyed hash, so it guards against accidents, not deliberate tampering — anything with a shell can recompute it. A report with no `provenance` block at all is left untouched with a warning — it predates the feature, or the skill skipped `provenance.model`. The renderer prints the block as one footer line, and nothing for reports that predate it. The merged report carries no provenance — its JSON is a temp file that is deleted after rendering.
 
@@ -42,7 +45,7 @@ The renderer inlines each finding's screenshots as base64, because every run sha
 
 Merging requires all three of functional, performance, and accessibility; shop and AEO reports are standalone. Prefer `/kosh:merge` over calling the script — it reports which JSON files are missing up front, where the script exits on the first one it can't find.
 
-`run-qa-report.sh` has no aeo branch in its filename detection, so the AEO skill passes `--aeo` explicitly; without it the renderer's own dispatch routes on `mode: "aeo"` in the JSON. An AEO-shaped report missing that field is a hard error, not a fallback.
+With no flag, `run-qa-report.sh` takes the test type from the filename, and for AEO from `mode: "aeo"` in the JSON, so validation, the stamp and the renderer all get `--aeo` even when the skill forgets to pass it. A report with neither is rendered with a "not validated" note. An AEO-shaped report missing `mode` is a hard error in the renderer, not a fallback.
 
 ## How it works
 
@@ -57,7 +60,7 @@ schemas/         → JSON schemas that define report structure
 scripts/         → report generation and merge scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
-tests/           → `node --test` checks for the scripts, skill-embedded snippets, tracked JSON files and skill ↔ schema drift, no dependencies
+tests/           → `node --test` checks for the scripts, skill-embedded snippets, tracked JSON files, skill ↔ schema drift and report validation
 docs/            → user-facing guides (getting-started.md)
 .github/         → the CI workflow (runs tests/ on every PR)
 .mcp.json        → Playwright MCP server configuration

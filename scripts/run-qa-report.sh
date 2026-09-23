@@ -11,7 +11,7 @@
 #   ./run-qa-report.sh qa-report-shop.json --shop
 #   ./run-qa-report.sh qa-report.json --performance
 #   ./run-qa-report.sh qa-report.json --functional --performance --accessibility
-#   ./run-qa-report.sh qa-report.json (auto-detects test type from filename)
+#   ./run-qa-report.sh qa-report.json (auto-detects test type from filename, or aeo from "mode": "aeo")
 
 set -e  # Exit on any error
 
@@ -55,8 +55,8 @@ fi
 
 # Step 2: Extract metadata from JSON
 echo -e "${BLUE}Step 2: Extracting metadata from JSON...${NC}"
-WEBSITE_NAME=$(node -e "console.log(require('fs').readFileSync('$QA_REPORT_JSON', 'utf8').split('\"websiteName\": \"')[1].split('\"')[0])")
-TIMESTAMP=$(node -e "console.log(require('fs').readFileSync('$QA_REPORT_JSON', 'utf8').split('\"timestamp\": \"')[1].split('\"')[0])")
+WEBSITE_NAME=$(node -p "JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON', 'utf8')).websiteName ?? ''")
+TIMESTAMP=$(node -p "JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON', 'utf8')).timestamp ?? ''")
 echo -e "${GREEN}  Website: $WEBSITE_NAME${NC}"
 echo -e "${GREEN}  Timestamp: $TIMESTAMP${NC}"
 
@@ -74,6 +74,8 @@ if [ -z "$TEST_TYPE_FLAGS" ]; then
     TEST_TYPE_FLAGS="--accessibility"
   elif [[ "$BASENAME" == *"shop"* ]]; then
     TEST_TYPE_FLAGS="--shop"
+  elif [ "$(node -p "JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON', 'utf8')).mode")" = "aeo" ]; then
+    TEST_TYPE_FLAGS="--aeo"
   fi
 fi
 

@@ -34,6 +34,16 @@ cd kosh
 
 If you don't have it yet, you can install it with `brew install gh` and then run `gh auth login` to sign in.
 
+### Install the report tools
+
+Still inside the `kosh` folder, run:
+
+```bash
+npm ci
+```
+
+This installs the one library kosh uses to check each report's JSON before turning it into HTML. Run it again whenever you pull an update.
+
 ## Step 2: Start Claude Code with the plugin
 
 From inside the `kosh` folder, run:

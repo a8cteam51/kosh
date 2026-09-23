@@ -140,3 +140,15 @@ test('ordinary page links still render, with stray control characters removed', 
   assert.ok(html.includes('<a href="https://example.com/search?q=a&amp;page=2"'));
   assert.ok(html.includes('<a href="https://example.com/contact"'));
 });
+
+test('an AEO-shaped report missing mode is refused without advice that cannot work', (t) => {
+  const { root, reportsDir } = sandbox(t);
+  const input = path.join(root, 'report.json');
+  fs.writeFileSync(input, JSON.stringify({ criteria: { technicalHealth: {}, structuredData: {}, aeoReadiness: {} } }));
+
+  const { status, stderr } = spawnSync('node', [GENERATOR, input, '--aeo'], { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: reportsDir } });
+
+  assert.notEqual(status, 0);
+  assert.match(stderr, /missing `mode: "aeo"`/);
+  assert.doesNotMatch(stderr, /--aeo/);
+});

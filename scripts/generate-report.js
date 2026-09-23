@@ -8,7 +8,7 @@
  * severity, collapsible sections, and inline screenshots when findings reference them.
  *
  * Usage:
- *   node generate-report.js <json-file> [--functional|--performance|--accessibility|--shop|--aeo]
+ *   node generate-report.js <json-file> [--functional|--performance|--accessibility|--shop|--aeo] [--skip-validation]
  *
  * AEO reports are auto-detected from `report.mode === "aeo"`; --aeo forces the
  * AEO branch explicitly. The test-type flag affects the output filename.
@@ -19,12 +19,13 @@
 const fs = require('fs');
 const path = require('path');
 const { describeProvenance } = require('./stamp-provenance.js');
+const { checkReport, typesFor } = require('./validate-report.js');
 
 const inputFile = process.argv[2];
 const args = process.argv.slice(3);
 
 if (!inputFile) {
-  console.error('Usage: node generate-report.js <report.json> [--functional|--performance|--accessibility|--shop|--aeo]');
+  console.error('Usage: node generate-report.js <report.json> [--functional|--performance|--accessibility|--shop|--aeo] [--skip-validation]');
   process.exit(1);
 }
 
@@ -140,8 +141,13 @@ if (looksLikeAeo && qaFlagSet) {
   process.exit(1);
 }
 if (looksLikeAeo && !modeIsAeo) {
-  console.error('Error: report has AEO-shaped `criteria` but is missing `mode: "aeo"`. Add the field or pass --aeo to force.');
+  console.error('Error: report has AEO-shaped `criteria` but is missing `mode: "aeo"`. Add the field and re-run.');
   process.exit(1);
+}
+// process.exit would cut off a long refusal still being written to a pipe; a top-level return lets it drain.
+if (!args.includes('--skip-validation') && !checkReport(report, inputFile, typesFor(args, report))) {
+  process.exitCode = 1;
+  return;
 }
 if (modeIsAeo || aeoFlagSet) {
   renderAeoReport(report, inputFile, testTypeLabel);
