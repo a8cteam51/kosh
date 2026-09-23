@@ -8,7 +8,7 @@ These make real model calls and cost money. Run them by hand, not in CI.
 
 ```bash
 cd evals
-npm install
+npm ci
 npm run eval                 # one pass
 npm run eval -- --repeat 5   # repeat every case 5 times to measure stability
 ```
@@ -34,6 +34,17 @@ Each run:
 4. Exits with promptfoo's failure code (100) when any case fails or errors.
 
 `.workspaces/`, `results/`, and `node_modules/` are gitignored.
+
+## When to run
+
+When something the evals depend on changes, not on a schedule. Between changes the inputs are pinned: the skill text is in the repo, the model and effort are in `promptfooconfig.yaml`, and the Agent SDK and its bundled Claude Code are in `package-lock.json`. A repeat run mostly re-measures sampling noise, at about $3 for a cold run of both models.
+
+- A skill with evals changes: before the PR merges, and before and after a rewrite.
+- The cases or `promptfooconfig.yaml` change.
+- A new model, or a bump of the Agent SDK or Claude Code.
+- A baseline or refactor phase starts, so there is a "before" to compare against.
+
+When a case set is new or changed, run it once with `--repeat 3` (or 5) to find the unstable cases. A stable case then only needs re-running on one of the triggers above.
 
 ## Add a case
 
