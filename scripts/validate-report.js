@@ -40,13 +40,14 @@ function validate(report, type) {
   return check(report) ? [] : check.errors.map(describe);
 }
 
-// The flagged test types, or aeo when no type is flagged and the report says `mode: "aeo"`.
+// The content markers count alongside any flag, so leaving a flag out or passing the wrong one can't skip the check.
 function typesFor(flags, report) {
-  const types = flags.map((flag) => flag.replace(/^--/, ''));
-  return types.length || report.mode !== 'aeo' ? types : ['aeo'];
+  const types = new Set(flags.map((flag) => flag.replace(/^--/, '')));
+  if (report.mode === 'aeo') types.add('aeo');
+  if (report.shop) types.add('shop');
+  return [...types];
 }
 
-// Prints the outcome for each type; false when the report must not be rendered.
 function checkReport(report, reportPath, types) {
   if (types.length === 0) console.log('Schema: no test type given, not validated.');
   let ok = true;
@@ -78,4 +79,4 @@ function checkReport(report, reportPath, types) {
   return ok;
 }
 
-module.exports = { checkReport, typesFor, validate };
+module.exports = { checkReport, schemaFor, typesFor, validate };

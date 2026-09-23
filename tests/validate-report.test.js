@@ -4,13 +4,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { validate } = require('../scripts/validate-report.js');
+const { schemaFor, validate } = require('../scripts/validate-report.js');
 
 const ROOT = path.join(__dirname, '..');
 
 const jsonSchemaTypes = fs.readdirSync(path.join(ROOT, 'schemas'))
   .map((file) => file.match(/^qa-report-(.+)-schema\.json$/)?.[1])
-  .filter((type) => type && JSON.parse(fs.readFileSync(path.join(ROOT, 'schemas', `qa-report-${type}-schema.json`), 'utf8')).$schema);
+  .filter((type) => type && schemaFor(type));
 
 const plainReport = {
   url: 'https://example.com/',
@@ -45,10 +45,8 @@ const shopReport = (edit = () => {}) => {
   return report;
 };
 
-// The filename is what run-qa-report.sh detects the test type from. `prepare` runs a copy of
-// scripts/ and schemas/ outside the repo, where the repo's node_modules can't be resolved.
-// `generatorFlags` calls generate-report.js directly instead, the way the renderer-only command does.
-const run = (t, filename, report, { space = 2, prepare, generatorFlags } = {}) => {
+// `prepare` runs copies of scripts/ and schemas/ outside the repo, where ajv can't be resolved.
+const run =(t, filename, report, { space = 2, prepare, generatorFlags } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-validate-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   if (prepare) {
@@ -123,6 +121,26 @@ test('the renderer refuses a report that fails its schema when called directly',
   assert.notEqual(status, 0, output);
   assert.match(output, /\/ must have required property 'shop'/);
   assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+});
+
+for (const flags of [[], ['--functional']]) {
+  test(`the renderer validates a shop report from its shop block, flags: ${flags.join(' ') || 'none'}`, (t) => {
+    const { status, output, reportsDir } = run(t, 'report.json', shopReport((r) => { delete r.shop.checkoutStop; }), { generatorFlags: flags });
+
+    assert.notEqual(status, 0, output);
+    assert.match(output, /\/shop must have required property 'checkoutStop'/);
+    assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+  });
+}
+
+test('a refusal longer than a pipe buffer still ends with its last line', (t) => {
+  const findings = Array.from({ length: 1500 }, () => ({ category: 'Nowhere', issue: 'x', impact: 'y', device: 'both', pages: ['https://example.com/'] }));
+
+  const { status, output } = run(t, 'report.json', shopReport((r) => { r.issues.low = findings; }), { generatorFlags: ['--shop'] });
+
+  assert.notEqual(status, 0);
+  assert.ok(output.length > 65536, `refusal only ${output.length} bytes, too short to test the cut-off`);
+  assert.match(output, /Nothing was rendered\.\n$/);
 });
 
 test('--skip-validation renders a report its schema would refuse', (t) => {

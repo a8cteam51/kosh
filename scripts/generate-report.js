@@ -10,9 +10,6 @@
  * Usage:
  *   node generate-report.js <json-file> [--functional|--performance|--accessibility|--shop|--aeo] [--skip-validation]
  *
- * The report is validated against its schema before anything is rendered;
- * --skip-validation renders an archived report whose shape predates its schema.
- *
  * AEO reports are auto-detected from `report.mode === "aeo"`; --aeo forces the
  * AEO branch explicitly. The test-type flag affects the output filename.
  * Design tokens (colors, fonts) live in the TOKENS constant below — edit them
@@ -144,11 +141,13 @@ if (looksLikeAeo && qaFlagSet) {
   process.exit(1);
 }
 if (looksLikeAeo && !modeIsAeo) {
-  console.error('Error: report has AEO-shaped `criteria` but is missing `mode: "aeo"`. Add the field or pass --aeo to force.');
+  console.error('Error: report has AEO-shaped `criteria` but is missing `mode: "aeo"`. Add the field and re-run.');
   process.exit(1);
 }
+// process.exit would cut off a long refusal still being written to a pipe; a top-level return lets it drain.
 if (!args.includes('--skip-validation') && !checkReport(report, inputFile, typesFor(args, report))) {
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 if (modeIsAeo || aeoFlagSet) {
   renderAeoReport(report, inputFile, testTypeLabel);
