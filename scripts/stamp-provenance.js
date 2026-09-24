@@ -8,6 +8,7 @@ const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 const SKILL_DIRS = { functional: 'functional-design', accessibility: 'a11y' };
+const TYPE_FLAGS = ['--functional', '--performance', '--accessibility', '--shop', '--aeo'];
 
 function hashSkill(dir) {
   const hash = crypto.createHash('sha256');
@@ -34,6 +35,9 @@ function stamp(report, flags) {
   const existing = report.provenance;
   if (!existing || typeof existing !== 'object') return 'absent';
   if (existing.seal && existing.seal === sealFor(report, existing)) return 'kept';
+  // A seal is never rewritten, so a wrong skill in it would stay; any other flag would be hashed as a skill folder.
+  const unique = [...new Set(flags)];
+  if (unique.length > 1 || unique.some((flag) => !TYPE_FLAGS.includes(flag))) return 'refused';
 
   const skills = {};
   for (const flag of flags) {
@@ -63,7 +67,10 @@ if (require.main === module) {
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   const status = stamp(report, flags);
 
-  if (status === 'absent') {
+  if (status === 'refused') {
+    console.error(`✗ Provenance: not stamped. Pass at most one of ${TYPE_FLAGS.join(' ')}; got ${flags.join(' ')}.`);
+    process.exit(1);
+  } else if (status === 'absent') {
     console.log('⚠ Provenance: report has no provenance.model, so it was not stamped. A fresh run must set it and re-run; a report from before provenance existed stays as it is.');
   } else {
     if (status === 'stamped') fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
@@ -71,4 +78,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { describeProvenance, hashSkill, stamp };
+module.exports = { TYPE_FLAGS, describeProvenance, hashSkill, stamp };
