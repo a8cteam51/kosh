@@ -1,0 +1,110 @@
+{
+  "url": "https://example.com/",
+  "websiteName": "Example Site",
+  "timestamp": "2026-09-23T13:48:49Z",
+  "provenance": {
+    "model": "claude-opus-5-5[1m]",
+    "pluginVersion": "1.1.0",
+    "skills": {
+      "performance": "691ddf15764a91fdd6f54da0e64bbba2d7938dc3656d00deda9cfd3c57bca6e0"
+    },
+    "seal": "56c52337f7b93a06d74763a00475fabae52f69be31a4b49c38bc3499591494f7"
+  },
+  "environment": "production",
+  "testMethodology": "Redacted text.",
+  "visitedPages": [
+    "https://example.com/",
+    "https://example.com/documentation/about/",
+    "https://example.com/documentation/guide/",
+    "https://example.com/blog/",
+    "https://example.com/documentation/contact-us/",
+    "https://example.com/topics/example/",
+    "https://example.com/2026/09/21/sample-post/"
+  ],
+  "mobile": {
+    "viewport": "375x812",
+    "title": "Example Site",
+    "url": "https://example.com/",
+    "loadTime": 248,
+    "console": [
+      {
+        "type": "warning",
+        "text": "Redacted text."
+      },
+      {
+        "type": "warning",
+        "text": "Redacted text."
+      }
+    ],
+    "network": []
+  },
+  "desktop": {
+    "viewport": "1920x1080",
+    "title": "Example Site",
+    "url": "https://example.com/",
+    "loadTime": 372,
+    "console": [
+      {
+        "type": "warning",
+        "text": "Redacted text."
+      },
+      {
+        "type": "warning",
+        "text": "Redacted text."
+      }
+    ],
+    "network": []
+  },
+  "issues": {
+    "critical": [],
+    "high": [],
+    "medium": [
+      {
+        "category": "Performance",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "device": "both",
+        "pages": [
+          "https://example.com/",
+          "https://example.com/documentation/about/",
+          "https://example.com/documentation/guide/",
+          "https://example.com/blog/",
+          "https://example.com/documentation/contact-us/",
+          "https://example.com/topics/example/",
+          "https://example.com/2026/09/21/sample-post/"
+        ],
+        "metric": "Redacted text."
+      }
+    ],
+    "low": [
+      {
+        "category": "Network",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "device": "both",
+        "pages": [
+          "https://old.example.com/",
+          "https://old.example.com/documentation/about/",
+          "https://old.example.com/documentation/guide/"
+        ],
+        "metric": "Redacted text."
+      },
+      {
+        "category": "Performance",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "device": "both",
+        "pages": [
+          "https://example.com/",
+          "https://example.com/documentation/about/",
+          "https://example.com/documentation/guide/",
+          "https://example.com/blog/",
+          "https://example.com/documentation/contact-us/",
+          "https://example.com/topics/example/",
+          "https://example.com/2026/09/21/sample-post/"
+        ],
+        "metric": "Redacted text."
+      }
+    ]
+  }
+}

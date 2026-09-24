@@ -40,11 +40,17 @@ function validate(report, type) {
   return check(report) ? [] : check.errors.map(describe);
 }
 
+// Only the performance skill records console and network data; the renderer's title uses the same test.
+function looksLikePerformance(report) {
+  return ['mobile', 'desktop'].some((viewport) => report[viewport]?.console || report[viewport]?.network);
+}
+
 // The content markers count alongside any flag, so leaving a flag out or passing the wrong one can't skip the check.
 function typesFor(flags, report) {
   const types = new Set(flags.map((flag) => flag.replace(/^--/, '')));
   if (report.mode === 'aeo') types.add('aeo');
   if (report.shop) types.add('shop');
+  if (looksLikePerformance(report)) types.add('performance');
   return [...types];
 }
 
@@ -79,4 +85,4 @@ function checkReport(report, reportPath, types) {
   return ok;
 }
 
-module.exports = { checkReport, schemaFor, typesFor, validate };
+module.exports = { checkReport, looksLikePerformance, schemaFor, typesFor, validate };

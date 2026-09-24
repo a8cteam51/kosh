@@ -1,61 +1,199 @@
 {
-  "url": "https://example.com",
-  "websiteName": "Example",
-  "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
-  "provenance": {
-    "model": "claude-sonnet-5",
-    "pluginVersion": "added by scripts/run-qa-report.sh — do not write this field",
-    "skills": {"performance": "sha256 of the skill directory, added by scripts/run-qa-report.sh — do not write this field"},
-    "seal": "added by scripts/run-qa-report.sh — do not write this field"
-  },
-  "environment": "production",
-  "visitedPages": [
-    "https://example.com/",
-    "https://example.com/about/",
-    "https://example.com/services/",
-    "https://example.com/blog/",
-    "https://example.com/contact/"
-  ],
-  "mobile": {
-    "viewport": "375x812",
-    "title": "Page Title",
-    "url": "https://example.com",
-    "loadTime": 1800,
-    "console": [
-      {"type": "log", "text": "Console message"},
-      {"type": "error", "text": "Error message"},
-      {"type": "warning", "text": "Warning message"}
-    ],
-    "network": [
-      {"url": "https://example.com/resource.js", "status": 404, "type": "script"}
-    ]
-  },
-  "desktop": {
-    "viewport": "1920x1080",
-    "title": "Page Title",
-    "url": "https://example.com",
-    "loadTime": 1800,
-    "console": [
-      {"type": "log", "text": "Console message"}
-    ],
-    "network": [
-      {"url": "https://example.com/resource.js", "status": 404, "type": "script"}
-    ]
-  },
-  "issues": {
-    "critical": [
-      {
-        "category": "Performance",
-        "issue": "Brief issue description",
-        "impact": "How this affects users",
-        "device": "mobile|desktop|both",
-        "pages": ["https://example.com/page1"],
-        "metric": "Load time >3s",
-        "screenshots": ["screenshots/example-finding.png"]
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kosh Performance Report",
+  "description": "Schema for the kosh performance report: load times, console messages and failed network requests across several pages of a WordPress site, at desktop and mobile viewports. Renders through the standard QA renderer in scripts/generate-report.js.",
+  "type": "object",
+  "required": ["url", "websiteName", "timestamp", "environment", "visitedPages", "mobile", "desktop", "issues"],
+  "additionalProperties": false,
+  "properties": {
+    "url": {
+      "$ref": "#/definitions/webUrl",
+      "description": "The homepage URL the test started from."
+    },
+    "websiteName": {
+      "type": "string",
+      "description": "Site name from og:site_name, the WordPress site title, or the page title."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the test was run."
+    },
+    "provenance": {
+      "type": "object",
+      "description": "What produced this report, so runs can be compared across plugin versions, skill edits, and models.",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Exact model ID the skill ran as, self-reported by the model; \"unknown\" when its system prompt does not state one. The only provenance field the skill writes."
+        },
+        "pluginVersion": {
+          "type": "string",
+          "description": "kosh version from .claude-plugin/plugin.json. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "skills": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "description": "SHA-256 of each skill directory that produced the report, keyed by skill name. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "seal": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 over the report timestamp, pluginVersion and skills, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
+        }
       }
-    ],
-    "high": [],
-    "medium": [],
-    "low": []
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["local", "development", "staging", "production"],
+      "description": "Environment the site was running in during the test. Defaults to production."
+    },
+    "testMethodology": {
+      "type": "string",
+      "description": "Short prose description of how the test was performed: pages and viewports, how timings were taken, and anything that affects how the numbers compare, such as a warm browser cache."
+    },
+    "visitedPages": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/webUrl" },
+      "description": "URLs of every page visited during the test."
+    },
+    "mobile": {
+      "$ref": "#/definitions/viewportResult",
+      "description": "Homepage measurements at the mobile viewport. Findings on other pages go in issues."
+    },
+    "desktop": {
+      "$ref": "#/definitions/viewportResult",
+      "description": "Homepage measurements at the desktop viewport. Findings on other pages go in issues."
+    },
+    "issues": {
+      "type": "object",
+      "description": "Findings grouped by severity.",
+      "required": ["critical", "high", "medium", "low"],
+      "additionalProperties": false,
+      "properties": {
+        "critical": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/finding" },
+          "description": "Site-breaking: JS errors causing a white screen, a CSS 404 breaking the layout, 5xx errors on core pages."
+        },
+        "high": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/finding" },
+          "description": "Significant user impact: load time over 3s, broken images, mixed content on scripts, recurring JS errors."
+        },
+        "medium": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/finding" },
+          "description": "Noticeable but not blocking: load time 2–3s, non-critical 404s, console warnings."
+        },
+        "low": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/finding" },
+          "description": "Minor: console logs that shouldn't be in production, third-party script warnings."
+        }
+      }
+    }
+  },
+  "definitions": {
+    "webUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "description": "An http(s) URL of a page kosh navigated to. URLs observed on the site, such as a failed request's, are plain strings: a malformed one is something to report, not to fix in the JSON."
+    },
+    "viewportResult": {
+      "type": "object",
+      "required": ["viewport", "title", "url", "loadTime", "console", "network"],
+      "additionalProperties": false,
+      "properties": {
+        "viewport": {
+          "type": "string",
+          "description": "Viewport size as WIDTHxHEIGHT, e.g. 375x812 or 1920x1080."
+        },
+        "title": {
+          "type": "string",
+          "description": "The page title."
+        },
+        "url": {
+          "$ref": "#/definitions/webUrl",
+          "description": "The page measured, normally the homepage."
+        },
+        "loadTime": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Page load time in milliseconds. Never 0: loadEventEnd reads 0 when taken before the load event, so re-measure instead."
+        },
+        "console": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "type": "string", "description": "Console message type as the browser reports it, e.g. error, warning, log." },
+              "text": { "type": "string", "description": "The message text." }
+            }
+          },
+          "description": "Console messages logged on this page."
+        },
+        "network": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["url", "status", "type"],
+            "additionalProperties": false,
+            "properties": {
+              "url": { "type": "string", "description": "The requested URL, as observed." },
+              "status": { "type": ["integer", "null"], "description": "HTTP status; null for a request that got no response, such as blocked mixed content." },
+              "type": { "type": "string", "description": "Resource type, e.g. script, stylesheet, image, font." }
+            }
+          },
+          "description": "Failed requests only: 4xx and 5xx responses, and mixed content. Successful responses and 3xx redirects are left out."
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["category", "issue", "impact", "device", "pages"],
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["Performance", "JavaScript", "Network", "MixedContent", "ServerError"],
+          "description": "Performance = load times exceeding targets. JavaScript = console errors from JS failures. Network = 4xx/5xx failed resource requests. MixedContent = HTTP resources on HTTPS pages. ServerError = 5xx server-side failures."
+        },
+        "issue": {
+          "type": "string",
+          "description": "What is wrong, naming the specific resource, page or behavior."
+        },
+        "impact": {
+          "type": "string",
+          "description": "How this affects users."
+        },
+        "device": {
+          "type": "string",
+          "enum": ["mobile", "desktop", "both"],
+          "description": "Which viewport the issue was observed on."
+        },
+        "pages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/webUrl" },
+          "description": "URLs where the issue was observed."
+        },
+        "metric": {
+          "type": "string",
+          "description": "The measurement behind the finding, e.g. 'Load time 3.4s (target < 3s)'."
+        },
+        "screenshots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^screenshots/"
+          },
+          "description": "Paths relative to the reports/ directory, e.g. 'screenshots/homepage-network-tab.png' for a file saved at reports/screenshots/homepage-network-tab.png."
+        }
+      }
+    }
   }
 }

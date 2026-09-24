@@ -49,7 +49,7 @@ schemas/         JSON schemas for report validation
 scripts/         Report generation, validation and provenance scripts
 hooks/           Session hook that creates reports/data/ on startup
 evals/           Promptfoo regression checks for skill decision rules
-tests/           node --test checks for the scripts, skill snippets, JSON files and skill ↔ schema drift — run by .github/workflows/ci.yml on every PR
+tests/           node --test checks for the scripts, skill snippets, JSON files, skill ↔ schema drift, report validation and redacted report fixtures — run by .github/workflows/ci.yml on every PR
 reports/data/archive/  Past runs' JSON, named to match the HTML they produced
 .mcp.json        Playwright MCP server configuration
 .claude/         Project settings and Playwright tool permissions

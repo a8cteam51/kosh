@@ -1,0 +1,92 @@
+{
+  "url": "https://example.com/",
+  "websiteName": "Example Site",
+  "timestamp": "2026-09-22T15:19:32Z",
+  "provenance": {
+    "model": "claude-opus-5[1m]",
+    "pluginVersion": "1.1.0",
+    "skills": {
+      "performance": "691ddf15764a91fdd6f54da0e64bbba2d7938dc3656d00deda9cfd3c57bca6e0"
+    },
+    "seal": "6f94145c3bc363b9eeabea2fc5899585e09232823b4d05a641c8c3d2d4cf5218"
+  },
+  "environment": "production",
+  "visitedPages": [
+    "https://example.com/",
+    "https://example.com/documentation/",
+    "https://example.com/documentation/about/",
+    "https://example.com/blog/",
+    "https://example.com/documentation/contact-us/",
+    "https://example.com/2026/08/12/another-post/"
+  ],
+  "mobile": {
+    "viewport": "375x812",
+    "title": "Example Site",
+    "url": "https://example.com/",
+    "loadTime": 205,
+    "console": [
+      {
+        "type": "warning",
+        "text": "Redacted text."
+      },
+      {
+        "type": "warning",
+        "text": "Redacted text."
+      }
+    ],
+    "network": []
+  },
+  "desktop": {
+    "viewport": "1920x1080",
+    "title": "Example Site",
+    "url": "https://example.com/",
+    "loadTime": 413,
+    "console": [
+      {
+        "type": "warning",
+        "text": "Redacted text."
+      },
+      {
+        "type": "warning",
+        "text": "Redacted text."
+      }
+    ],
+    "network": []
+  },
+  "summary": "Redacted text.",
+  "issues": {
+    "critical": [],
+    "high": [],
+    "medium": [],
+    "low": [
+      {
+        "category": "Performance",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "device": "both",
+        "pages": [
+          "https://example.com/blog/"
+        ],
+        "metric": "Redacted text.",
+        "screenshots": [
+          "screenshots/blog-lazy-lcp-image.png"
+        ]
+      },
+      {
+        "category": "JavaScript",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "device": "both",
+        "pages": [
+          "https://example.com/",
+          "https://example.com/documentation/",
+          "https://example.com/documentation/about/",
+          "https://example.com/blog/",
+          "https://example.com/documentation/contact-us/",
+          "https://example.com/2026/08/12/another-post/"
+        ],
+        "metric": "Redacted text."
+      }
+    ]
+  }
+}

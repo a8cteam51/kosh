@@ -19,7 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 const { TYPE_FLAGS, describeProvenance } = require('./stamp-provenance.js');
-const { checkReport, typesFor } = require('./validate-report.js');
+const { checkReport, looksLikePerformance, typesFor } = require('./validate-report.js');
 
 const inputFile = process.argv[2];
 const args = process.argv.slice(3);
@@ -168,7 +168,7 @@ const severityCounts = Object.fromEntries(
 const totalFindings = severities.reduce((sum, s) => sum + severityCounts[s], 0);
 
 // Detect which skill data is present so the report title reflects what was actually run.
-const hasPerformanceData = !!(report.mobile?.console || report.desktop?.console || report.mobile?.network || report.desktop?.network);
+const hasPerformanceData = looksLikePerformance(report);
 const hasAccessibilityData = !!(report.mobile?.a11y || report.desktop?.a11y);
 const hasShopData = !!report.shop;
 

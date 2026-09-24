@@ -66,8 +66,8 @@ const run =(t, filename, report, { space = 2, prepare, generatorFlags } = {}) =>
   return { status, output: (stdout + stderr).replace(/\x1b\[[0-9;]*m/g, ''), json, written, reportsDir };
 };
 
-test('shop and aeo are JSON Schema', () => {
-  assert.ok(jsonSchemaTypes.includes('shop') && jsonSchemaTypes.includes('aeo'), jsonSchemaTypes.join(', '));
+test('shop, aeo and performance are JSON Schema', () => {
+  assert.deepEqual(['aeo', 'performance', 'shop'].filter((type) => !jsonSchemaTypes.includes(type)), [], jsonSchemaTypes.join(', '));
 });
 
 for (const type of jsonSchemaTypes) {
@@ -165,6 +165,42 @@ test('a report that matches its schema is rendered', (t) => {
   assert.match(output, /✓ Schema: valid against schemas\/qa-report-shop-schema\.json/);
   assert.ok(fs.readdirSync(reportsDir).some((file) => file.endsWith('.html')));
 });
+
+const fixture = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'));
+
+test('a real performance report is validated from its filename and rendered', (t) => {
+  const { status, output } = run(t, 'qa-report-performance.json', fixture('performance-opus-5-5-run-3.json'));
+
+  assert.equal(status, 0, output);
+  assert.match(output, /✓ Schema: valid against schemas\/qa-report-performance-schema\.json/);
+});
+
+test('a performance report with an invented top-level key is refused', (t) => {
+  const { status, output, reportsDir } = run(t, 'qa-report-performance.json', fixture('performance-opus-5-run-1.json'));
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /\/ must NOT have additional properties: summary/);
+  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+});
+
+test('a valid performance report with no flag is validated and titled from its content', (t) => {
+  const { status, output, reportsDir } = run(t, 'report.json', fixture('performance-opus-5-5-run-3.json'), { generatorFlags: [] });
+
+  assert.equal(status, 0, output);
+  assert.match(output, /✓ Schema: valid against schemas\/qa-report-performance-schema\.json/);
+  const [html] = fs.readdirSync(reportsDir).filter((file) => file.endsWith('.html'));
+  assert.match(fs.readFileSync(path.join(reportsDir, html), 'utf8'), /<title>kosh performance QA report/);
+});
+
+for (const flags of [[], ['--functional']]) {
+  test(`the renderer validates a performance report from its console and network data, flags: ${flags.join(' ') || 'none'}`, (t) => {
+    const { status, output, reportsDir } = run(t, 'report.json', fixture('performance-opus-5-run-1.json'), { generatorFlags: flags });
+
+    assert.notEqual(status, 0, output);
+    assert.match(output, /\/ must NOT have additional properties: summary/);
+    assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+  });
+}
 
 test('an aeo report is validated from its mode when neither a flag nor the filename names the type', (t) => {
   const { status, output, reportsDir } = run(t, 'report.json', { ...plainReport, mode: 'aeo' });

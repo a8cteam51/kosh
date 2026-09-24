@@ -1,0 +1,706 @@
+{
+  "url": "https://example.com/",
+  "websiteName": "Example Site",
+  "timestamp": "2026-09-07T16:05:00Z",
+  "mode": "aeo",
+  "aeoRubricVersion": "1.0",
+  "siteType": "education",
+  "siteTypeConfidence": "medium",
+  "siteTypeRationale": "Redacted text.",
+  "environment": "production",
+  "visitedPages": [
+    "https://example.com/",
+    "https://example.com/help/faqs/",
+    "https://example.com/course-one/",
+    "https://example.com/news/",
+    "https://example.com/2026/08/14/sample-post/",
+    "https://example.com/help/",
+    "https://example.com/learn/",
+    "https://example.com/robots.txt",
+    "https://example.com/sitemap.xml",
+    "https://example.com/llms.txt",
+    "https://example.com/llms-full.txt"
+  ],
+  "summary": {
+    "totalSignals": 49,
+    "pass": 26,
+    "partial": 4,
+    "fail": 18,
+    "na": 1
+  },
+  "criteria": {
+    "technicalHealth": {
+      "signals": {
+        "robotsAndCrawlerAccess": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "noNoindex": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "httpsNoMixedContent": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "sitemapLastmod": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "nojsAccessible": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "canonicalUrls": {
+          "status": "fail",
+          "notes": "Redacted text."
+        }
+      }
+    },
+    "structuredData": {
+      "signals": {
+        "organizationSchema": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "primaryEntitySchema": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "faqSchema": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "relevantSchemasApplied": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "jsonLdFormat": {
+          "status": "partial",
+          "notes": "Redacted text."
+        },
+        "openGraphTags": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "reviewSchema": {
+          "status": "fail",
+          "notes": "Redacted text."
+        }
+      }
+    },
+    "aeoReadiness": {
+      "signals": {
+        "directAnswers": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "whoWhatWho": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "featuredSnippetStructure": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "answerCapsules": {
+          "status": "partial",
+          "notes": "Redacted text."
+        },
+        "faqSectionPresent": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "faqSchemaApplied": {
+          "status": "partial",
+          "notes": "Redacted text."
+        },
+        "questionFramedHeadings": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "titleAndMetaQuestionMatch": {
+          "status": "pass",
+          "notes": "Redacted text."
+        }
+      }
+    },
+    "eeatSignals": {
+      "signals": {
+        "namedTeamMembers": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "authorCredentials": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "authorBylines": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "demonstratedExpertise": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "externalCitations": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "certificationBadges": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "namedExternalRelationships": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "tenureIndicators": {
+          "status": "fail",
+          "notes": "Redacted text."
+        }
+      }
+    },
+    "contentFreshness": {
+      "signals": {
+        "copyrightYearCurrent": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "blogNewsRecent": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "dateStampsOnContent": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "contentUpdateRecency": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "sitemapLastmodRecent": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "recentFeaturedWork": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "currentDomainReferences": {
+          "status": "pass",
+          "notes": "Redacted text."
+        }
+      }
+    },
+    "entityClarity": {
+      "signals": {
+        "entityIdentifiable": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "primaryFocusSpecificity": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "socialProfileLinks": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "geographicMarketClarity": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "consistentIdentity": {
+          "status": "pass",
+          "notes": "Redacted text."
+        }
+      }
+    },
+    "contentSpecificity": {
+      "signals": {
+        "primaryOfferingDetail": {
+          "status": "partial",
+          "notes": "Redacted text."
+        },
+        "namedSpecificEntities": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "namedSubjectAreas": {
+          "status": "pass",
+          "notes": "Redacted text."
+        },
+        "specificOutcomes": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "passageExtractionQuality": {
+          "status": "pass",
+          "notes": "Redacted text."
+        }
+      }
+    },
+    "llmsTxt": {
+      "signals": {
+        "llmsTxtPresent": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "llmsFullTxtPresent": {
+          "status": "fail",
+          "notes": "Redacted text."
+        },
+        "llmsTxtContent": {
+          "status": "na",
+          "notes": "Redacted text."
+        }
+      }
+    }
+  },
+  "issues": {
+    "critical": [
+      {
+        "criterion": "structuredData",
+        "signal": "organizationSchema",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "medium",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "technicalHealth",
+        "signal": "robotsAndCrawlerAccess",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "unknown",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/",
+          "https://example.com/robots.txt"
+        ]
+      }
+    ],
+    "high": [
+      {
+        "criterion": "technicalHealth",
+        "signal": "canonicalUrls",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "structuredData",
+        "signal": "faqSchema",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "medium",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/help/faqs/",
+          "https://example.com/course-one/"
+        ]
+      },
+      {
+        "criterion": "structuredData",
+        "signal": "primaryEntitySchema",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "medium",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/course-one/"
+        ]
+      },
+      {
+        "criterion": "structuredData",
+        "signal": "relevantSchemasApplied",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "medium",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/course-one/",
+          "https://example.com/learn/"
+        ]
+      },
+      {
+        "criterion": "structuredData",
+        "signal": "reviewSchema",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "medium",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "llmsTxt",
+        "signal": "llmsTxtPresent",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/llms.txt"
+        ]
+      }
+    ],
+    "medium": [
+      {
+        "criterion": "structuredData",
+        "signal": "jsonLdFormat",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "medium",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "aeoReadiness",
+        "signal": "faqSchemaApplied",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/help/faqs/"
+        ]
+      },
+      {
+        "criterion": "llmsTxt",
+        "signal": "llmsFullTxtPresent",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/llms-full.txt"
+        ]
+      }
+    ],
+    "low": [
+      {
+        "criterion": "aeoReadiness",
+        "signal": "answerCapsules",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "contentSpecificity",
+        "signal": "primaryOfferingDetail",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/",
+          "https://example.com/course-two/"
+        ]
+      },
+      {
+        "criterion": "eeatSignals",
+        "signal": "namedTeamMembers",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "medium",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "eeatSignals",
+        "signal": "authorCredentials",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "medium",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "eeatSignals",
+        "signal": "authorBylines",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/2026/08/14/sample-post/"
+        ]
+      },
+      {
+        "criterion": "eeatSignals",
+        "signal": "externalCitations",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "medium",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "eeatSignals",
+        "signal": "certificationBadges",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "high",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "eeatSignals",
+        "signal": "tenureIndicators",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "contentFreshness",
+        "signal": "contentUpdateRecency",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/help/faqs/",
+          "https://example.com/help/"
+        ]
+      },
+      {
+        "criterion": "entityClarity",
+        "signal": "socialProfileLinks",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      },
+      {
+        "criterion": "contentSpecificity",
+        "signal": "specificOutcomes",
+        "issue": "Redacted text.",
+        "impact": "Redacted text.",
+        "effort": "low",
+        "effortRationale": "Redacted text.",
+        "pages": [
+          "https://example.com/"
+        ]
+      }
+    ]
+  },
+  "actionablePrompts": [
+    {
+      "criterion": "structuredData",
+      "signal": "organizationSchema",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "structuredData",
+      "signal": "primaryEntitySchema",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "structuredData",
+      "signal": "faqSchema",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "structuredData",
+      "signal": "relevantSchemasApplied",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "structuredData",
+      "signal": "jsonLdFormat",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "structuredData",
+      "signal": "reviewSchema",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "technicalHealth",
+      "signal": "canonicalUrls",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "technicalHealth",
+      "signal": "robotsAndCrawlerAccess",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "aeoReadiness",
+      "signal": "faqSchemaApplied",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "aeoReadiness",
+      "signal": "answerCapsules",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "llmsTxt",
+      "signal": "llmsTxtPresent",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "llmsTxt",
+      "signal": "llmsFullTxtPresent",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "eeatSignals",
+      "signal": "namedTeamMembers",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "eeatSignals",
+      "signal": "authorCredentials",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "eeatSignals",
+      "signal": "authorBylines",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "eeatSignals",
+      "signal": "externalCitations",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "eeatSignals",
+      "signal": "certificationBadges",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "eeatSignals",
+      "signal": "tenureIndicators",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "contentFreshness",
+      "signal": "contentUpdateRecency",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "entityClarity",
+      "signal": "socialProfileLinks",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "contentSpecificity",
+      "signal": "primaryOfferingDetail",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    },
+    {
+      "criterion": "contentSpecificity",
+      "signal": "specificOutcomes",
+      "issue": "Redacted text.",
+      "impact": "Redacted text.",
+      "prompt": "Redacted text."
+    }
+  ],
+  "technicalNotes": {
+    "robotsTxt": "Redacted text.",
+    "sitemapUrl": "Redacted text.",
+    "llmsTxtFound": false,
+    "llmsFullTxtFound": false,
+    "javascriptRequired": false,
+    "httpsActive": true,
+    "mixedContentCount": 0,
+    "cmsDetected": "Redacted text.",
+    "capabilityMatrixLastVerified": "Redacted text.",
+    "capabilityMatrixStale": false,
+    "schemaFormats": {
+      "jsonLd": 0,
+      "microdata": 1,
+      "rdfa": 0
+    },
+    "applicableSchemas": {
+      "Person": "absent",
+      "Article": "medium",
+      "Organization": "high",
+      "LocalBusiness": "absent",
+      "Event": "absent",
+      "FAQPage": "high",
+      "HowTo": "absent",
+      "Product": "absent",
+      "Course": "medium",
+      "Recipe": "absent",
+      "Review": "absent"
+    },
+    "testingCaveats": "Redacted text.",
+    "faqAggregate": "Redacted text."
+  }
+}
