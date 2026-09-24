@@ -27,6 +27,22 @@ test('a fresh run is stamped with version, model, skill hash and seal', () => {
   assert.match(report.provenance.seal, HASH);
 });
 
+for (const flags of [['--functional', '--performance'], ['--functional', '--a11y'], ['--skip-validation']]) {
+  test(`a fresh run is not stamped with ${flags.join(' ')}`, () => {
+    const report = freshRun();
+
+    assert.equal(stamp(report, flags), 'refused');
+    assert.deepEqual(report, freshRun());
+  });
+}
+
+test('a repeated type flag stamps that one skill', () => {
+  const report = freshRun();
+
+  assert.equal(stamp(report, ['--functional', '--functional']), 'stamped');
+  assert.deepEqual(Object.keys(report.provenance.skills), ['functional-design']);
+});
+
 test('a sealed report is never restamped, whatever flags the re-render passes', () => {
   const report = freshRun();
   stamp(report, ['--functional']);

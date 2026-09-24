@@ -47,15 +47,15 @@ fi
 
 # Step 1: Validate JSON structure
 echo -e "${BLUE}Step 1: Validating JSON structure...${NC}"
-if ! node -e "JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON', 'utf8')); console.log('✓ JSON is valid')" 2>/dev/null; then
+if ! node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); console.log('✓ JSON is valid')" "$QA_REPORT_JSON" 2>/dev/null; then
   echo -e "${RED}Error: Invalid JSON in $QA_REPORT_JSON${NC}"
   exit 1
 fi
 
 # Step 2: Extract metadata from JSON
 echo -e "${BLUE}Step 2: Extracting metadata from JSON...${NC}"
-WEBSITE_NAME=$(node -p "JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON', 'utf8')).websiteName ?? ''")
-TIMESTAMP=$(node -p "JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON', 'utf8')).timestamp ?? ''")
+WEBSITE_NAME=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).websiteName ?? ''" "$QA_REPORT_JSON")
+TIMESTAMP=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).timestamp ?? ''" "$QA_REPORT_JSON")
 echo -e "${GREEN}  Website: $WEBSITE_NAME${NC}"
 echo -e "${GREEN}  Timestamp: $TIMESTAMP${NC}"
 
@@ -73,7 +73,7 @@ if [ -z "$TEST_TYPE_FLAGS" ]; then
     TEST_TYPE_FLAGS="--accessibility"
   elif [[ "$BASENAME" == *"shop"* ]]; then
     TEST_TYPE_FLAGS="--shop"
-  elif [ "$(node -p "JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON', 'utf8')).mode")" = "aeo" ]; then
+  elif [ "$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).mode" "$QA_REPORT_JSON")" = "aeo" ]; then
     TEST_TYPE_FLAGS="--aeo"
   fi
 fi
@@ -101,10 +101,8 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
 
   # Display report statistics (extract counts from the JSON source)
   echo -e "${BLUE}Report Statistics:${NC}"
-  CRITICAL_COUNT=$(node -e "const r=JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON','utf8')); console.log(r.issues.critical.length)")
-  HIGH_COUNT=$(node -e "const r=JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON','utf8')); console.log(r.issues.high.length)")
-  MEDIUM_COUNT=$(node -e "const r=JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON','utf8')); console.log(r.issues.medium.length)")
-  LOW_COUNT=$(node -e "const r=JSON.parse(require('fs').readFileSync('$QA_REPORT_JSON','utf8')); console.log(r.issues.low.length)")
+  COUNTS=$(node -p "const issues = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).issues; ['critical', 'high', 'medium', 'low'].map((s) => (issues?.[s] || []).length).join(' ')" "$QA_REPORT_JSON")
+  read -r CRITICAL_COUNT HIGH_COUNT MEDIUM_COUNT LOW_COUNT <<< "$COUNTS"
 
   echo -e "  ${YELLOW}Critical Issues:${NC} $CRITICAL_COUNT"
   echo -e "  ${YELLOW}High Priority Issues:${NC} $HIGH_COUNT"
@@ -117,7 +115,7 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
 
   # The HTML name carries only a date, so a same-day rerun moves the previous run aside under its own timestamp.
   if [ -e "$ARCHIVE_JSON" ] && ! cmp -s "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
-    OLD_STAMP=$(node -p "JSON.parse(require('fs').readFileSync('$ARCHIVE_JSON','utf8')).timestamp" | tr -c 'A-Za-z0-9\n' '-')
+    OLD_STAMP=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).timestamp" "$ARCHIVE_JSON" | tr -c 'A-Za-z0-9\n' '-')
     mv "$ARCHIVE_JSON" "${ARCHIVE_JSON%.json}_$OLD_STAMP.json"
   fi
 

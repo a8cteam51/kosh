@@ -18,7 +18,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { describeProvenance } = require('./stamp-provenance.js');
+const { TYPE_FLAGS, describeProvenance } = require('./stamp-provenance.js');
 const { checkReport, typesFor } = require('./validate-report.js');
 
 const inputFile = process.argv[2];
@@ -29,13 +29,18 @@ if (!inputFile) {
   process.exit(1);
 }
 
-const testTypeLabel =
-  args.includes('--functional')    ? 'FUNCTIONAL'
-  : args.includes('--performance') ? 'PERFORMANCE'
-  : args.includes('--accessibility') ? 'ACCESSIBILITY'
-  : args.includes('--shop') ? 'SHOP'
-  : args.includes('--aeo') ? 'AEO'
-  : null;
+const unknownFlags = args.filter((a) => !TYPE_FLAGS.includes(a) && a !== '--skip-validation');
+if (unknownFlags.length > 0) {
+  console.error(`Error: unknown flag ${unknownFlags.join(' ')}. Pass at most one of ${TYPE_FLAGS.join(' ')}, plus --skip-validation.`);
+  process.exit(1);
+}
+const typeFlags = [...new Set(args.filter((a) => TYPE_FLAGS.includes(a)))];
+if (typeFlags.length > 1) {
+  console.error(`Error: pass one test type flag, not several: ${typeFlags.join(' ')}`);
+  process.exit(1);
+}
+
+const testTypeLabel = typeFlags[0]?.slice(2).toUpperCase() ?? null;
 
 if (!fs.existsSync(inputFile)) {
   console.error(`Error: Input file not found at ${inputFile}`);
@@ -121,17 +126,13 @@ const reportDate = report.timestamp ? new Date(report.timestamp).toLocaleString(
 // renderAeoReport is a hoisted function declaration at the bottom of this file.
 
 const aeoFlagSet = args.includes('--aeo');
-const qaFlagSet = args.some((a) => ['--functional', '--performance', '--accessibility', '--shop'].includes(a));
+const qaFlagSet = typeFlags.some((a) => a !== '--aeo');
 const modeIsAeo = report.mode === 'aeo';
 const looksLikeAeo =
   modeIsAeo ||
   (report.criteria && typeof report.criteria === 'object' &&
    ['technicalHealth', 'structuredData', 'aeoReadiness'].every((k) => k in report.criteria));
 
-if (aeoFlagSet && qaFlagSet) {
-  console.error('Error: --aeo cannot be combined with --functional / --performance / --accessibility / --shop.');
-  process.exit(1);
-}
 if (aeoFlagSet && !looksLikeAeo) {
   console.error('Error: --aeo flag set but the report shape is not AEO (no `mode: "aeo"` and no AEO-shaped `criteria` block). Refusing to produce a misleading empty report.');
   process.exit(1);

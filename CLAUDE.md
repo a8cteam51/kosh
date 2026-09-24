@@ -42,7 +42,7 @@ The renderer inlines each finding's screenshots as base64, because every run sha
 
 `reports/` lives next to `scripts/`, and every script resolves it from its own location, never from the cwd; `tests/reports-dir.test.js` runs `run-qa-report.sh` from a foreign cwd to keep it that way. Skills are the exception: they write `reports/…` and call `scripts/*.sh` cwd-relative, which is why the documented launch is `cd kosh && claude --plugin-dir .`. `KOSH_REPORTS_DIR` redirects the scripts only — the tests use it to stay out of the real directory — and does not move where the skills write, so setting it for a real run leaves the renderer looking for screenshots the skill saved somewhere else. The SessionStart hook pre-creates the folders as a nicety; nothing depends on it.
 
-With no flag, `run-qa-report.sh` takes the test type from the filename, and for AEO from `mode: "aeo"` in the JSON, so validation, the stamp and the renderer all get `--aeo` even when the skill forgets to pass it. A report with neither is rendered with a "not validated" note. An AEO-shaped report missing `mode` is a hard error in the renderer, not a fallback.
+With no flag, `run-qa-report.sh` takes the test type from the filename, and for AEO from `mode: "aeo"` in the JSON, so validation, the stamp and the renderer all get `--aeo` even when the skill forgets to pass it. A report with neither is rendered with a "not validated" note. An AEO-shaped report missing `mode` is a hard error in the renderer, not a fallback. A report has one type, so the stamp refuses more than one type flag or any other flag and leaves the report unsealed, and the renderer refuses the same plus any flag it doesn't know (`--skip-validation` aside).
 
 ## How it works
 
