@@ -14,7 +14,7 @@ Kosh tests a site across five dimensions:
 - **Shop (WooCommerce):** The guest purchase path — catalog, product pages, add to cart, cart quantity and removal operations, cart math, and the checkout form. Stops at the payment step and never places an order.
 - **AEO (Answer Engine Optimization):** How AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews discover, parse, understand, and cite the site. 49 signals across 8 criteria, status-based evaluation (pass / partial / fail / N/A), site-type-aware and content-driven.
 
-Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. A render script converts the JSON into a self-contained HTML report with color-coded severity, collapsible sections, and inline screenshots. The functional, performance, and accessibility test types can also be merged into one comprehensive report; shop and AEO reports are standalone.
+Each test visits 4–6+ pages, simulates real user behavior, and outputs a structured JSON report. A render script converts the JSON into a self-contained HTML report with color-coded severity, collapsible sections, and inline screenshots.
 
 ## Quick start
 
@@ -44,10 +44,9 @@ For detailed setup instructions (including troubleshooting), see the [Getting St
 ## Project structure
 
 ```text
-commands/        Slash command for /kosh:merge
 skills/          Full testing procedures, invoked as /kosh:a11y, /kosh:aeo, /kosh:functional-design, /kosh:performance, /kosh:shop
 schemas/         JSON schemas for report validation
-scripts/         Report generation and merge scripts
+scripts/         Report generation, validation and provenance scripts
 hooks/           Session hook that creates reports/data/ on startup
 evals/           Promptfoo regression checks for skill decision rules
 tests/           node --test checks for the scripts, skill snippets, JSON files and skill ↔ schema drift — run by .github/workflows/ci.yml on every PR

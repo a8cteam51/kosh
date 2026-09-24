@@ -1002,12 +1002,6 @@ If `generate-report.js` is available in the project:
 scripts/run-qa-report.sh reports/data/qa-report-functional.json
 ```
 
-Or to merge with performance and accessibility reports:
-
-```bash
-scripts/merge-qa-reports.sh reports/data/qa-report-functional.json reports/data/qa-report-performance.json reports/data/qa-report-accessibility.json
-```
-
 ---
 
 ## Important Testing Notes

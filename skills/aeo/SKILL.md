@@ -1798,7 +1798,7 @@ Complete all items before generating the JSON report.
 
 ### File location
 
-Save the report to `reports/data/qa-report-aeo.json`. This is the fixed filename the kosh report generator and merge script expect.
+Save the report to `reports/data/qa-report-aeo.json`. This is the fixed filename the kosh report generator expects.
 
 ### Top-level structure
 

@@ -3,8 +3,8 @@
 /**
  * kosh report generator (HTML output)
  *
- * Reads a kosh JSON report (functional, performance, accessibility, shop, AEO,
- * or merged) and emits a self-contained HTML file with inline CSS, color-coded
+ * Reads a kosh JSON report (functional, performance, accessibility, shop or AEO)
+ * and emits a self-contained HTML file with inline CSS, color-coded
  * severity, collapsible sections, and inline screenshots when findings reference them.
  *
  * Usage:
