@@ -779,12 +779,6 @@ Once `reports/data/qa-report-accessibility.json` is populated:
 scripts/run-qa-report.sh reports/data/qa-report-accessibility.json
 ```
 
-To merge with functional and performance reports:
-
-```bash
-scripts/merge-qa-reports.sh reports/data/qa-report-functional.json reports/data/qa-report-performance.json reports/data/qa-report-accessibility.json
-```
-
 ---
 
 ## Accessibility Testing Notes

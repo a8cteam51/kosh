@@ -26,12 +26,6 @@ const sandbox = (t) => {
   return { root, cwd, reportsDir };
 };
 
-const writeMergeInputs = ({ reportsDir }) => {
-  for (const type of ['functional', 'performance', 'accessibility']) {
-    fs.writeFileSync(path.join(reportsDir, 'data', `qa-report-${type}.json`), report('Merge Fixture'));
-  }
-};
-
 // Runs the script itself, not `bash <script>`, so a lost executable bit fails here before it fails a skill.
 const run = (script, args, { cwd, reportsDir }, env) => {
   const { status, stdout: raw, stderr, error } = spawnSync(script, args, { cwd, encoding: 'utf8', env });
@@ -54,22 +48,17 @@ test('run-qa-report.sh renders and archives under KOSH_REPORTS_DIR from any cwd'
   assert.deepEqual(fs.readdirSync(path.join(box.reportsDir, 'data', 'archive')), ['REPORTS_DIR_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json']);
 });
 
-test('merge-qa-reports.sh finds its default inputs and the HTML under KOSH_REPORTS_DIR from any cwd', (t) => {
-  const box = sandbox(t);
-  writeMergeInputs(box);
-
-  const stdout = run(path.join(SCRIPTS, 'merge-qa-reports.sh'), [], box, { ...process.env, KOSH_REPORTS_DIR: box.reportsDir });
-
-  assert.match(stdout, /Merge workflow complete/);
-});
-
 // A copy of scripts/ next to a temp reports/ exercises the production default without touching the real directory.
 test('without KOSH_REPORTS_DIR, the scripts use the reports/ next to their own directory', (t) => {
   const box = sandbox(t);
   fs.cpSync(SCRIPTS, path.join(box.root, 'scripts'), { recursive: true });
-  writeMergeInputs(box);
+  // The input lives apart from the sandbox, so resolving reports/ from the input's location can't pass by accident.
+  const inputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-reports-dir-input-'));
+  t.after(() => fs.rmSync(inputDir, { recursive: true, force: true }));
+  const json = path.join(inputDir, 'qa-report-functional.json');
+  fs.writeFileSync(json, report('Reports Dir Fixture'));
   const env = { ...process.env };
   delete env.KOSH_REPORTS_DIR;
 
-  run(path.join(box.root, 'scripts', 'merge-qa-reports.sh'), [], box, env);
+  run(path.join(box.root, 'scripts', 'run-qa-report.sh'), [json], box, env);
 });

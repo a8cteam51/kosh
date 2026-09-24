@@ -27,23 +27,20 @@ Render a report to self-contained HTML:
 scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from filename
 scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo comes from the flag or mode: "aeo"
 node scripts/generate-report.js reports/data/qa-report-aeo.json   # renderer only: validates, skips the stamp and the archive
-scripts/merge-qa-reports.sh                                       # or /kosh:merge
 node --test "tests/*.test.js"                                     # script, snippet, JSON-file, schema-drift and validation tests
 ```
 
 `.github/workflows/ci.yml` runs `npm ci` and that same `node --test` line on every PR and on pushes to `trunk` — no API calls. The promptfoo evals stay manual because they cost money.
 
-`generate-report.js` validates the report against its schema (`scripts/validate-report.js`, ajv) before rendering, so the check runs on every render path: `run-qa-report.sh`, the merge, and a direct call. A report that doesn't match is refused — nothing is rendered or archived, and ajv's errors name each field, so the skill that wrote the JSON can fix it and re-run. `run-qa-report.sh` stamps provenance first, so a refused report comes back stamped with its own fields untouched. The types checked are the flagged ones plus any the content shows — `mode: "aeo"` or a `shop` block — so leaving a flag out or passing the wrong one doesn't skip the check. Only a schema file that declares `$schema` is validated — shop and aeo today; functional, performance and accessibility, and so the merged report, are still example documents and pass through with a note. Schemas must compile in ajv strict mode. `node scripts/generate-report.js <json> --skip-validation` renders without the check, which is how to re-render an archived report in an older shape; it's a renderer flag, not a `run-qa-report.sh` one, since the wrapper would also re-stamp and re-archive.
+`generate-report.js` validates the report against its schema (`scripts/validate-report.js`, ajv) before rendering, so the check runs on every render path: `run-qa-report.sh` and a direct call. A report that doesn't match is refused — nothing is rendered or archived, and ajv's errors name each field, so the skill that wrote the JSON can fix it and re-run. `run-qa-report.sh` stamps provenance first, so a refused report comes back stamped with its own fields untouched. The types checked are the flagged ones plus any the content shows — `mode: "aeo"` or a `shop` block — so leaving a flag out or passing the wrong one doesn't skip the check. Only a schema file that declares `$schema` is validated — shop and aeo today; functional, performance and accessibility are still example documents and pass through with a note. Schemas must compile in ajv strict mode. `node scripts/generate-report.js <json> --skip-validation` renders without the check, which is how to re-render an archived report in an older shape; it's a renderer flag, not a `run-qa-report.sh` one, since the wrapper would also re-stamp and re-archive.
 
-`run-qa-report.sh` stamps a `provenance` block into the source JSON before rendering: the skill writes `provenance.model` (self-reported), and `scripts/stamp-provenance.js` adds `pluginVersion`, a SHA-256 of each skill directory (references included), and a `seal` over those plus the report's `timestamp`. A valid seal means the block is never restamped, so re-rendering an archived run keeps the provenance of the run that produced it; a model-invented or copied-forward block fails the seal and is restamped. The seal is an unkeyed hash, so it guards against accidents, not deliberate tampering — anything with a shell can recompute it. A report with no `provenance` block at all is left untouched with a warning — it predates the feature, or the skill skipped `provenance.model`. The renderer prints the block as one footer line, and nothing for reports that predate it. The merged report carries no provenance — its JSON is a temp file that is deleted after rendering.
+`run-qa-report.sh` stamps a `provenance` block into the source JSON before rendering: the skill writes `provenance.model` (self-reported), and `scripts/stamp-provenance.js` adds `pluginVersion`, a SHA-256 of each skill directory (references included), and a `seal` over those plus the report's `timestamp`. A valid seal means the block is never restamped, so re-rendering an archived run keeps the provenance of the run that produced it; a model-invented or copied-forward block fails the seal and is restamped. The seal is an unkeyed hash, so it guards against accidents, not deliberate tampering — anything with a shell can recompute it. A report with no `provenance` block at all is left untouched with a warning — it predates the feature, or the skill skipped `provenance.model`. The renderer prints the block as one footer line, and nothing for reports that predate it.
 
 `run-qa-report.sh` also copies the source JSON to `reports/data/archive/` under the same basename as the HTML it generated, since `reports/data/qa-report-<type>.json` is overwritten by every run. A same-day rerun with different content moves the previous run's copy aside with its timestamp appended, so the un-suffixed JSON is always the source of the current HTML.
 
 The renderer inlines each finding's screenshots as base64, because every run shares `reports/screenshots/` and a later run can overwrite a file an older report points at. Only image files inside `reports/` are read, and an inlined image expands in place through a CSS-only `<details>` toggle because a `data:` URI can't be a link target. A missing file keeps its external `src` with a warning; a remote, absolute, scheme-carrying or `../` path is dropped with a warning, so only paths inside `reports/` ever reach the HTML. The generator prints the inlined count and the HTML's size. The archived JSON still holds the shared-folder paths, so re-rendering an old run embeds whatever is at those paths now.
 
-`reports/` lives next to `scripts/`, and every script resolves it from its own location, never from the cwd; `tests/reports-dir.test.js` runs the shell scripts from a foreign cwd to keep it that way. Skills and `commands/merge.md` are the exception: they write `reports/…` and call `scripts/*.sh` cwd-relative, which is why the documented launch is `cd kosh && claude --plugin-dir .`. `KOSH_REPORTS_DIR` redirects the scripts only — the tests use it to stay out of the real directory — and does not move where the skills write, so setting it for a real run leaves the renderer looking for screenshots the skill saved somewhere else. The SessionStart hook pre-creates the folders as a nicety; nothing depends on it.
-
-Merging requires all three of functional, performance, and accessibility; shop and AEO reports are standalone. Prefer `/kosh:merge` over calling the script — it reports which JSON files are missing up front, where the script exits on the first one it can't find.
+`reports/` lives next to `scripts/`, and every script resolves it from its own location, never from the cwd; `tests/reports-dir.test.js` runs `run-qa-report.sh` from a foreign cwd to keep it that way. Skills are the exception: they write `reports/…` and call `scripts/*.sh` cwd-relative, which is why the documented launch is `cd kosh && claude --plugin-dir .`. `KOSH_REPORTS_DIR` redirects the scripts only — the tests use it to stay out of the real directory — and does not move where the skills write, so setting it for a real run leaves the renderer looking for screenshots the skill saved somewhere else. The SessionStart hook pre-creates the folders as a nicety; nothing depends on it.
 
 With no flag, `run-qa-report.sh` takes the test type from the filename, and for AEO from `mode: "aeo"` in the JSON, so validation, the stamp and the renderer all get `--aeo` even when the skill forgets to pass it. A report with neither is rendered with a "not validated" note. An AEO-shaped report missing `mode` is a hard error in the renderer, not a fallback.
 
@@ -51,13 +48,12 @@ With no flag, `run-qa-report.sh` takes the test type from the filename, and for 
 
 Each test is a **skill** (`skills/`), invoked directly as `/kosh:<name>`. The skill parses the URL and environment type from user input, then carries the full testing procedure — what to check, how to check it, and how to report findings. Results follow the structure defined in a **schema** (`schemas/`) and are saved as JSON reports, which are then rendered to self-contained HTML reports via scripts in `scripts/`.
 
-Skills and commands share one `/kosh:` namespace, so a command named after a skill makes that entry appear twice in the slash menu. Tests are skills only; `commands/` holds `merge.md` alone.
+Skills and commands share one `/kosh:` namespace, so a command named after a skill makes that entry appear twice in the slash menu.
 
 ```
-commands/        → merge only — a skill of the same name would double the menu entry
 skills/          → detailed testing procedures (the actual prompts)
 schemas/         → JSON schemas that define report structure
-scripts/         → report generation and merge scripts
+scripts/         → report generation, validation and provenance scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
 tests/           → `node --test` checks for the scripts, skill-embedded snippets, tracked JSON files, skill ↔ schema drift and report validation
@@ -81,8 +77,6 @@ Each test type has a matching set of files:
 | AEO / AI mode | `skills/aeo/SKILL.md` | `schemas/qa-report-aeo-schema.json` |
 
 If you add a new test type, you need both: a skill and a schema. Do not add a matching command — the name would collide.
-
-`commands/merge.md` is the exception — it has no skill or schema, and runs `scripts/merge-qa-reports.sh` after a pre-flight check for the three input reports.
 
 ## Contributing
 

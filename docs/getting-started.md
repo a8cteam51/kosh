@@ -140,16 +140,6 @@ Can you visit https://example.com/blog and check whether the post images all hav
 I want to know if the navigation is keyboard accessible on mobile — can you check that?
 ```
 
-## Combining reports
-
-After running the functional, performance, and accessibility tests against the same site, you can merge them into one comprehensive report:
-
-```
-/kosh:merge
-```
-
-This creates a single HTML document covering functional, performance, and accessibility findings. The shop and AEO tests aren't part of the merge — they render as standalone reports.
-
 ## Specifying the environment
 
 If you're testing a local or development site (not the live production site), you can tell kosh so it doesn't flag expected dev-environment things as bugs:

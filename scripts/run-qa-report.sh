@@ -4,13 +4,12 @@
 # Reads a kosh JSON report and emits a self-contained HTML report.
 #
 # Usage:
-#   ./run-qa-report.sh <path-to-json> [--functional] [--performance] [--accessibility] [--shop]
+#   ./run-qa-report.sh <path-to-json> [--functional|--performance|--accessibility|--shop|--aeo]
 #
 # Examples:
 #   ./run-qa-report.sh qa-report-functional.json --functional
 #   ./run-qa-report.sh qa-report-shop.json --shop
 #   ./run-qa-report.sh qa-report.json --performance
-#   ./run-qa-report.sh qa-report.json --functional --performance --accessibility
 #   ./run-qa-report.sh qa-report.json (auto-detects test type from filename, or aeo from "mode": "aeo")
 
 set -e  # Exit on any error
@@ -80,7 +79,7 @@ if [ -z "$TEST_TYPE_FLAGS" ]; then
 fi
 
 if [ -z "$TEST_TYPE_FLAGS" ]; then
-  echo -e "${YELLOW}  Note: No test type flags specified. Including all available test data.${NC}"
+  echo -e "${YELLOW}  Note: no test type from flags, filename or mode.${NC}"
 else
   echo -e "${YELLOW}  Test type: $TEST_TYPE_FLAGS${NC}"
 fi

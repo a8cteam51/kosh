@@ -750,8 +750,6 @@ scripts/run-qa-report.sh reports/data/qa-report-shop.json
 
 The script auto-detects the shop type from the filename and applies `--shop`, producing `reports/<SITE>_SHOP_QA_REPORT_<date>.html`.
 
-**Shop reports are standalone.** Do not pass them to the merge scripts — merging covers the functional, performance, and accessibility types only.
-
 ---
 
 ## Important Testing Notes
