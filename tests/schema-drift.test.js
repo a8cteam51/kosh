@@ -3,11 +3,12 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { fences } = require('./fences');
+const { validate } = require('../scripts/validate-report.js');
 
 const ROOT = path.join(__dirname, '..');
 
-// Only the example-document schemas; aeo and shop are real JSON Schema and declare their own `required` list.
-const EXAMPLE_SCHEMAS = { functional: 'functional-design', performance: 'performance', accessibility: 'a11y' };
+// Only the example-document schemas; aeo, shop and performance are real JSON Schema and declare their own `required` list.
+const EXAMPLE_SCHEMAS = { functional: 'functional-design', accessibility: 'a11y' };
 
 // Every key path in a document, with array elements folded into one `[]` segment.
 const keyPaths = (value, prefix = '') => {
@@ -32,3 +33,14 @@ for (const [type, skill] of Object.entries(EXAMPLE_SCHEMAS)) {
     }
   });
 }
+
+// The example carries two placeholders a real report never would, so they are filled in before validating.
+test('performance skill report examples validate against the performance schema', () => {
+  const examples = fences(path.join(ROOT, 'skills', 'performance', 'SKILL.md'), 'json').filter((f) => f.code.includes('"websiteName"'));
+  assert.ok(examples.length > 0, 'no report example found in the performance skill');
+
+  for (const example of examples) {
+    const filled = example.code.replace('"YYYY-MM-DDTHH:MM:SSZ"', '"2026-01-01T00:00:00Z"').replaceAll('"mobile|desktop|both"', '"both"');
+    assert.deepEqual(validate(JSON.parse(filled), 'performance'), [], `example at SKILL.md:${example.line}`);
+  }
+});
