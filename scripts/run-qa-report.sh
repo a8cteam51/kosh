@@ -64,7 +64,7 @@ echo -e "${BLUE}Step 3: Generating HTML report using generate-report.js...${NC}"
 
 # Auto-detect test type from filename if no flags provided
 if [ -z "$TEST_TYPE_FLAGS" ]; then
-  BASENAME=$(basename "$QA_REPORT_JSON")
+  BASENAME=$(basename "$QA_REPORT_JSON" | tr '[:upper:]' '[:lower:]')
   if [[ "$BASENAME" == *"functional"* ]]; then
     TEST_TYPE_FLAGS="--functional"
   elif [[ "$BASENAME" == *"performance"* ]]; then
@@ -109,8 +109,9 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   echo -e "  ${YELLOW}Medium Priority Issues:${NC} $MEDIUM_COUNT"
   echo -e "  ${YELLOW}Low Priority Issues:${NC} $LOW_COUNT"
 
-  # Step 5: Archive the source JSON under the HTML's basename; qa-report-<type>.json is overwritten by every run.
-  ARCHIVE_DIR="$(dirname "$REPORT_FILE")/data/archive"
+  # Step 5: Archive the source JSON under the HTML's basename, then clear the path the skill wrote it to.
+  DATA_DIR="$(dirname "$REPORT_FILE")/data"
+  ARCHIVE_DIR="$DATA_DIR/archive"
   ARCHIVE_JSON="$ARCHIVE_DIR/$(basename "${REPORT_FILE%.html}").json"
 
   # The HTML name carries only a date, so a same-day rerun moves the previous run aside under its own timestamp.
@@ -119,8 +120,15 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
     mv "$ARCHIVE_JSON" "${ARCHIVE_JSON%.json}_$OLD_STAMP.json"
   fi
 
-  if mkdir -p "$ARCHIVE_DIR" && cp "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
+  if [ "$QA_REPORT_JSON" -ef "$ARCHIVE_JSON" ]; then
+    echo -e "${BLUE}Source data is already the archive copy: $ARCHIVE_JSON${NC}"
+  elif mkdir -p "$ARCHIVE_DIR" && cp "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
     echo -e "${BLUE}Source data archived: $ARCHIVE_JSON${NC}"
+    # Only a skill's own output goes, so the next run saves its report without reading this one first.
+    if [ "$(dirname "$QA_REPORT_JSON")" -ef "$DATA_DIR" ] && [[ "$(basename "$QA_REPORT_JSON")" =~ ^qa-report-[a-z]+\.json$ ]]; then
+      rm -f "$QA_REPORT_JSON" && echo -e "${BLUE}Source JSON removed: $QA_REPORT_JSON${NC}" \
+        || echo -e "${YELLOW}Warning: could not remove $QA_REPORT_JSON; the next run must read it before overwriting it${NC}"
+    fi
   else
     echo -e "${YELLOW}Warning: could not archive source JSON to $ARCHIVE_JSON${NC}"
   fi

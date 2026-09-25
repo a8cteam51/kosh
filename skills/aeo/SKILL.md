@@ -1988,7 +1988,7 @@ Once `reports/data/qa-report-aeo.json` is saved, run:
 scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo
 ```
 
-`--aeo` forces the generator's AEO branch, which is otherwise auto-detected from `report.mode === "aeo"`. The script writes a self-contained HTML report to `reports/` (color-coded status pills, per-criterion signal tables, schema-relevance section, collapsible severity blocks, paste-ready Claude prompts), prints the output path, and archives the source JSON under the same basename in `reports/data/archive/`.
+`--aeo` forces the generator's AEO branch, which is otherwise auto-detected from `report.mode === "aeo"`. The script writes a self-contained HTML report to `reports/` (color-coded status pills, per-criterion signal tables, schema-relevance section, collapsible severity blocks, paste-ready Claude prompts), prints the output path, and moves the source JSON to `reports/data/archive/` under the same basename.
 
 ### Terminal summary
 
@@ -2005,8 +2005,8 @@ Top issues:
 - [Top 3 critical/high issues by severity and CMS-adjusted effort]
 
 Full report saved to:
-  JSON: reports/data/qa-report-aeo.json
-  HTML: reports/[SITENAME]_AEO_QA_REPORT_[YYYY-MM-DD].html
+  JSON: [the path after "Source data archived:" in the report script's output]
+  HTML: [the path after "Report location:" in the report script's output]
 ```
 
 ---
