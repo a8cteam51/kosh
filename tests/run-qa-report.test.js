@@ -145,6 +145,18 @@ test('a report that could not be archived is kept', (t) => {
   assert.ok(fs.existsSync(json), 'the only copy was removed');
 });
 
+// A shop name gets the report validated, and the bare fixture has no shop block, so it's refused like a real bad report.
+test('a refused report a skill wrote is kept so it can be fixed', (t) => {
+  const box = sandbox(t);
+  const json = write(box, 'reports/data/qa-report-shop.json', report());
+
+  const { status, output } = run(box, WRAPPER, [json]);
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /Nothing was rendered/);
+  assert.ok(fs.existsSync(json), 'the refused report was removed before it could be fixed');
+});
+
 test('re-rendering an archive copy through the wrapper keeps its type and its one copy', (t) => {
   const box = sandbox(t);
   assert.equal(run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]).status, 0);
