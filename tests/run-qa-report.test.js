@@ -28,6 +28,7 @@ const sandbox = (t, prefix = 'kosh-run-') => {
 
 const write = (box, name, value) => {
   const file = path.join(box.root, name);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(value, null, 2));
   return file;
 };
@@ -39,6 +40,8 @@ const run = (box, command, args) => {
 };
 
 const archived = (box) => fs.readdirSync(path.join(box.reportsDir, 'data', 'archive')).sort();
+const archiveCopy = (box) => path.join(box.reportsDir, 'data', 'archive', 'WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json');
+const SKILL_OUTPUT = 'reports/data/qa-report-functional.json';
 
 test('a report missing a severity list is counted as empty and still archived', (t) => {
   const box = sandbox(t);
@@ -99,6 +102,59 @@ test('the wrapper renders a repeated type flag as that one type', (t) => {
 
   assert.equal(status, 0, output);
   assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(json, 'utf8')).provenance.skills), ['functional-design']);
+});
+
+// A skill saving a new report with Claude Code's Write tool has to read any file already at that path first.
+test('the report a skill wrote is removed once its stamped copy is archived', (t) => {
+  const box = sandbox(t);
+  const json = write(box, SKILL_OUTPUT, stampable());
+
+  const { status, output } = run(box, WRAPPER, [json]);
+
+  assert.equal(status, 0, output);
+  assert.ok(!fs.existsSync(json), 'the source JSON is still there');
+  assert.ok(JSON.parse(fs.readFileSync(archiveCopy(box), 'utf8')).provenance.seal, 'the archive copy is unstamped');
+});
+
+for (const [where, name] of [
+  ['named as a keeper', 'reports/data/qa-report-functional.2026-09-23.original.json'],
+  ['in a subfolder of reports/data', 'reports/data/old/qa-report-functional.json'],
+  ['outside reports/data', 'qa-report-functional.json'],
+]) {
+  test(`a rendered report ${where} is archived and kept`, (t) => {
+    const box = sandbox(t);
+    const json = write(box, name, report());
+
+    const { status, output } = run(box, WRAPPER, [json]);
+
+    assert.equal(status, 0, output);
+    assert.match(output, /Source data archived: /);
+    assert.ok(fs.existsSync(json), 'the source JSON was removed');
+  });
+}
+
+test('a report that could not be archived is kept', (t) => {
+  const box = sandbox(t);
+  const json = write(box, SKILL_OUTPUT, report());
+  fs.writeFileSync(path.join(box.reportsDir, 'data', 'archive'), '');
+
+  const { status, output } = run(box, WRAPPER, [json]);
+
+  assert.equal(status, 0, output);
+  assert.match(output, /could not archive source JSON/);
+  assert.ok(fs.existsSync(json), 'the only copy was removed');
+});
+
+test('re-rendering an archive copy through the wrapper keeps its type and its one copy', (t) => {
+  const box = sandbox(t);
+  assert.equal(run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]).status, 0);
+
+  const { status, output } = run(box, WRAPPER, [archiveCopy(box)]);
+
+  assert.equal(status, 0, output);
+  assert.match(output, /Test type: --functional/);
+  assert.doesNotMatch(output, /could not archive/);
+  assert.deepEqual(archived(box), ['WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json']);
 });
 
 for (const [flags, message] of [

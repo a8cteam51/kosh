@@ -91,7 +91,7 @@ kosh has five tests. Each one takes a URL — the site you want to test.
 
 Replace `https://example.com` with the URL of the site you want to test. The test will take a few minutes — kosh opens a real browser, visits 4-6+ pages, and runs checks on each one.
 
-When it's done, you'll find the results in the `reports/` folder as both a JSON file (the raw data) and a self-contained HTML report (the formatted view).
+When it's done, you'll find a self-contained HTML report (the formatted view) in the `reports/` folder, and its JSON (the raw data) under the same name in `reports/data/archive/`.
 
 ## Step 4: Read the results
 
@@ -176,6 +176,6 @@ A couple of notes:
 
 ## Tips
 
-- **JSON reports are overwritten on each run.** If you want to keep a report, rename or move the file before testing a different site.
+- **Every run's JSON is kept** in `reports/data/archive/`, named to match its HTML report. A same-day rerun of the same site keeps the earlier copy with its timestamp appended.
 - **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.
