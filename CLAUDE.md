@@ -27,7 +27,7 @@ Render a report to self-contained HTML:
 scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from filename
 scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo comes from the flag or mode: "aeo"
 node scripts/generate-report.js reports/data/qa-report-aeo.json   # renderer only: validates, skips the stamp and the archive
-node --test "tests/*.test.js"                                     # script, snippet, JSON-file, schema-drift, validation and fixture tests
+node --test "tests/*.test.js"                                     # script, snippet, JSON-file, schema-drift, shared-block, validation and fixture tests
 ```
 
 `.github/workflows/ci.yml` runs `npm ci` and that same `node --test` line on every PR and on pushes to `trunk` — no API calls. The promptfoo evals stay manual because they cost money.
@@ -53,10 +53,11 @@ Skills and commands share one `/kosh:` namespace, so a command named after a ski
 ```
 skills/          → detailed testing procedures (the actual prompts)
 schemas/         → JSON schemas that define report structure
+shared/          → canonical blocks every skill carries a verbatim copy of (never read at runtime)
 scripts/         → report generation, validation and provenance scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
-tests/           → `node --test` checks for the scripts, skill-embedded snippets, tracked JSON files, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
+tests/           → `node --test` checks for the scripts, skill-embedded snippets, shared-block copies, tracked JSON files, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
 docs/            → user-facing guides (getting-started.md)
 .github/         → the CI workflow (runs tests/ on every PR)
 .mcp.json        → Playwright MCP server configuration
@@ -87,7 +88,7 @@ Skill files are long, detailed prompts — not code. They tell Claude exactly wh
 - Keep instructions explicit and mandatory. Claude follows these literally, so vague language leads to inconsistent results.
 - Use `- ✅` for mandatory requirement declarations (things Claude must do, stated upfront as rules). Use `- [ ]` for completion tracking checklists (things Claude checks off as it works, used as a gate before report generation). Both patterns appear in skill files and serve different purposes.
 - Maintain the existing phase structure (setup → multi-page testing → analysis → reporting).
-- Open with the shared `$ARGUMENTS` preamble: parse the URL, validate it is present (ask the user if not), and resolve the environment type.
+- Open with the preamble in `shared/preamble.md`, and carry the gate check and `provenance.model` line from `shared/` too. Each skill holds a verbatim copy, because skills can't include files and a skill folder must hold everything it runs. Edit the `shared/` file and every copy together; `tests/shared-blocks.test.js` fails otherwise.
 - Test your changes by running the skill against a real site and reviewing the report. For `functional-design`, also run the promptfoo evals — see `evals/README.md`.
 
 ### Adding or editing a schema

@@ -69,7 +69,7 @@ If you detect signs of a non-production environment that wasn't explicitly speci
 
 ## Reachability Gate Check — MANDATORY before any testing
 
-Some WordPress sites are gated and not publicly reachable: the browser loads a coming-soon launchpad, a password prompt, or a private-site notice instead of the real site. Testing the gate produces an empty or misleading report. **After the first navigation to the homepage, before any other Phase 1 step, run this check.**
+Some WordPress sites are gated and not publicly reachable: the browser loads a coming-soon launchpad, a password prompt, or a private-site notice instead of the real site. Testing the gate produces an empty or misleading report. **After the first navigation to the homepage, before any other step, run this check.**
 
 Read the gate signals with `browser_evaluate` — do **not** rely on the page title, which stays the real site title for two of the three gates:
 
