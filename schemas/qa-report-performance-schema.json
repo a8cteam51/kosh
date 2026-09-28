@@ -39,12 +39,12 @@
         "collectors": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
-          "description": "SHA-256 of the collectors/ directory, the page-side code Playwright MCP loads into every page. Added by scripts/run-qa-report.sh — do not write this field."
+          "description": "SHA-256 of the collectors/ directory, the page-side code Playwright MCP loads into every page, as it was on disk when the report was rendered. A session started before collectors/ changed ran the older code. Added by scripts/run-qa-report.sh — do not write this field."
         },
         "playwrightMcp": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "The arguments kosh's .mcp.json starts Playwright MCP with: the pinned version and its flags. Added by scripts/run-qa-report.sh — do not write this field."
+          "description": "The Playwright MCP arguments (the pinned version and its flags) in kosh's .mcp.json when the report was rendered. A session started before .mcp.json changed ran with the older ones. Added by scripts/run-qa-report.sh — do not write this field."
         },
         "seal": {
           "type": "string",

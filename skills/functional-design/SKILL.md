@@ -89,7 +89,7 @@ If `gate` is set (`coming-soon`, `password-protected` or `private`), **do NOT ge
 
 Private sites require access, not just a login: if the WordPress.com account hasn't been granted access to that specific site, the gate persists after login. That's a site-permission issue, not a kosh issue.
 
-If `redirectedTo` is set, **do NOT generate a report** either: the site now lives on another host, and a report would measure a site other than the one requested. Stop and tell the user the URL redirects to `redirectedTo`, so they can re-run the test against it.
+If `redirectedTo` is set, **do NOT generate a report** either: the site now lives on another host, and a report would measure a site other than the one requested. Stop and tell the user the URL redirects to `redirectedTo`, so they can re-run the test against it. If `redirectedTo` is a login or access page rather than a site (single sign-on, an access wall), treat it as a gate instead: offer the bypass above, and proceed once the check returns both fields `null`.
 
 ---
 
