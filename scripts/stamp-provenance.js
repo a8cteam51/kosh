@@ -25,10 +25,11 @@ function hashSkill(dir) {
 }
 
 // Catches accidental copy-forward and echoed blocks (new run, new timestamp, seal mismatch); unkeyed, so not proof against deliberate forgery.
-function sealFor(report, { pluginVersion, skills }) {
-  return crypto.createHash('sha256')
-    .update(JSON.stringify([report.timestamp, pluginVersion, Object.entries(skills || {}).sort()]))
-    .digest('hex');
+function sealFor(report, { pluginVersion, skills, collectors, playwrightMcp }) {
+  const fields = [report.timestamp, pluginVersion, Object.entries(skills || {}).sort()];
+  // Blocks sealed before these two fields existed keep their seal.
+  if (collectors !== undefined || playwrightMcp !== undefined) fields.push(collectors, playwrightMcp);
+  return crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex');
 }
 
 function stamp(report, flags) {
@@ -48,7 +49,14 @@ function stamp(report, flags) {
   }
 
   const plugin = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude-plugin/plugin.json'), 'utf8'));
-  const stamped = { model: String(existing.model || 'unknown'), pluginVersion: plugin.version, skills };
+  const mcp = JSON.parse(fs.readFileSync(path.join(ROOT, '.mcp.json'), 'utf8'));
+  const stamped = {
+    model: String(existing.model || 'unknown'),
+    pluginVersion: plugin.version,
+    skills,
+    collectors: hashSkill(path.join(ROOT, 'collectors')),
+    playwrightMcp: mcp.mcpServers.playwright.args,
+  };
   report.provenance = { ...stamped, seal: sealFor(report, stamped) };
   return 'stamped';
 }

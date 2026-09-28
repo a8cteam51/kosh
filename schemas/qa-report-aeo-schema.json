@@ -36,10 +36,20 @@
           "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "description": "SHA-256 of each skill directory that produced the report, keyed by skill name. Added by scripts/run-qa-report.sh — do not write this field."
         },
+        "collectors": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the collectors/ directory, the page-side code Playwright MCP loads into every page. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "playwrightMcp": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The arguments kosh's .mcp.json starts Playwright MCP with: the pinned version and its flags. Added by scripts/run-qa-report.sh — do not write this field."
+        },
         "seal": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
-          "description": "SHA-256 over the report timestamp, pluginVersion and skills, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
+          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors and playwrightMcp, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
         }
       }
     },

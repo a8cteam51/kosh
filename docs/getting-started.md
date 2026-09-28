@@ -172,6 +172,7 @@ When kosh hits one of these, it tells you which gate it found and leaves the bro
 A couple of notes:
 
 - **Private sites need access, not just a login.** If your WordPress.com account hasn't been granted access to that specific site, logging in won't clear the gate — you'll need to request access first.
+- **Moved sites:** if the URL redirects to another host (say the site moved to a custom domain), kosh stops and tells you where it landed, rather than testing a site you didn't ask for. Re-run with the new URL. A redirect between `example.com` and `www.example.com`, or from `http` to `https`, isn't a move.
 - **Unattended runs:** if no one's at the keyboard (e.g. kosh is launched from automation), pass a share/preview link that already carries access as the URL — kosh uses it directly. Don't store site passwords or account credentials in the repo.
 
 ## Tips
