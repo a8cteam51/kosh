@@ -167,7 +167,7 @@ kosh drives a real browser to the URL you give it. If the site is gated — so t
 When kosh hits one of these, it tells you which gate it found and leaves the browser open. It also sends a desktop notification (and a phone push, if you have Remote Control connected) so you know it's waiting even if you've stepped away. To get past it:
 
 1. **Log in or unlock in the open browser window.** Log in to WordPress.com (coming-soon or private sites), or type the site password (password-protected sites), in the browser window kosh opened.
-2. **Tell kosh to continue.** It re-checks the page, confirms the gate is gone, and runs the test normally. Your session stays authenticated for the rest of the test.
+2. **Tell kosh to continue.** It re-checks the page, confirms the gate is gone, and runs the test normally. You stay logged in while that browser window stays open, and later tests in the same session share it, cookies and cache included. Closing the window or starting a new Claude Code session gives you a fresh browser with no logins, so you'll log in again.
 
 A couple of notes:
 

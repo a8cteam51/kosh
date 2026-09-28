@@ -27,7 +27,7 @@ Render a report to self-contained HTML:
 scripts/run-qa-report.sh reports/data/qa-report-functional.json   # type from filename
 scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo    # aeo comes from the flag or mode: "aeo"
 node scripts/generate-report.js reports/data/archive/<name>.json  # renderer only: validates, skips the stamp and the archive
-node --test "tests/*.test.js"                                     # script, snippet, JSON-file, schema-drift, shared-block, portability, validation and fixture tests
+node --test "tests/*.test.js"                                     # script, snippet, JSON-file, schema-drift, shared-block, portability, MCP-config, validation and fixture tests
 ```
 
 `.github/workflows/ci.yml` runs `npm ci` and that same `node --test` line on every PR and on pushes to `trunk` — no API calls. The promptfoo evals stay manual because they cost money.
@@ -44,6 +44,8 @@ The renderer inlines each finding's screenshots as base64, because every run sha
 
 With no flag, `run-qa-report.sh` takes the test type from the filename, and for AEO from `mode: "aeo"` in the JSON, so validation, the stamp and the renderer all get `--aeo` even when the skill forgets to pass it. A report with neither is rendered with a "not validated" note. An AEO-shaped report missing `mode` is a hard error in the renderer, not a fallback. A report has one type, so the stamp refuses more than one type flag or any other flag and leaves the report unsealed, and the renderer refuses the same plus any flag it doesn't know (`--skip-validation` aside).
 
+`.mcp.json` runs Playwright MCP at an exact version with `--isolated` and `--no-webmcp`, and `plugin.json` points at it, so a marketplace install gets the same flags. `--isolated` keeps the browser profile in memory, so a session starts with no cache, cookies or logins from earlier sessions; runs within one session share them, and closing the browser (`browser_close` or the window) drops a gate login; `--no-webmcp` stops a tested page from registering tools the model could call. `@latest` would make the Playwright version an unrecorded input to every run, so a bump is its own PR. `tests/mcp-config.test.js` holds all three, and checks that every `browser_*` tool a skill names is in `.claude/settings.json`'s allowlist, since a missing one prompts mid-run.
+
 ## How it works
 
 Each test is a **skill** (`skills/`), invoked directly as `/kosh:<name>`. The skill parses the URL and environment type from user input, then carries the full testing procedure — what to check, how to check it, and how to report findings. Results follow the structure defined in a **schema** (`schemas/`) and are saved as JSON reports, which are then rendered to self-contained HTML reports via scripts in `scripts/`.
@@ -57,10 +59,10 @@ shared/          → canonical blocks every skill carries a verbatim copy of (ne
 scripts/         → report generation, validation and provenance scripts
 hooks/           → session hooks (e.g., create reports/data/ on startup)
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
-tests/           → `node --test` checks for the scripts, skill-embedded snippets, shared-block copies, Claude Code-only constructs in skills, tracked JSON files, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
+tests/           → `node --test` checks for the scripts, skill-embedded snippets, shared-block copies, Claude Code-only constructs in skills, tracked JSON files, the Playwright MCP flags and allowlist, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
 docs/            → user-facing guides (getting-started.md)
 .github/         → the CI workflow (runs tests/ on every PR)
-.mcp.json        → Playwright MCP server configuration
+.mcp.json        → Playwright MCP server configuration (pinned, --isolated, --no-webmcp)
 .claude/         → project settings and Playwright tool permissions
 .claude-plugin/  → plugin manifest (plugin.json)
 ```
