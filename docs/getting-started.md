@@ -179,3 +179,4 @@ A couple of notes:
 - **Every run's JSON is kept** in `reports/data/archive/`, named to match its HTML report. A same-day rerun of the same site keeps the earlier copy with its timestamp appended.
 - **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.
+- **Run shop and performance tests in their own Claude Code session.** Both assume a fresh browser. A second run in the same session inherits the first one's cache and cart, so its timings come out warm and shop can miss prices that change once something is in the cart.
