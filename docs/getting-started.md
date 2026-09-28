@@ -52,7 +52,7 @@ From inside the `kosh` folder, run:
 claude --plugin-dir .
 ```
 
-This starts Claude Code with kosh loaded as a plugin. Stay inside the `kosh` folder for the whole session: the tests save their results relative to the folder you're in, so starting from anywhere else puts them in the wrong place.
+This starts Claude Code with kosh loaded as a plugin. Stay inside the `kosh` folder for the whole session: the tests save their results relative to the folder you're in, so starting from anywhere else puts them in the wrong place. It also keeps the browser from starting: if kosh's browser tools are missing, or `/mcp` lists the `playwright` server as failed, check that you started Claude Code from the `kosh` folder.
 
 ### Trust the project settings
 
@@ -172,6 +172,7 @@ When kosh hits one of these, it tells you which gate it found and leaves the bro
 A couple of notes:
 
 - **Private sites need access, not just a login.** If your WordPress.com account hasn't been granted access to that specific site, logging in won't clear the gate — you'll need to request access first.
+- **Moved sites:** if the URL redirects to another host (say the site moved to a custom domain), kosh stops and tells you where it landed, rather than testing a site you didn't ask for. Re-run with the new URL. A redirect between `example.com` and `www.example.com`, or from `http` to `https`, isn't a move.
 - **Unattended runs:** if no one's at the keyboard (e.g. kosh is launched from automation), pass a share/preview link that already carries access as the URL — kosh uses it directly. Don't store site passwords or account credentials in the repo.
 
 ## Tips
@@ -179,4 +180,5 @@ A couple of notes:
 - **Every run's JSON is kept** in `reports/data/archive/`, named to match its HTML report. A same-day rerun of the same site keeps the earlier copy with its timestamp appended.
 - **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.
+- **Restart Claude Code after updating kosh.** A session keeps the browser setup it started with, so after a `git pull` an open session still runs the old one. If a test stops because `__kosh` isn't defined, that's why: exit and start again from the `kosh` folder.
 - **Run shop and performance tests in their own Claude Code session.** Both assume a fresh browser. A second run in the same session inherits the first one's cache and cart, so its timings come out warm and shop can miss prices that change once something is in the cart.

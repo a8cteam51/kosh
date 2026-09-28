@@ -1,9 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { describeProvenance, hashSkill, stamp } = require('../scripts/stamp-provenance.js');
+const { schemaFor } = require('../scripts/validate-report.js');
+
+const ROOT = path.join(__dirname, '..');
 
 const HASH = /^[0-9a-f]{64}$/;
 const freshRun = () => ({ timestamp: '2026-09-21T12:00:00Z', provenance: { model: 'claude-test-1' } });
@@ -24,7 +28,32 @@ test('a fresh run is stamped with version, model, skill hash and seal', () => {
   assert.equal(report.provenance.model, 'claude-test-1');
   assert.match(report.provenance.pluginVersion, /^\d+\.\d+\.\d+$/);
   assert.match(report.provenance.skills['functional-design'], HASH);
+  assert.equal(report.provenance.collectors, hashSkill(path.join(ROOT, 'collectors')));
+  assert.deepEqual(report.provenance.playwrightMcp, require('../.mcp.json').mcpServers.playwright.args);
   assert.match(report.provenance.seal, HASH);
+});
+
+test('a block sealed before collectors and playwrightMcp existed is kept', () => {
+  const skills = { 'functional-design': 'c'.repeat(64) };
+  const report = freshRun();
+  const seal = crypto.createHash('sha256').update(JSON.stringify([report.timestamp, '1.3.0', Object.entries(skills)])).digest('hex');
+  report.provenance = { model: 'claude-test-1', pluginVersion: '1.3.0', skills, seal };
+  const sealed = structuredClone(report);
+
+  assert.equal(stamp(report, ['--functional']), 'kept');
+  assert.deepEqual(report, sealed);
+});
+
+test('a sealed block with collectors or playwrightMcp edited is restamped', () => {
+  for (const edit of [(p) => { p.collectors = 'd'.repeat(64); }, (p) => { p.playwrightMcp = ['@playwright/mcp@latest']; }, (p) => { delete p.collectors; }]) {
+    const report = freshRun();
+    stamp(report, ['--functional']);
+    const stamped = structuredClone(report.provenance);
+    edit(report.provenance);
+
+    assert.equal(stamp(report, ['--functional']), 'stamped');
+    assert.deepEqual(report.provenance, stamped);
+  }
 });
 
 for (const flags of [['--functional', '--performance'], ['--functional', '--a11y'], ['--skip-validation']]) {
@@ -122,4 +151,13 @@ test('describeProvenance shortens hashes and tolerates partial blocks', () => {
     'kosh 1.1.0 · model m · skill aeo@abcdef012345'
   );
   assert.equal(describeProvenance({ model: 'm' }), 'kosh ? · model m');
+});
+
+test('every JSON Schema documents exactly the fields the stamp writes, the same way', () => {
+  const report = freshRun();
+  stamp(report, ['--shop']);
+  const schemas = ['shop', 'aeo', 'performance'].map((type) => schemaFor(type).properties.provenance);
+
+  assert.deepEqual(Object.keys(schemas[0].properties).sort(), Object.keys(report.provenance).sort());
+  for (const schema of schemas.slice(1)) assert.deepEqual(schema, schemas[0]);
 });

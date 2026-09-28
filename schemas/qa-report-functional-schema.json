@@ -6,6 +6,8 @@
     "model": "claude-sonnet-5",
     "pluginVersion": "added by scripts/run-qa-report.sh — do not write this field",
     "skills": {"functional-design": "sha256 of the skill directory, added by scripts/run-qa-report.sh — do not write this field"},
+    "collectors": "sha256 of collectors/, added by scripts/run-qa-report.sh — do not write this field",
+    "playwrightMcp": ["the Playwright MCP arguments from .mcp.json, added by scripts/run-qa-report.sh — do not write this field"],
     "seal": "added by scripts/run-qa-report.sh — do not write this field"
   },
   "environment": "production",

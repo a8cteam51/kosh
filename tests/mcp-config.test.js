@@ -18,6 +18,12 @@ test('playwright mcp ignores tools a page registers', () => {
   assert.ok(args.includes('--no-webmcp'), 'without --no-webmcp, a tested page can add tools to the model\'s toolset');
 });
 
+test('playwright mcp loads the collectors into every page', () => {
+  const script = args[args.indexOf('--init-script') + 1];
+  assert.ok(args.includes('--init-script'), 'without --init-script, __kosh is undefined in every page');
+  assert.ok(fs.existsSync(path.join(ROOT, script)), `${script} is missing, and Playwright MCP won't start without it`);
+});
+
 test('the plugin manifest uses .mcp.json', () => {
   assert.strictEqual(require(path.join(ROOT, '.claude-plugin/plugin.json')).mcpServers, './.mcp.json');
 });

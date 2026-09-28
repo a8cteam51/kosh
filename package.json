@@ -3,5 +3,8 @@
   "private": true,
   "dependencies": {
     "ajv": "^8.20.0"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
   }
 }
