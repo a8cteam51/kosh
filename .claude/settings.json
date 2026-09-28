@@ -14,7 +14,7 @@
       "mcp__playwright__browser_snapshot",
       "mcp__playwright__browser_tabs",
       "mcp__playwright__browser_navigate",
-      "mcp__playwright__browser_run_code",
+      "mcp__playwright__browser_fill_form",
       "mcp__playwright__browser_evaluate",
       "mcp__playwright__browser_wait_for",
       "mcp__playwright__browser_press_key",
