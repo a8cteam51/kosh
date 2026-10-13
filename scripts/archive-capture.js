@@ -24,7 +24,9 @@ fs.renameSync(source, taken);
 const entries = fs.readFileSync(taken, 'utf8').split('\n').flatMap((line) => {
   try { return [JSON.parse(line)]; } catch { return []; }
 });
-const visits = new Set(entries.filter((entry) => entry.type === 'visit' && reportHost && host(entry.url) === reportHost).map((entry) => entry.visit));
+// A page can redirect off the report's host mid-run, and it's still a page the run asked for.
+const onReportHost = (visit) => [visit.url, ...(visit.redirectedFrom ?? [])].some((url) => host(url) === reportHost);
+const visits = new Set(entries.filter((entry) => entry.type === 'visit' && reportHost && onReportHost(entry)).map((entry) => entry.visit));
 const kept = entries.filter((entry) => (entry.visit ? visits.has(entry.visit) : entry.type === 'truncated'));
 
 try {

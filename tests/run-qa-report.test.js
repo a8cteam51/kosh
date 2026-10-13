@@ -128,10 +128,10 @@ const CAPTURE = [
   { type: 'truncated', reason: 'file' },
 ];
 const captureAt = (box, session = SESSION) => path.join(box.reportsDir, 'data', `capture-${session}.jsonl`);
-const writeCapture = (box, session) => {
+const writeCapture = (box, session, entries = CAPTURE) => {
   const file = captureAt(box, session);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${CAPTURE.map((entry) => JSON.stringify(entry)).join('\n')}\nnot json\n`);
+  fs.writeFileSync(file, `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\nnot json\n`);
   return file;
 };
 const archivedCapture = (box, suffix = '') => path.join(box.reportsDir, 'data', 'archive', `WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01${suffix}.capture.jsonl`);
@@ -148,6 +148,22 @@ test("a skill's rendered report takes its session's page capture, for its own ho
   assert.match(output, /Page capture archived: .*\(2 visits on example\.com, 2 entries for other hosts dropped\)/);
   assert.ok(!fs.existsSync(capture), 'the capture is still there for the next run to inherit');
   assert.deepEqual(lines(archivedCapture(box)), CAPTURE.filter((entry) => entry.visit !== 'a-2'));
+});
+
+test('a page that redirected off the report host mid-run stays in its capture', (t) => {
+  const box = sandbox(t);
+  const redirected = [
+    { type: 'visit', visit: 'b-1', url: 'https://example.com/', redirectedFrom: [] },
+    { type: 'visit', visit: 'b-2', url: 'https://shop.example.com/cart/', redirectedFrom: ['https://example.com/shop/'] },
+    { type: 'network', visit: 'b-2', url: 'https://shop.example.com/cart.js', status: 404 },
+    { type: 'visit', visit: 'b-3', url: 'https://cdn.example.net/x', redirectedFrom: ['https://other-client.example.org/go'] },
+  ];
+  writeCapture(box, SESSION, redirected);
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
+
+  assert.equal(status, 0, output);
+  assert.deepEqual(lines(archivedCapture(box)).map((entry) => entry.visit), ['b-1', 'b-2', 'b-2']);
 });
 
 test("another session's capture is left alone, and named in the warning", (t) => {
