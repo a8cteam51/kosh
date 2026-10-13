@@ -152,3 +152,15 @@ test('an AEO-shaped report missing mode is refused without advice that cannot wo
   assert.match(stderr, /missing `mode: "aeo"`/);
   assert.doesNotMatch(stderr, /--aeo/);
 });
+
+test('both renderers forbid scripts, and neither report needs one', (t) => {
+  const box = sandbox(t);
+  const aeo = spawnSync('node', [GENERATOR, path.join(__dirname, 'fixtures/aeo.json'), '--aeo'], { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir } });
+  assert.equal(aeo.status, 0, aeo.stderr);
+  const aeoHtml = fs.readFileSync(aeo.stdout.match(/^HTML report generated: (.+)$/m)[1], 'utf8');
+
+  for (const html of [render(box, []).html, aeoHtml]) {
+    assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">`));
+    assert.doesNotMatch(html, /<script|\son[a-z]+\s*=/i);
+  }
+});

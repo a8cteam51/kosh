@@ -25,6 +25,7 @@ NC='\033[0m' # No Color
 QA_REPORT_JSON="$1"
 SCRIPT_PATH="$(dirname "$0")/generate-report.js"
 STAMP_SCRIPT_PATH="$(dirname "$0")/stamp-provenance.js"
+CAPTURE_SCRIPT_PATH="$(dirname "$0")/archive-capture.js"
 
 # Extract test type flags (everything after the JSON file argument)
 TEST_TYPE_FLAGS="${@:2}"
@@ -113,11 +114,15 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   DATA_DIR="$(dirname "$REPORT_FILE")/data"
   ARCHIVE_DIR="$DATA_DIR/archive"
   ARCHIVE_JSON="$ARCHIVE_DIR/$(basename "${REPORT_FILE%.html}").json"
+  ARCHIVE_CAPTURE="${ARCHIVE_JSON%.json}.capture.jsonl"
 
   # The HTML name carries only a date, so a same-day rerun moves the previous run aside under its own timestamp.
   if [ -e "$ARCHIVE_JSON" ] && ! cmp -s "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
     OLD_STAMP=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).timestamp" "$ARCHIVE_JSON" | tr -c 'A-Za-z0-9\n' '-')
     mv "$ARCHIVE_JSON" "${ARCHIVE_JSON%.json}_$OLD_STAMP.json"
+    if [ -e "$ARCHIVE_CAPTURE" ]; then
+      mv "$ARCHIVE_CAPTURE" "${ARCHIVE_JSON%.json}_$OLD_STAMP.capture.jsonl"
+    fi
   fi
 
   if [ "$QA_REPORT_JSON" -ef "$ARCHIVE_JSON" ]; then
@@ -126,6 +131,9 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
     echo -e "${BLUE}Source data archived: $ARCHIVE_JSON${NC}"
     # Only a skill's own output goes, so the next run saves its report without reading this one first.
     if [ "$(dirname "$QA_REPORT_JSON")" -ef "$DATA_DIR" ] && [[ "$(basename "$QA_REPORT_JSON")" =~ ^qa-report-[a-z]+\.json$ ]]; then
+      # A skill's rendered report ends its run, so the session's page capture goes with it.
+      node "$CAPTURE_SCRIPT_PATH" "$ARCHIVE_JSON" "$ARCHIVE_CAPTURE" \
+        || echo -e "${YELLOW}Warning: could not archive this session's page capture${NC}"
       rm -f "$QA_REPORT_JSON" && echo -e "${BLUE}Source JSON removed: $QA_REPORT_JSON${NC}" \
         || echo -e "${YELLOW}Warning: could not remove $QA_REPORT_JSON; the next run must read it before overwriting it${NC}"
     fi

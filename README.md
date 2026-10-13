@@ -47,13 +47,13 @@ For detailed setup instructions (including troubleshooting), see the [Getting St
 skills/          Full testing procedures, invoked as /kosh:a11y, /kosh:aeo, /kosh:functional-design, /kosh:performance, /kosh:shop
 schemas/         JSON schemas for report validation
 shared/          Canonical blocks each skill carries a verbatim copy of
-collectors/      Page-side code Playwright MCP loads into every page (window.__kosh)
-scripts/         Report generation, validation and provenance scripts
-hooks/           Session hook that creates reports/data/ on startup
+collectors/      Code Playwright MCP loads: into every page (window.__kosh), and in Node for every tab (the page capture)
+scripts/         Report generation, validation, provenance and capture-archive scripts
+hooks/           Session hook that creates reports/data/ on startup, and a guard that keeps page captures read-only
 evals/           Promptfoo regression checks for skill decision rules
-tests/           node --test checks for the scripts, the collectors, skill snippets, shared-block copies, portability, JSON files, the Playwright MCP flags and allowlist, skill ↔ schema drift, report validation and redacted report fixtures — run by .github/workflows/ci.yml on every PR
-reports/data/archive/  Past runs' JSON, named to match the HTML they produced
-.mcp.json        Playwright MCP server configuration (pinned, --isolated, --no-webmcp, --init-script)
+tests/           node --test checks for the scripts, the collectors, the capture and its guard, skill snippets, shared-block copies, portability, JSON files, the Playwright MCP flags and allowlist, skill ↔ schema drift, report validation and redacted report fixtures — run by .github/workflows/ci.yml on every PR
+reports/data/archive/  Past runs' JSON and page captures, named to match the HTML they produced
+.mcp.json        Playwright MCP server configuration (pinned, --isolated, --no-webmcp, --init-script, --init-page)
 .claude/         Project settings and Playwright tool permissions
 .github/         CI workflow — runs tests/ on every PR and push to trunk
 ```

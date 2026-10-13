@@ -64,6 +64,9 @@ const escHtml = (val) =>
 
 const escAttr = escHtml;
 
+// The reports run no script, so text a tested site wrote can't run in a client's browser even if an escape is missed.
+const CSP = "script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+
 const renderProvenance = (provenance) =>
   provenance && typeof provenance === 'object' ? `<p>${escHtml(describeProvenance(provenance))}</p>` : '';
 
@@ -717,6 +720,7 @@ const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>kosh ${escHtml(runTypesLabel)} QA report — ${escHtml(websiteName)}</title>
 <style>${styles}</style>
@@ -1336,6 +1340,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>kosh AEO report — ${escHtml(websiteName)}</title>
 <style>${styles}</style>
