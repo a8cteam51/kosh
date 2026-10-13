@@ -24,6 +24,13 @@ test('playwright mcp loads the collectors into every page', () => {
   assert.ok(fs.existsSync(path.join(ROOT, script)), `${script} is missing, and Playwright MCP won't start without it`);
 });
 
+test('playwright mcp records every page through the capture', () => {
+  const file = args[args.indexOf('--init-page') + 1];
+  assert.ok(args.includes('--init-page'), 'without --init-page, nothing records page loads, console errors or failed requests');
+  assert.ok(fs.existsSync(path.join(ROOT, file)), `${file} is missing, and Playwright MCP won't start without it`);
+  assert.match(file, /^collectors\//, 'outside collectors/, the provenance collectors hash would not cover the capture');
+});
+
 test('the plugin manifest uses .mcp.json', () => {
   assert.strictEqual(require(path.join(ROOT, '.claude-plugin/plugin.json')).mcpServers, './.mcp.json');
 });

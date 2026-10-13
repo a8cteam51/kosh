@@ -178,6 +178,7 @@ A couple of notes:
 ## Tips
 
 - **Every run's JSON is kept** in `reports/data/archive/`, named to match its HTML report. A same-day rerun of the same site keeps the earlier copy with its timestamp appended.
+- **Beside it, a `.capture.jsonl` file** holds what the browser itself recorded on that site's pages during the run: load timings, console errors and warnings, and failed requests. Claude can read it but isn't allowed to change it, so it stays a record of what happened.
 - **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.
 - **Restart Claude Code after updating kosh.** A session keeps the browser setup it started with, so after a `git pull` an open session still runs the old one. If a test stops because `__kosh` isn't defined, that's why: exit and start again from the `kosh` folder.

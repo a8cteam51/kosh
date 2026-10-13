@@ -33,8 +33,10 @@ const write = (box, name, value) => {
   return file;
 };
 
+const SESSION = 'wrapper-test';
+
 const run = (box, command, args) => {
-  const { status, stdout, stderr, error } = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir } });
+  const { status, stdout, stderr, error } = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir, CLAUDE_CODE_SESSION_ID: SESSION } });
   assert.ifError(error);
   return { status, output: (stdout + stderr).replace(/\x1b\[[0-9;]*m/g, '') };
 };
@@ -114,6 +116,119 @@ test('the report a skill wrote is removed once its stamped copy is archived', (t
   assert.equal(status, 0, output);
   assert.ok(!fs.existsSync(json), 'the source JSON is still there');
   assert.ok(JSON.parse(fs.readFileSync(archiveCopy(box), 'utf8')).provenance.seal, 'the archive copy is unstamped');
+});
+
+const CAPTURE = [
+  { type: 'visit', visit: 'a-1', url: 'https://example.com/' },
+  { type: 'load', visit: 'a-1', loadTime: 900 },
+  { type: 'visit', visit: 'a-2', url: 'https://other-client.example.org/' },
+  { type: 'console', visit: 'a-2', level: 'error', text: 'another client' },
+  { type: 'visit', visit: 'a-3', url: 'https://www.example.com/about/' },
+  { type: 'network', visit: 'a-3', url: 'https://cdn.example.net/app.js', status: 404 },
+  { type: 'truncated', reason: 'file' },
+];
+const captureAt = (box, session = SESSION) => path.join(box.reportsDir, 'data', `capture-${session}.jsonl`);
+const writeCapture = (box, session) => {
+  const file = captureAt(box, session);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${CAPTURE.map((entry) => JSON.stringify(entry)).join('\n')}\nnot json\n`);
+  return file;
+};
+const archivedCapture = (box, suffix = '') => path.join(box.reportsDir, 'data', 'archive', `WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01${suffix}.capture.jsonl`);
+const lines = (file) => fs.readFileSync(file, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+
+test("a skill's rendered report takes its session's page capture, for its own host only", (t) => {
+  const box = sandbox(t);
+  const json = write(box, SKILL_OUTPUT, report());
+  const capture = writeCapture(box);
+
+  const { status, output } = run(box, WRAPPER, [json]);
+
+  assert.equal(status, 0, output);
+  assert.match(output, /Page capture archived: .*\(2 visits on example\.com, 2 entries for other hosts dropped\)/);
+  assert.ok(!fs.existsSync(capture), 'the capture is still there for the next run to inherit');
+  assert.deepEqual(lines(archivedCapture(box)), CAPTURE.filter((entry) => entry.visit !== 'a-2'));
+});
+
+test("another session's capture is left alone, and named in the warning", (t) => {
+  const box = sandbox(t);
+  const capture = writeCapture(box, 'another-session');
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
+
+  assert.equal(status, 0, output);
+  assert.match(output, /no page capture at .*capture-wrapper-test\.jsonl, so none was archived \(left alone: capture-another-session\.jsonl\)/);
+  assert.ok(fs.existsSync(capture), "another session's capture was taken");
+  assert.ok(!fs.existsSync(archivedCapture(box)));
+});
+
+test('a report the archiver cannot read leaves the capture where it was', (t) => {
+  const box = sandbox(t);
+  const capture = writeCapture(box);
+
+  const { status } = spawnSync('node', [path.join(__dirname, '../scripts/archive-capture.js'), path.join(box.root, 'missing.json'), archivedCapture(box)], { env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir, CLAUDE_CODE_SESSION_ID: SESSION } });
+
+  assert.notEqual(status, 0);
+  assert.ok(fs.existsSync(capture), 'the capture was moved before the report was read');
+});
+
+test('a capture that cannot be archived is kept, and the warning says where', (t) => {
+  const box = sandbox(t);
+  const before = fs.readFileSync(writeCapture(box), 'utf8');
+  fs.mkdirSync(archivedCapture(box), { recursive: true });
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
+
+  assert.equal(status, 0, output);
+  const stranded = output.match(/this run's capture is still at (\S+)/);
+  assert.ok(stranded, output);
+  assert.match(output, /could not archive this session's page capture/);
+  assert.equal(fs.readFileSync(stranded[1], 'utf8'), before);
+});
+
+test("a rendered report that isn't a skill's own output leaves the capture alone", (t) => {
+  const box = sandbox(t);
+  const capture = writeCapture(box);
+
+  assert.equal(run(box, WRAPPER, [write(box, 'qa-report-functional.json', report())]).status, 0);
+  assert.equal(run(box, WRAPPER, [archiveCopy(box)]).status, 0);
+
+  assert.ok(fs.existsSync(capture), 'a re-render took the capture of the run still in progress');
+});
+
+test('a same-day rerun moves the previous capture aside with its report', (t) => {
+  const box = sandbox(t);
+  writeCapture(box);
+  assert.equal(run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]).status, 0);
+
+  writeCapture(box);
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report((r) => { r.timestamp = '2026-01-01T09:00:00Z'; }))]);
+
+  assert.equal(status, 0, output);
+  assert.equal(lines(archivedCapture(box, '_2026-01-01T00-00-00Z')).length, 5);
+  assert.equal(lines(archivedCapture(box)).length, 5);
+});
+
+test('rendering the same report again adds to its archived capture', (t) => {
+  const box = sandbox(t);
+  for (let i = 0; i < 2; i += 1) {
+    writeCapture(box);
+    assert.equal(run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]).status, 0);
+  }
+
+  assert.equal(lines(archivedCapture(box)).length, 10);
+});
+
+test('a report with no url drops the capture with a warning', (t) => {
+  const box = sandbox(t);
+  const capture = writeCapture(box);
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report((r) => { delete r.url; }))]);
+
+  assert.equal(status, 0, output);
+  assert.match(output, /no usable url, so this session's page capture \(7 entries\) was dropped/);
+  assert.ok(!fs.existsSync(capture));
+  assert.ok(!fs.existsSync(archivedCapture(box)));
 });
 
 for (const [where, name] of [
