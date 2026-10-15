@@ -1,4 +1,4 @@
-## Reachability Gate Check — MANDATORY before any testing
+## Reachability gate check
 
 Some WordPress sites are gated and not publicly reachable: the browser loads a coming-soon launchpad, a password prompt, or a private-site notice instead of the real site. Others have moved, and the URL redirects to another host. Testing either produces an empty or misleading report. **After the first navigation to the homepage, before any other step, run this check** with `browser_evaluate`, passing the URL you were asked to test:
 

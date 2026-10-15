@@ -25,10 +25,11 @@ function hashSkill(dir) {
 }
 
 // Catches accidental copy-forward and echoed blocks (new run, new timestamp, seal mismatch); unkeyed, so not proof against deliberate forgery.
-function sealFor(report, { pluginVersion, skills, collectors, playwrightMcp }) {
+function sealFor(report, { pluginVersion, skills, collectors, playwrightMcp, captureSha256 }) {
   const fields = [report.timestamp, pluginVersion, Object.entries(skills || {}).sort()];
-  // Blocks sealed before these two fields existed keep their seal.
+  // Blocks sealed before these fields existed keep their seal.
   if (collectors !== undefined || playwrightMcp !== undefined) fields.push(collectors, playwrightMcp);
+  if (captureSha256 !== undefined) fields.push(captureSha256);
   return crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex');
 }
 
@@ -56,6 +57,8 @@ function stamp(report, flags) {
     skills,
     collectors: hashSkill(path.join(ROOT, 'collectors')),
     playwrightMcp: mcp.mcpServers.playwright.args,
+    // Hashed from the capture before the stamp runs; the stamp can't recompute it.
+    ...(existing.captureSha256 !== undefined && { captureSha256: existing.captureSha256 }),
   };
   report.provenance = { ...stamped, seal: sealFor(report, stamped) };
   return 'stamped';

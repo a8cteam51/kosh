@@ -46,10 +46,15 @@
           "items": { "type": "string" },
           "description": "The Playwright MCP arguments (the pinned version and its flags) in kosh's .mcp.json when the report was rendered. A session started before .mcp.json changed ran with the older ones. Added by scripts/run-qa-report.sh — do not write this field."
         },
+        "captureSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the page capture archived beside the report as <name>.capture.jsonl, which a performance report's pages[] are built from. Added by scripts/run-qa-report.sh — do not write this field."
+        },
         "seal": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
-          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors and playwrightMcp, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
+          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors, playwrightMcp and captureSha256, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
         }
       }
     },

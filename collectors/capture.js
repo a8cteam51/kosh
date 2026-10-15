@@ -7,6 +7,9 @@ const MAX_TEXT = 500;
 const MAX_URL = 1000;
 const MAX_ROWS_PER_VISIT = 200;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const VITALS_FOR_MS = 10000;
+const VITALS_QUIET_MS = 1000;
+const VITALS_POLL_MS = 500;
 
 const captureFile = (env = process.env) => {
   const reportsDir = path.resolve(env.KOSH_REPORTS_DIR || path.join(__dirname, '../reports'));
@@ -22,6 +25,17 @@ const clip = (value, max) => {
 const isWeb = (url) => /^https?:/i.test(url);
 const bare = (url) => String(url).split('#')[0];
 
+// Only the site URL the run asked for keeps its query: a step the server or a login host chose can carry a token.
+const hopUrl = (from, to, first) => {
+  try {
+    const hop = new URL(from);
+    const host = (url) => url.host.replace(/^www\./, '');
+    return first && host(hop) === host(new URL(to)) ? from : `${hop.origin}${hop.pathname}`;
+  } catch {
+    return '';
+  }
+};
+
 const safe = (fn) => (...args) => {
   try {
     const result = fn(...args);
@@ -29,7 +43,7 @@ const safe = (fn) => (...args) => {
   } catch {}
 };
 
-// ponytail: runs in the page's own world, so a page that patches performance can fake its timings; a CDP isolated world closes that.
+// ponytail: these reads run in the page's own world, so a page that patches performance can fake its timings; a CDP isolated world closes that.
 const readTiming = () => new Promise((resolve) => {
   const started = Date.now();
   const read = () => {
@@ -37,8 +51,12 @@ const readTiming = () => new Promise((resolve) => {
     const viewport = { width: innerWidth, height: innerHeight };
     if (nav && nav.loadEventEnd > 0) {
       const resources = performance.getEntriesByType('resource');
+      let gate = null;
+      try { gate = __kosh.gate(location.href).gate; } catch {}
       return resolve({
+        ...(gate && { gate: String(gate) }),
         documentUrl: nav.name,
+        timeOrigin: performance.timeOrigin,
         viewport,
         loadTime: Math.round(nav.loadEventEnd),
         domContentLoaded: Math.round(nav.domContentLoadedEventEnd),
@@ -53,6 +71,38 @@ const readTiming = () => new Promise((resolve) => {
   };
   read();
 });
+
+// CLS is the largest burst of shifts under 1 s apart and at most 5 s long, leaving out shifts just after input: https://web.dev/articles/cls
+const readVitals = () => {
+  const buffered = (type) => {
+    const observer = new PerformanceObserver(() => {});
+    observer.observe({ type, buffered: true });
+    const entries = observer.takeRecords();
+    observer.disconnect();
+    return entries;
+  };
+  const paints = buffered('largest-contentful-paint');
+  const shifts = buffered('layout-shift').filter((shift) => !shift.hadRecentInput);
+  let cls = 0;
+  let burst = 0;
+  let first = 0;
+  let last = 0;
+  for (const shift of shifts) {
+    if (burst && shift.startTime - last < 1000 && shift.startTime - first < 5000) burst += shift.value;
+    else [burst, first] = [shift.value, shift.startTime];
+    last = shift.startTime;
+    cls = Math.max(cls, burst);
+  }
+  const loaded = performance.getEntriesByType('navigation')[0]?.loadEventEnd ?? 0;
+  const now = performance.now();
+  return {
+    timeOrigin: performance.timeOrigin,
+    lcp: paints.length ? Math.round(paints.at(-1).startTime) : null,
+    cls: Math.round(cls * 1000) / 1000,
+    quietFor: now - Math.max(loaded, ...paints.map((entry) => entry.startTime), ...shifts.map((entry) => entry.startTime)),
+    sinceLoad: now - loaded,
+  };
+};
 
 const writers = new Map();
 const writerFor = (file) => {
@@ -88,6 +138,7 @@ let visits = 0;
 
 exports.captureFile = captureFile;
 exports.readTiming = readTiming;
+exports.readVitals = readVitals;
 
 exports.default = async ({ page }) => {
   try {
@@ -116,21 +167,41 @@ exports.default = async ({ page }) => {
     const consoleRow = (entry) => (held ? held.push([current, entry]) : row(current, entry));
 
     const writeVisit = (visit) => {
-      write({ type: 'visit', visit: visit.id, url: clip(visit.url, MAX_URL), status: visit.status, redirectedFrom: visit.redirectedFrom, ...(visit.failure && { failure: clip(visit.failure, MAX_TEXT) }), ...(visit.caughtUp && { caughtUp: true }) });
+      write({ type: 'visit', visit: visit.id, url: clip(visit.url, MAX_URL), status: visit.status, redirectedFrom: visit.redirectedFrom.map((from, index) => hopUrl(from, visit.url, index === 0)), ...(visit.failure && { failure: clip(visit.failure, MAX_TEXT) }), ...(visit.caughtUp && { caughtUp: true }) });
+    };
+
+    // Late shifts count, so this reads until the visit ends or ten seconds after load, writing each change; the visit's last line is its value.
+    const recordVitals = async (visit, timeOrigin) => {
+      const started = Date.now();
+      let last = '';
+      try {
+        while (Date.now() - started < VITALS_FOR_MS) {
+          const read = await page.evaluate(readVitals);
+          if (read.timeOrigin !== timeOrigin) return;
+          const vitals = { lcp: read.lcp, cls: read.cls, settled: read.quietFor >= VITALS_QUIET_MS };
+          if (JSON.stringify(vitals) !== last) write({ type: 'vitals', visit: visit.id, ...vitals });
+          last = JSON.stringify(vitals);
+          if (read.sinceLoad >= VITALS_FOR_MS) return;
+          await new Promise((resolve) => setTimeout(resolve, VITALS_POLL_MS));
+        }
+      } catch {}
     };
 
     // A failed visit's load is Chrome's error page, whose timing entry carries the failed URL.
     const recordLoad = async (visit) => {
       if (!visit || visit.loaded || visit.failure) return;
       visit.loaded = true;
+      let timing;
       try {
-        const { documentUrl, ...timing } = await page.evaluate(readTiming);
-        // A redirect on load can answer for the next document.
-        if (documentUrl !== undefined && bare(documentUrl) !== bare(visit.url)) write({ type: 'load', visit: visit.id, loadTime: null, error: 'the timing came from another document' });
-        else write({ type: 'load', visit: visit.id, ...timing });
+        timing = await page.evaluate(readTiming);
       } catch (error) {
-        write({ type: 'load', visit: visit.id, loadTime: null, error: clip(String(error?.message).split('\n')[0], MAX_TEXT) });
+        return write({ type: 'load', visit: visit.id, loadTime: null, error: clip(String(error?.message).split('\n')[0], MAX_TEXT) });
       }
+      const { documentUrl, timeOrigin, ...load } = timing;
+      // A redirect on load can answer for the next document.
+      if (documentUrl !== undefined && bare(documentUrl) !== bare(visit.url)) return write({ type: 'load', visit: visit.id, viewport: load.viewport, loadTime: null, error: 'the timing came from another document' });
+      write({ type: 'load', visit: visit.id, ...load });
+      if (load.loadTime !== null) await recordVitals(visit, timeOrigin);
     };
 
     const newVisit = (url) => ({ id: `${processId}-${++visits}`, url, status: null, redirectedFrom: [], loaded: false, rows: 0 });

@@ -1,5 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const { uncovered } = require('./page-capture.js');
+const { captureFile } = require('../collectors/capture.js');
 
 const SCHEMAS = path.join(__dirname, '../schemas');
 const DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i;
@@ -40,9 +42,9 @@ function validate(report, type) {
   return check(report) ? [] : check.errors.map(describe);
 }
 
-// Only the performance skill records console and network data; the renderer's title uses the same test.
+// Only the performance skill records pages[], or console and network data before it; the renderer's title uses the same test.
 function looksLikePerformance(report) {
-  return ['mobile', 'desktop'].some((viewport) => report[viewport]?.console || report[viewport]?.network);
+  return Array.isArray(report.pages) || ['mobile', 'desktop'].some((viewport) => report[viewport]?.console || report[viewport]?.network);
 }
 
 // The content markers count alongside any flag, so leaving a flag out or passing the wrong one can't skip the check.
@@ -75,6 +77,15 @@ function checkReport(report, reportPath, types) {
       console.log(`Schema: no JSON Schema for ${type} yet, not validated.`);
     } else if (errors.length === 0) {
       console.log(`✓ Schema: valid against ${schemaPath}`);
+      const missing = type === 'performance' ? uncovered(report.visitedPages, report.pages) : [];
+      // The merge writes captureSha256 with every pages[] it builds, so rows without one came from the model.
+      if (type === 'performance' && report.pages.length && !report.provenance?.captureSha256) {
+        ok = false;
+        console.error(`✗ pages[] has rows the page capture didn't write. scripts/run-qa-report.sh builds them from the browser's record, and only for ${path.join(path.dirname(captureFile()), 'qa-report-performance.json')}: save the report there without pages[], and re-run.`);
+      } else if (missing.length) {
+        ok = false;
+        console.error(`✗ visitedPages lists pages the browser has no record of loading:\n${missing.map((url) => `  ${url}`).join('\n')}\nLoad each in the browser and re-run, or take it out of visitedPages if this run didn't test it.`);
+      }
     } else {
       ok = false;
       console.error(`✗ ${reportPath} does not match ${schemaPath}:\n${errors.map((e) => `  ${e}`).join('\n')}\nFix these fields in ${reportPath}, then re-run.`);

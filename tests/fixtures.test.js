@@ -3,14 +3,21 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { schemaFor, validate } = require('../scripts/validate-report.js');
+const { buildPages, readEntries } = require('../scripts/page-capture.js');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
 const names = fs.readdirSync(FIXTURES).filter((name) => name.endsWith('.json')).sort();
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(FIXTURES, name), 'utf8'));
 const typeOf = (name) => name.replace(/\.json$/, '').split('-')[0];
 
-// Opus 5 run 1 invented a top-level `summary` that nothing reads; the schema exists partly to refuse that.
-const EXPECTED_ERRORS = { 'performance-opus-5-run-1.json': ['/ must NOT have additional properties: summary'] };
+// Runs from before pages[] are refused for their shape and re-render with --skip-validation.
+const OLD_SHAPE = ["/ must have required property 'pages'", '/ must NOT have additional properties: mobile', '/ must NOT have additional properties: desktop'];
+// Opus 5 run 1 also invented a top-level `summary` that nothing reads; the schema exists partly to refuse that.
+const EXPECTED_ERRORS = {
+  'performance-opus-5-run-1.json': [...OLD_SHAPE, '/ must NOT have additional properties: summary'],
+  'performance-opus-5-run-3.json': OLD_SHAPE,
+  'performance-opus-5-5-run-3.json': OLD_SHAPE,
+};
 
 test('every fixture is checked against a JSON Schema', () => {
   assert.ok(names.length > 0, 'no fixtures found');
@@ -23,8 +30,9 @@ for (const name of names) {
   });
 }
 
+const PAGES = 'performance-opus-5-5-2026-10-13.json';
 const performance = (edit) => {
-  const report = fixture('performance-opus-5-5-run-3.json');
+  const report = fixture(PAGES);
   edit(report);
   return validate(report, 'performance');
 };
@@ -38,16 +46,22 @@ for (const [value, errors] of [
   });
 }
 
-test('a load time of 0 is refused, since it means loadEventEnd was read too early', () => {
-  assert.deepEqual(performance((r) => { r.mobile.loadTime = 0; }), ['/mobile/loadTime must be > 0']);
+test('a report must list at least one page it covered', () => {
+  assert.deepEqual(performance((r) => { r.visitedPages = []; }), ['/visitedPages must NOT have fewer than 1 items']);
 });
+
+for (const name of names.filter((file) => fs.existsSync(path.join(FIXTURES, file.replace(/\.json$/, '.capture.jsonl'))))) {
+  test(`${name}'s pages[] is what the merge builds from its capture`, () => {
+    assert.deepEqual(buildPages(readEntries(path.join(FIXTURES, name.replace(/\.json$/, '.capture.jsonl')))), fixture(name).pages);
+  });
+}
 
 test('a URL observed on the site is kept as written, whatever its scheme or shape', () => {
   const observed = [
-    { url: 'wss://example.com/socket', status: null, type: 'websocket' },
-    { url: 'http://exa mple.com/broken href', status: 404, type: 'image' },
+    { url: 'wss://example.com/socket', status: null, failure: 'net::ERR_FAILED', resourceType: 'websocket' },
+    { url: 'http://exa mple.com/broken href', status: 404, resourceType: 'image' },
   ];
-  assert.deepEqual(performance((r) => { r.mobile.network = observed; }), []);
+  assert.deepEqual(performance((r) => { r.pages[0].network = observed; }), []);
 });
 
 // No trailing \b: an underscore is a word character, so `site.com_backup` would slip past one.
@@ -63,7 +77,7 @@ test('the host scan finds hostnames, IP addresses and localhost, and skips file 
 
 // Fixtures are real runs in a public repo, so any other host means the redaction missed one. Site names are checked by hand.
 test('fixtures name no hosts but example domains', () => {
-  for (const name of names) {
+  for (const name of fs.readdirSync(FIXTURES).filter((file) => /\.jsonl?$/.test(file))) {
     assert.deepEqual(strayHosts(fs.readFileSync(path.join(FIXTURES, name), 'utf8')), [], name);
   }
 });

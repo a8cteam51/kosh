@@ -28,13 +28,14 @@ const sandbox = (t) => {
 
 // Runs the script itself, not `bash <script>`, so a lost executable bit fails here before it fails a skill.
 const run = (script, args, { cwd, reportsDir }, env) => {
+  const before = fs.readdirSync(cwd);
   const { status, stdout: raw, stderr, error } = spawnSync(script, args, { cwd, encoding: 'utf8', env });
   const stdout = (raw || '').replace(/\x1b\[[0-9;]*m/g, '');
   assert.equal(status, 0, error?.message ?? stderr + stdout);
   const html = stdout.match(/^Report location: (.+)$/m);
   assert.ok(html, `script did not report an HTML location:\n${stdout}`);
   assert.ok(html[1].startsWith(reportsDir + path.sep) && fs.existsSync(html[1]), `HTML not under ${reportsDir}: ${html[1]}`);
-  assert.deepEqual(fs.readdirSync(cwd), [], 'script wrote into the cwd');
+  assert.deepEqual(fs.readdirSync(cwd), before, 'script wrote into the cwd');
   return stdout;
 };
 
@@ -48,10 +49,23 @@ test('run-qa-report.sh renders and archives under KOSH_REPORTS_DIR from any cwd'
   assert.deepEqual(fs.readdirSync(path.join(box.reportsDir, 'data', 'archive')), ['REPORTS_DIR_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json']);
 });
 
+// A skill calls it as scripts/run-qa-report.sh from kosh's root, and a $0 like that isn't a path require() accepts.
+test('run-qa-report.sh runs when called by the relative path the skills use', (t) => {
+  const box = sandbox(t);
+  const json = path.join(box.reportsDir, 'data', 'qa-report-functional.json');
+  fs.writeFileSync(json, report('Reports Dir Fixture'));
+
+  const stdout = run('scripts/run-qa-report.sh', [json], { ...box, cwd: path.join(SCRIPTS, '..') }, { ...process.env, KOSH_REPORTS_DIR: box.reportsDir });
+
+  assert.doesNotMatch(stdout, /Cannot find module/);
+  assert.deepEqual(fs.readdirSync(path.join(box.reportsDir, 'data', 'archive')), ['REPORTS_DIR_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json']);
+});
+
 // A copy of scripts/ next to a temp reports/ exercises the production default without touching the real directory.
 test('without KOSH_REPORTS_DIR, the scripts use the reports/ next to their own directory', (t) => {
   const box = sandbox(t);
   fs.cpSync(SCRIPTS, path.join(box.root, 'scripts'), { recursive: true });
+  fs.cpSync(path.join(SCRIPTS, '../collectors'), path.join(box.root, 'collectors'), { recursive: true });
   // The input lives apart from the sandbox, so resolving reports/ from the input's location can't pass by accident.
   const inputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-reports-dir-input-'));
   t.after(() => fs.rmSync(inputDir, { recursive: true, force: true }));

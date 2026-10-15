@@ -9,6 +9,8 @@ const SKILLS = path.join(ROOT, 'skills');
 
 const blocks = fs.readdirSync(SHARED).filter((name) => name.endsWith('.md'));
 const skills = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+// A block every skill carries is left out; each rewrite adds its skill to the blocks it adopts.
+const CARRIERS = { 'screenshot-path.md': ['performance'] };
 
 test('shared/ and skills/ are not empty', () => {
   assert.ok(blocks.length > 0, 'no blocks in shared/');
@@ -19,7 +21,7 @@ for (const block of blocks) {
   const canonical = fs.readFileSync(path.join(SHARED, block), 'utf8').replace(/\n?$/, '\n');
   const [first] = canonical.split('\n');
 
-  for (const skill of skills) {
+  for (const skill of CARRIERS[block] ?? skills) {
     test(`skills/${skill}/SKILL.md carries shared/${block} verbatim`, () => {
       assert.ok(canonical.trim(), `shared/${block} is empty`);
       // A newline on both sides pins the copy to whole lines, so nothing can be added before or after it.

@@ -9,7 +9,7 @@ A Claude Code plugin for testing WordPress sites. Run automated functional, perf
 Kosh tests a site across five dimensions:
 
 - **Functional & design:** User journeys, layout consistency, link validation, OpenGraph metadata, content quality
-- **Performance:** Load times, console errors, network failures, mixed content
+- **Performance:** LCP and CLS, load timings, console errors, failed requests and mixed content across a site's key pages, recorded by the browser rather than reported by the model
 - **Accessibility:** WCAG 2.2 Level AA compliance: heading hierarchy, alt text, color contrast, keyboard navigation, form labels, ARIA
 - **Shop (WooCommerce):** The guest purchase path — catalog, product pages, add to cart, cart quantity and removal operations, cart math, and the checkout form. Stops at the payment step and never places an order.
 - **AEO (Answer Engine Optimization):** How AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews discover, parse, understand, and cite the site. 49 signals across 8 criteria, status-based evaluation (pass / partial / fail / N/A), site-type-aware and content-driven.
@@ -48,7 +48,7 @@ skills/          Full testing procedures, invoked as /kosh:a11y, /kosh:aeo, /kos
 schemas/         JSON schemas for report validation
 shared/          Canonical blocks each skill carries a verbatim copy of
 collectors/      Code Playwright MCP loads: into every page (window.__kosh), and in Node for every tab (the page capture)
-scripts/         Report generation, validation, provenance and capture-archive scripts
+scripts/         Report generation, validation, provenance, the page-capture merge and summary, and run comparison
 hooks/           Session hook that creates reports/data/ on startup, and a guard that keeps page captures read-only
 evals/           Promptfoo regression checks for skill decision rules
 tests/           node --test checks for the scripts, the collectors, the capture and its guard, skill snippets, shared-block copies, portability, JSON files, the Playwright MCP flags and allowlist, skill ↔ schema drift, report validation and redacted report fixtures — run by .github/workflows/ci.yml on every PR
@@ -79,6 +79,7 @@ Every test type emits a JSON report with this common frame:
 
 Beyond that frame, each test type has its own shape — see `schemas/` for the authoritative per-type definitions:
 
-- **Functional & design / Performance / Accessibility** (`qa-report-functional-schema.json`, `qa-report-performance-schema.json`, `qa-report-accessibility-schema.json`) — `mobile` and `desktop` blocks carry the viewport-specific findings (page metadata, network errors, contrast failures, etc.).
+- **Functional & design / Accessibility** (`qa-report-functional-schema.json`, `qa-report-accessibility-schema.json`) — `mobile` and `desktop` blocks carry the viewport-specific findings (page metadata, network errors, contrast failures, etc.).
+- **Performance** (`qa-report-performance-schema.json`) — a `pages` list with one row per page and viewport (LCP, CLS, load timings, transfer sizes, console errors, failed requests), which `run-qa-report.sh` builds from the browser's page capture; the skill writes the findings. The HTML report shows it as a table with LCP and CLS banded by the Core Web Vitals thresholds.
 - **Shop** (`qa-report-shop-schema.json`) — the common frame plus a `shop` block recording what the journey actually exercised: platform, the discovered catalog/cart/checkout URLs, whether the store runs classic or blocks templates, the products tested, which cart operations were verified, and where the run stopped at checkout.
 - **AEO** (`qa-report-aeo-schema.json`) — `criteria` block with eight criterion sub-blocks (each containing pass / partial / fail / N/A signal evaluations), a top-level `summary` with signal counts, plus `siteType`, `siteTypeConfidence`, and a `technicalNotes.applicableSchemas` relevance map.

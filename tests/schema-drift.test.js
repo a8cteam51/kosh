@@ -34,13 +34,14 @@ for (const [type, skill] of Object.entries(EXAMPLE_SCHEMAS)) {
   });
 }
 
-// The example carries two placeholders a real report never would, so they are filled in before validating.
+// The example's timestamp is a placeholder a real report never carries, and pages[] is the wrapper's to write, so both are filled in before validating.
 test('performance skill report examples validate against the performance schema', () => {
   const examples = fences(path.join(ROOT, 'skills', 'performance', 'SKILL.md'), 'json').filter((f) => f.code.includes('"websiteName"'));
   assert.ok(examples.length > 0, 'no report example found in the performance skill');
 
   for (const example of examples) {
-    const filled = example.code.replace('"YYYY-MM-DDTHH:MM:SSZ"', '"2026-01-01T00:00:00Z"').replaceAll('"mobile|desktop|both"', '"both"');
-    assert.deepEqual(validate(JSON.parse(filled), 'performance'), [], `example at SKILL.md:${example.line}`);
+    const report = JSON.parse(example.code.replace('"YYYY-MM-DDTHH:MM:SSZ"', '"2026-01-01T00:00:00Z"'));
+    assert.equal(report.pages, undefined, `example at SKILL.md:${example.line} writes pages[], which the wrapper builds`);
+    assert.deepEqual(validate({ ...report, pages: [] }, 'performance'), [], `example at SKILL.md:${example.line}`);
   }
 });

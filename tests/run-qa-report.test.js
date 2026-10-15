@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { buildPages } = require('../scripts/page-capture.js');
 
 const WRAPPER = path.join(__dirname, '../scripts/run-qa-report.sh');
 const RENDERER = path.join(__dirname, '../scripts/generate-report.js');
@@ -173,7 +174,8 @@ test("another session's capture is left alone, and named in the warning", (t) =>
   const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
 
   assert.equal(status, 0, output);
-  assert.match(output, /no page capture at .*capture-wrapper-test\.jsonl, so none was archived \(left alone: capture-another-session\.jsonl\)/);
+  assert.match(output, /no page capture at .*capture-wrapper-test\.jsonl \(left alone: capture-another-session\.jsonl\)\. If this run's pages are in one of those, re-run from the Claude Code session that loaded them\./);
+  assert.doesNotMatch(output, /restart Claude Code/);
   assert.ok(fs.existsSync(capture), "another session's capture was taken");
   assert.ok(!fs.existsSync(archivedCapture(box)));
 });
@@ -225,14 +227,43 @@ test('a same-day rerun moves the previous capture aside with its report', (t) =>
   assert.equal(lines(archivedCapture(box)).length, 5);
 });
 
-test('rendering the same report again adds to its archived capture', (t) => {
+test("rendering the same report again keeps each run's capture beside its own JSON", (t) => {
   const box = sandbox(t);
-  for (let i = 0; i < 2; i += 1) {
-    writeCapture(box);
+  for (const loadTime of [900, 950]) {
+    writeCapture(box, SESSION, [CAPTURE[0], { ...CAPTURE[1], loadTime }]);
     assert.equal(run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]).status, 0);
   }
 
-  assert.equal(lines(archivedCapture(box)).length, 10);
+  const reports = archived(box).filter((name) => name.endsWith('.json'));
+  assert.equal(reports.length, 2);
+  for (const name of reports) {
+    const json = path.join(box.reportsDir, 'data', 'archive', name);
+    const capture = fs.readFileSync(json.replace(/\.json$/, '.capture.jsonl'));
+    assert.equal(JSON.parse(fs.readFileSync(json, 'utf8')).provenance.captureSha256, require('crypto').createHash('sha256').update(capture).digest('hex'), name);
+  }
+});
+
+test("a skill's report is sealed to the capture the archive holds, whatever its type, and a copied hash is replaced", (t) => {
+  const box = sandbox(t);
+  writeCapture(box);
+  fs.mkdirSync(path.dirname(archivedCapture(box)), { recursive: true });
+  fs.writeFileSync(archivedCapture(box), 'an orphan left by hand\n');
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report((r) => { r.provenance = { model: 'claude-test-1', captureSha256: 'copied-from-another-run' }; }))]);
+
+  assert.equal(status, 0, output);
+  const { provenance } = JSON.parse(fs.readFileSync(archiveCopy(box), 'utf8'));
+  assert.equal(provenance.captureSha256, require('crypto').createHash('sha256').update(fs.readFileSync(archivedCapture(box))).digest('hex'));
+  assert.ok(provenance.seal);
+});
+
+test('a skill report with no visits on its host drops a copied captureSha256', (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, CAPTURE.filter((entry) => entry.visit === 'a-2'));
+
+  assert.equal(run(box, WRAPPER, [write(box, SKILL_OUTPUT, report((r) => { r.provenance = { model: 'claude-test-1', captureSha256: 'copied-from-another-run' }; }))]).status, 0);
+
+  assert.ok(!('captureSha256' in JSON.parse(fs.readFileSync(archiveCopy(box), 'utf8')).provenance));
 });
 
 test('a report with no url drops the capture with a warning', (t) => {
@@ -317,3 +348,128 @@ for (const [flags, message] of [
     assert.ok(!fs.existsSync(box.reportsDir), 'something was written under reports/');
   });
 }
+
+const PERFORMANCE_OUTPUT = 'reports/data/qa-report-performance.json';
+const archivedPerformance = (box, ext = 'json') => path.join(box.reportsDir, 'data', 'archive', `WRAPPER_FIXTURE_PERFORMANCE_QA_REPORT_2026-01-01.${ext}`);
+const performanceReport = (edit = () => {}) => report((r) => {
+  Object.assign(r, { environment: 'production', visitedPages: ['https://example.com/'], provenance: { model: 'claude-test-1' } });
+  edit(r);
+});
+const MEASURED = [
+  { type: 'visit', visit: 'p-1', url: 'https://example.com/', status: 200, redirectedFrom: [] },
+  { type: 'load', visit: 'p-1', viewport: { width: 1920, height: 1080 }, loadTime: 900, domContentLoaded: 500, ttfb: 80, transferSize: 4000, resourceTransferSize: 60000 },
+  { type: 'vitals', visit: 'p-1', lcp: 700, cls: 0.01, settled: true },
+  { type: 'visit', visit: 'p-2', url: 'https://other-client.example.org/', status: 200, redirectedFrom: [] },
+];
+
+test("a performance report's pages[] is built from the capture, replacing the model's, and sealed to the archived capture", (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, MEASURED);
+  const json = write(box, PERFORMANCE_OUTPUT, performanceReport((r) => { r.pages = [{ url: 'https://example.com/', loadTime: 1 }]; }));
+
+  const { status, output } = run(box, WRAPPER, [json]);
+
+  assert.equal(status, 0, output);
+  assert.match(output, /Page capture merged: 1 page × viewport rows from 1 visits on example\.com/);
+  const archivedReport = JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8'));
+  assert.deepEqual(archivedReport.pages.map(({ url, viewport, loadTime, lcp }) => [url, viewport, loadTime, lcp]), [['https://example.com/', '1920x1080', 900, 700]]);
+  const capture = fs.readFileSync(archivedPerformance(box, 'capture.jsonl'));
+  assert.equal(archivedReport.provenance.captureSha256, require('crypto').createHash('sha256').update(capture).digest('hex'));
+  assert.ok(archivedReport.provenance.seal);
+  assert.deepEqual(fs.readdirSync(path.join(box.reportsDir, 'data')), ['archive']);
+});
+
+const INVENTED = (r) => { r.pages = buildPages(MEASURED).map((page) => ({ ...page, loadTime: 1, lcp: 1 })); };
+
+test('a report with pages[] gets them from the capture whatever flag it was rendered with', (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, MEASURED);
+
+  const { status, output } = run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, performanceReport(INVENTED)), '--functional']);
+
+  assert.equal(status, 0, output);
+  const archivedReport = JSON.parse(fs.readFileSync(path.join(box.reportsDir, 'data', 'archive', 'WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json'), 'utf8'));
+  assert.deepEqual(archivedReport.pages.map(({ loadTime, lcp }) => [loadTime, lcp]), [[900, 700]]);
+});
+
+test("a performance report with rows the merge didn't write is refused, pointing at the skill's own path", (t) => {
+  const box = sandbox(t);
+
+  const { status, output } = run(box, WRAPPER, [write(box, 'reports/data/qa-report-performance-example.json', performanceReport(INVENTED))]);
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /pages\[\] has rows the page capture didn't write/);
+  assert.ok(output.includes(path.join(box.reportsDir, 'data', 'qa-report-performance.json')), output);
+  assert.ok(!fs.existsSync(archivedPerformance(box)), 'the report was archived');
+});
+
+test('a skill report with no provenance block still gets its pages from the capture, sealed to it', (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, MEASURED);
+
+  const { status, output } = run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, performanceReport((r) => { delete r.provenance; }))]);
+
+  assert.equal(status, 0, output);
+  const archivedReport = JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8'));
+  assert.match(archivedReport.provenance.captureSha256, /^[0-9a-f]{64}$/);
+  assert.equal(archivedReport.provenance.model, 'unknown');
+  assert.deepEqual(archivedReport.pages.map(({ loadTime, lcp }) => [loadTime, lcp]), [[900, 700]]);
+});
+
+test("a merge that fails stops the render, so the model's numbers never reach a report", (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, MEASURED);
+  fs.mkdirSync(`${captureAt(box)}.taken`);
+
+  const { status, output } = run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, performanceReport(INVENTED))]);
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /could not merge this session's page capture .* Nothing was rendered\./);
+  assert.deepEqual(fs.readdirSync(box.reportsDir), ['data']);
+});
+
+test('a retry from a shell with no session id names the capture it left alone', (t) => {
+  const box = sandbox(t);
+  writeCapture(box, 'the-run', MEASURED);
+  fs.renameSync(captureAt(box, 'the-run'), `${captureAt(box, 'the-run')}.taken`);
+  const json = write(box, PERFORMANCE_OUTPUT, performanceReport());
+
+  const { status, output } = spawnSync(WRAPPER, [json], { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir, CLAUDE_CODE_SESSION_ID: '' } });
+
+  assert.notEqual(status, 0);
+  assert.match(output.join(''), /no page capture at .*capture\.jsonl \(left alone: capture-the-run\.jsonl\.taken\)\. If this run's pages are in one of those, re-run from the Claude Code session that loaded them\./);
+  assert.doesNotMatch(output.join(''), /restart Claude Code/);
+  assert.ok(fs.existsSync(`${captureAt(box, 'the-run')}.taken`));
+});
+
+test('a refused performance report keeps its capture, and the retry adds what the browser wrote since', (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, MEASURED.slice(0, 3));
+  const json = write(box, PERFORMANCE_OUTPUT, performanceReport((r) => { r.visitedPages.push('https://example.com/about/'); }));
+
+  const refused = run(box, WRAPPER, [json]);
+  assert.notEqual(refused.status, 0, refused.output);
+  assert.match(refused.output, /no record of loading:\n {2}https:\/\/example\.com\/about\//);
+
+  writeCapture(box, SESSION, [{ type: 'visit', visit: 'p-3', url: 'https://example.com/about/', status: 200, redirectedFrom: [] }]);
+  const { status, output } = run(box, WRAPPER, [json]);
+
+  assert.equal(status, 0, output);
+  assert.deepEqual(JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8')).pages.map((page) => page.url), ['https://example.com/', 'https://example.com/about/']);
+  assert.equal(lines(archivedPerformance(box, 'capture.jsonl')).length, 4);
+});
+
+test('re-rendering an archived performance report keeps its pages[] and its seal', (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, MEASURED);
+  assert.equal(run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, performanceReport())]).status, 0);
+  const before = fs.readFileSync(archivedPerformance(box), 'utf8');
+  writeCapture(box, SESSION, MEASURED);
+
+  const { status, output } = run(box, WRAPPER, [archivedPerformance(box)]);
+
+  assert.equal(status, 0, output);
+  assert.match(output, /Provenance \(kept\)/);
+  assert.equal(fs.readFileSync(archivedPerformance(box), 'utf8'), before);
+  assert.ok(fs.existsSync(captureAt(box)), "a re-render took the next run's capture");
+});
