@@ -69,7 +69,7 @@ kosh has five tests. Each one takes a URL — the site you want to test.
 /kosh:functional-design https://example.com
 ```
 
-**Performance test:** Checks load times, console errors, and network health:
+**Performance test:** Measures LCP, CLS and load timings, and finds console errors and failed requests, across the site's key pages at desktop and mobile:
 ```
 /kosh:performance https://example.com
 ```
@@ -178,8 +178,8 @@ A couple of notes:
 ## Tips
 
 - **Every run's JSON is kept** in `reports/data/archive/`, named to match its HTML report. A same-day rerun of the same site keeps the earlier copy with its timestamp appended.
-- **Beside it, a `.capture.jsonl` file** holds what the browser itself recorded on that site's pages during the run: load timings, console errors and warnings, and failed requests. Claude can read it but isn't allowed to change it, so it stays a record of what happened.
+- **Beside it, a `.capture.jsonl` file** holds what the browser itself recorded on that site's pages during the run: load timings, LCP and CLS, console errors and warnings, and failed requests. A performance report's page table is built from it, and Claude can read it but isn't allowed to change it, so it stays a record of what happened.
 - **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.
 - **Restart Claude Code after updating kosh.** A session keeps the browser setup it started with, so after a `git pull` an open session still runs the old one. If a test stops because `__kosh` isn't defined, that's why: exit and start again from the `kosh` folder.
-- **Run shop and performance tests in their own Claude Code session.** Both assume a fresh browser. A second run in the same session inherits the first one's cache and cart, so its timings come out warm and shop can miss prices that change once something is in the cart.
+- **Run shop tests in their own Claude Code session.** A second run in the same session inherits the first one's cart, and can miss prices that change once something is in it. The performance test closes the browser before it starts so its timings are cold, which means a gated site you logged into earlier in the session asks for the login again.

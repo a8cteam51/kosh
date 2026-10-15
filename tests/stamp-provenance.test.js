@@ -33,6 +33,21 @@ test('a fresh run is stamped with version, model, skill hash and seal', () => {
   assert.match(report.provenance.seal, HASH);
 });
 
+// The merge writes the hash before the stamp seals it, and only the merge may change it.
+test('a capture hash is sealed, and editing or removing it breaks the seal', () => {
+  const report = freshRun();
+  report.provenance.captureSha256 = 'e'.repeat(64);
+  assert.equal(stamp(report, ['--performance']), 'stamped');
+  assert.equal(report.provenance.captureSha256, 'e'.repeat(64));
+  assert.equal(stamp(report, ['--performance']), 'kept');
+
+  for (const edit of [(p) => { p.captureSha256 = 'f'.repeat(64); }, (p) => { delete p.captureSha256; }]) {
+    const edited = structuredClone(report);
+    edit(edited.provenance);
+    assert.equal(stamp(edited, ['--performance']), 'stamped');
+  }
+});
+
 test('a block sealed before collectors and playwrightMcp existed is kept', () => {
   const skills = { 'functional-design': 'c'.repeat(64) };
   const report = freshRun();
@@ -155,6 +170,7 @@ test('describeProvenance shortens hashes and tolerates partial blocks', () => {
 
 test('every JSON Schema documents exactly the fields the stamp writes, the same way', () => {
   const report = freshRun();
+  report.provenance.captureSha256 = 'e'.repeat(64);
   stamp(report, ['--shop']);
   const schemas = ['shop', 'aeo', 'performance'].map((type) => schemaFor(type).properties.provenance);
 

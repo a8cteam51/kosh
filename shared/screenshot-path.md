@@ -1,0 +1,1 @@
+- Save each screenshot with `browser_take_screenshot`, passing the full path as `filename`: `reports/screenshots/<name>.png`. A bare filename saves to the project root, and moving the file afterwards is a step that gets skipped. A finding's `screenshots` lists paths relative to `reports/`: `screenshots/<name>.png` for the file at `reports/screenshots/<name>.png`.

@@ -335,6 +335,94 @@ const visitedPagesList = visitedPages.length
   ? `<ul>${visitedPages.map((p) => `<li>${renderLink(p)}</li>`).join('')}</ul>`
   : '<p class="muted">Not recorded.</p>';
 
+// Core Web Vitals thresholds: https://web.dev/articles/vitals
+const BANDS = { lcp: [2500, 4000], cls: [0.1, 0.25] };
+const BAND_LABELS = { good: 'Good', fair: 'Needs improvement', poor: 'Poor' };
+const MOBILE_MAX_WIDTH = 767;
+const PERFORMANCE_FLOOR = 4;
+
+const measuredPages = Array.isArray(report.pages) ? report.pages.filter((page) => page && typeof page === 'object') : [];
+const pathOf = (url) => {
+  try { const parsed = new URL(url); return parsed.pathname + parsed.search; } catch { return String(url); }
+};
+const viewportLabel = (viewport) => {
+  const width = Number(String(viewport).split('x')[0]);
+  if (!/^\d+x\d+$/.test(String(viewport))) return 'unknown viewport';
+  return `${width <= MOBILE_MAX_WIDTH ? 'Mobile' : 'Desktop'} ${viewport.replace('x', '×')}`;
+};
+const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
+const ms = (value) => (isNumber(value) ? `${Math.round(value)} ms` : '—');
+const kb = (value) => (isNumber(value) ? `${Math.round(value / 1024)} KB` : '—');
+
+const vitalCell = (metric, value, settled) => {
+  if (!isNumber(value)) return '<td>—</td>';
+  // Banded on the number shown, so a value can't read as a threshold and sit in the band above it.
+  const shown = (metric === 'lcp' ? value / 1000 : value).toFixed(3);
+  const rated = Number(shown) * (metric === 'lcp' ? 1000 : 1);
+  const level = rated <= BANDS[metric][0] ? 'good' : rated <= BANDS[metric][1] ? 'fair' : 'poor';
+  return `<td class="vital vital--${level}">${shown}${metric === 'lcp' ? ' s' : ''}${settled === false ? '*' : ''}<span class="vital__band">${BAND_LABELS[level]}</span></td>`;
+};
+
+const pageRow = (page) => {
+  const ok = !page.failure && isNumber(page.status) && page.status < 300;
+  const status = ok ? '' : `<span class="page-status">${escHtml(page.failure ? `Failed: ${page.failure}` : `HTTP ${page.status ?? 'status unknown'}`)}</span>`;
+  const visits = page.visits > 1 ? ` <span class="muted">(${escHtml(page.visits)} loads, first measured)</span>` : '';
+  return `
+        <tr>
+          <th scope="row">${renderLink(page.url, pathOf(page.url))}${visits}${status}</th>
+          <td>${escHtml(viewportLabel(page.viewport))}</td>
+          ${vitalCell('lcp', page.lcp, page.vitalsSettled)}
+          ${vitalCell('cls', page.cls, page.vitalsSettled)}
+          <td class="num">${ms(page.loadTime)}</td>
+          <td class="num">${ms(page.ttfb)}</td>
+          <td class="num">${kb(page.transferSize)}</td>
+          <td class="num">${kb(page.resourceTransferSize)}</td>
+          <td class="num">${Array.isArray(page.console) ? page.console.length : 0}</td>
+          <td class="num">${Array.isArray(page.network) ? page.network.length : 0}</td>
+        </tr>`;
+};
+
+// A row seen on every page that loaded is site-wide; the rest name the pages they were seen on.
+const placeOf = (page) => `${pathOf(page.url)} (${viewportLabel(page.viewport)})`;
+const loadedPlaces = measuredPages.filter((page) => !page.failure).map(placeOf);
+const patterns = (kind, describe) => {
+  const seen = new Map();
+  for (const page of measuredPages) {
+    for (const row of Array.isArray(page[kind]) ? page[kind] : []) {
+      const key = describe(row || {});
+      if (!seen.has(key)) seen.set(key, new Set());
+      seen.get(key).add(placeOf(page));
+    }
+  }
+  return [...seen].map(([text, where]) => {
+    const scope = loadedPlaces.length > 1 && loadedPlaces.every((place) => where.has(place)) ? 'Site-wide' : [...where].join(', ');
+    return `<li><code>${escHtml(text)}</code> <span class="muted">${escHtml(scope)}</span></li>`;
+  }).join('');
+};
+const consolePatterns = patterns('console', (row) => `${row.level}: ${row.text}`);
+const networkPatterns = patterns('network', (row) => `${row.status ?? row.failure ?? 'no response'} ${row.resourceType}: ${row.url}`);
+
+const coveredPages = new Set(visitedPages).size;
+const pagesSection = measuredPages.length
+  ? `
+  <section class="pages-measured">
+    <h2>Pages measured</h2>
+    <p class="pages-measured__intro">Numbers recorded by the browser, not reported by the model: the first load of each page at each viewport, one lab load each. LCP and CLS are banded by the Core Web Vitals thresholds (LCP good up to 2.5 s, poor over 4 s; CLS good up to 0.1, poor over 0.25), which ranks the pages against each other but is not a Core Web Vitals assessment: that needs field data from real visitors. * means a new LCP candidate or layout shift arrived in the last second before the read ended. HTML and Files are the bytes transferred for the page's document and for everything else it loaded. Files near 0 KB means they came from a warm cache, which flatters the page's numbers.</p>
+    ${coveredPages < PERFORMANCE_FLOOR ? `<p class="pages-measured__coverage">This run covered ${coveredPages} page${coveredPages === 1 ? '' : 's'}; the performance check covers at least ${PERFORMANCE_FLOOR} where the site has them.</p>` : ''}
+    <div class="pages-measured__scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Page</th><th scope="col">Viewport</th><th scope="col">LCP</th><th scope="col">CLS</th><th scope="col">Load</th><th scope="col">TTFB</th><th scope="col">HTML</th><th scope="col">Files</th><th scope="col">Console</th><th scope="col">Failed requests</th></tr>
+        </thead>
+        <tbody>${measuredPages.map(pageRow).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${consolePatterns ? `<h3>Console errors and warnings</h3><ul class="patterns">${consolePatterns}</ul>` : ''}
+    ${networkPatterns ? `<h3>Failed requests</h3><ul class="patterns">${networkPatterns}</ul>` : ''}
+  </section>`
+  : '';
+
 const TOKENS = {
   bg: '#F8FAFC', surface: '#ffffff', border: '#E2E8F0',
   text: '#0F172A', muted: '#64748B', accent: '#7C3AED',
@@ -692,6 +780,24 @@ const styles = `
     font-size: 0.8125rem;
     word-break: break-all;
   }
+  .pages-measured { margin-bottom: 2rem; }
+  .pages-measured h2 { font-size: 1.125rem; margin: 0 0 0.375rem; }
+  .pages-measured h3 { font-size: 0.875rem; margin: 1rem 0 0.375rem; color: ${t.muted}; text-transform: uppercase; letter-spacing: 0.04em; }
+  .pages-measured__intro { margin: 0 0 0.875rem; color: ${t.muted}; font-size: 0.875rem; max-width: 72ch; }
+  .pages-measured__coverage { margin: 0 0 0.875rem; padding: 0.5rem 0.75rem; background: ${t.checkOpenBg}; color: ${t.checkOpenFg}; border-radius: 6px; font-size: 0.875rem; }
+  .pages-measured__scroll { overflow-x: auto; background: ${t.surface}; border: 1px solid ${t.border}; border-radius: 6px; }
+  .pages-measured table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+  .pages-measured th, .pages-measured td { padding: 0.5rem 0.5rem; border-bottom: 1px solid ${t.border}; text-align: left; vertical-align: top; }
+  .pages-measured tbody th { font-weight: 500; word-break: break-all; min-width: 10rem; }
+  .pages-measured .num { white-space: nowrap; }
+  .page-status { display: block; margin-top: 0.125rem; color: ${t.checkRaisedFg}; font-weight: 600; }
+  .vital { min-width: 6.5rem; }
+  .vital--good { background: ${t.checkOkBg}; color: ${t.checkOkFg}; }
+  .vital--fair { background: ${t.checkOpenBg}; color: ${t.checkOpenFg}; }
+  .vital--poor { background: ${t.checkRaisedBg}; color: ${t.checkRaisedFg}; }
+  .vital__band { display: block; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .patterns { margin: 0; padding-left: 1rem; font-size: 0.8125rem; word-break: break-all; }
+  .patterns li { margin: 0.25rem 0; }
   .muted { color: ${t.muted}; }
   footer.report-foot {
     margin-top: 2rem;
@@ -747,10 +853,11 @@ const html = `<!doctype html>
     <h2>Findings</h2>
     ${findingsBlocks}
   </section>
+${pagesSection}
 ${explorationSection}
   <section class="methodology">
     <h2>Methodology</h2>
-    <p>${escHtml(report.testMethodology || 'Not recorded.')}</p>
+    ${report.testMethodology ? `<p>${escHtml(report.testMethodology)}</p>` : ''}
     <div class="visited-pages">
       <h3>Visited pages</h3>
       ${visitedPagesList}

@@ -45,12 +45,12 @@ const shopReport = (edit = () => {}) => {
   return report;
 };
 
-// `prepare` runs copies of scripts/ and schemas/ outside the repo, where ajv can't be resolved.
+// `prepare` runs copies of scripts/, schemas/ and the collectors/ they read outside the repo, where ajv can't be resolved.
 const run =(t, filename, report, { space = 2, prepare, generatorFlags } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-validate-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   if (prepare) {
-    for (const dir of ['scripts', 'schemas']) fs.cpSync(path.join(ROOT, dir), path.join(root, dir), { recursive: true });
+    for (const dir of ['scripts', 'schemas', 'collectors']) fs.cpSync(path.join(ROOT, dir), path.join(root, dir), { recursive: true });
     prepare(root);
   }
   const reportsDir = path.join(root, 'reports');
@@ -168,11 +168,26 @@ test('a report that matches its schema is rendered', (t) => {
 
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'));
 
+const PAGES = 'performance-opus-5-5-2026-10-13.json';
+
 test('a real performance report is validated from its filename and rendered', (t) => {
-  const { status, output } = run(t, 'qa-report-performance.json', fixture('performance-opus-5-5-run-3.json'));
+  const { status, output } = run(t, 'qa-report-performance.json', fixture(PAGES));
 
   assert.equal(status, 0, output);
   assert.match(output, /✓ Schema: valid against schemas\/qa-report-performance-schema\.json/);
+});
+
+// Loading the page is the fix; editing pages[] isn't, since the wrapper rebuilds it from the capture.
+test('a performance report listing a page the browser never loaded is refused', (t) => {
+  const report = fixture(PAGES);
+  report.visitedPages.push('https://example.com/never-loaded/', 'https://example.com/donate/#form');
+
+  const { status, output, reportsDir } = run(t, 'qa-report-performance.json', report);
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /no record of loading:\n  https:\/\/example\.com\/never-loaded\/\nLoad each in the browser/);
+  assert.match(output, /Nothing was rendered\./);
+  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
 });
 
 test('a performance report with an invented top-level key is refused', (t) => {
@@ -184,7 +199,7 @@ test('a performance report with an invented top-level key is refused', (t) => {
 });
 
 test('a valid performance report with no flag is validated and titled from its content', (t) => {
-  const { status, output, reportsDir } = run(t, 'report.json', fixture('performance-opus-5-5-run-3.json'), { generatorFlags: [] });
+  const { status, output, reportsDir } = run(t, 'report.json', fixture(PAGES), { generatorFlags: [] });
 
   assert.equal(status, 0, output);
   assert.match(output, /✓ Schema: valid against schemas\/qa-report-performance-schema\.json/);

@@ -8,6 +8,12 @@ const { EventEmitter } = require('events');
 const capture = require('../collectors/capture.js');
 
 const TIMING = { viewport: { width: 1920, height: 1080 }, loadTime: 1200, domContentLoaded: 800, ttfb: 100, transferSize: 5000, resourceTransferSize: 90000, navType: 'navigate' };
+const VITALS = { lcp: 900, cls: 0.02, quietFor: 1000, sinceLoad: 10000 };
+// Answers each read the capture makes, the way the page would: readyState, the vitals, or the timing.
+const answer = (fn, timing, vitals = VITALS) => {
+  if (String(fn).includes('readyState')) return 'loading';
+  return String(fn).includes('layout-shift') ? vitals : timing;
+};
 
 // Points the capture at a temp reports/ and returns a reader for what it wrote.
 const sandbox = (t, session = 'test-session') => {
@@ -35,7 +41,7 @@ const fakePage = ({ url = 'about:blank', evaluate, history } = {}) => {
     url: () => at,
     viewportSize: () => null,
     mainFrame: () => main,
-    evaluate: evaluate || (async (fn) => (String(fn).includes('readyState') ? 'loading' : { documentUrl: at, ...TIMING })),
+    evaluate: evaluate || (async (fn) => answer(fn, { documentUrl: at, ...TIMING })),
     ...history,
   });
 };
@@ -80,9 +86,47 @@ test('a navigation is one visit with its load', async (t) => {
   const box = sandbox(t);
   await navigate(await start(fakePage()), 'https://example.com/');
 
-  const [visit, load] = box.entries();
+  const [visit, load, vitals] = box.entries();
   assert.deepStrictEqual({ ...visit, at: undefined }, { at: undefined, type: 'visit', visit: visit.visit, url: 'https://example.com/', status: 200, redirectedFrom: [] });
   assert.deepStrictEqual({ ...load, at: undefined }, { at: undefined, type: 'load', visit: visit.visit, ...TIMING });
+  assert.deepStrictEqual({ ...vitals, at: undefined }, { at: undefined, type: 'vitals', visit: visit.visit, lcp: 900, cls: 0.02, settled: true });
+});
+
+test('the vitals are read until the visit ends, with a line for each change and none from the next document', async (t) => {
+  const box = sandbox(t);
+  const read = (lcp, cls, quietFor, timeOrigin = 1) => ({ timeOrigin, lcp, cls, quietFor, sinceLoad: 100 });
+  const reads = [read(300, 0, 10), read(300, 0, 1500), read(300, 0, 2000), read(300, 0.12, 10), read(50, 0, 10, 2)];
+  const page = await start(fakePage({ evaluate: async (fn) => (String(fn).includes('layout-shift') ? reads.shift() : answer(fn, { documentUrl: 'https://example.com/', timeOrigin: 1, ...TIMING })) }));
+  await navigate(page, 'https://example.com/');
+  for (let wait = 0; reads.length && wait < 40; wait += 1) await new Promise((resolve) => setTimeout(resolve, 100));
+  await settle();
+
+  assert.deepStrictEqual(ofType(box.entries(), 'vitals').map(({ lcp, cls, settled }) => [lcp, cls, settled]), [[300, 0, false], [300, 0, true], [300, 0.12, false]]);
+});
+
+test('the vitals are read no later than ten seconds after load', async (t) => {
+  const box = sandbox(t);
+  let reads = 0;
+  const page = await start(fakePage({ evaluate: async (fn) => (String(fn).includes('layout-shift') ? (reads += 1, { lcp: 1, cls: 0, quietFor: 0, sinceLoad: 10000 }) : answer(fn, { documentUrl: 'https://example.com/', ...TIMING })) }));
+  await navigate(page, 'https://example.com/');
+  await new Promise((resolve) => setTimeout(resolve, 700));
+
+  assert.strictEqual(reads, 1);
+  assert.strictEqual(ofType(box.entries(), 'vitals').length, 1);
+});
+
+test('a page that never settles stops being read, however its clock runs', async (t) => {
+  const box = sandbox(t);
+  const realNow = Date.now;
+  let now = 0;
+  Date.now = () => (now += 6000);
+  t.after(() => { Date.now = realNow; });
+  const page = await start(fakePage({ evaluate: async (fn) => answer(fn, { documentUrl: 'https://example.com/', ...TIMING }, { lcp: 1, cls: 0, quietFor: 0, sinceLoad: 0 }) }));
+  await navigate(page, 'https://example.com/');
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  Date.now = realNow;
+
+  assert.deepStrictEqual(ofType(box.entries(), 'vitals').map(({ settled }) => settled), [false]);
 });
 
 test('a redirect is one visit at the final url', async (t) => {
@@ -94,6 +138,14 @@ test('a redirect is one visit at the final url', async (t) => {
   assert.strictEqual(visits[0].url, 'https://example.com/new/');
   assert.strictEqual(visits[0].status, 200);
   assert.deepStrictEqual(visits[0].redirectedFrom, ['https://example.com/old/']);
+});
+
+test('a redirect hop on another host keeps only its origin and path, so a login token is never written', async (t) => {
+  const box = sandbox(t);
+  await navigate(await start(fakePage()), 'https://example.com/', { redirects: [['https://login.example.net/remote-login.php?token=secret&back=x', 302], ['https://www.example.com/?p=5', 301]] });
+
+  assert.deepStrictEqual(ofType(box.entries(), 'visit')[0].redirectedFrom, ['https://login.example.net/remote-login.php', 'https://www.example.com/?p=5']);
+  assert.doesNotMatch(fs.readFileSync(box.file, 'utf8'), /secret/);
 });
 
 test('a same-document navigation is not a visit', async (t) => {
@@ -223,11 +275,12 @@ test("a timing read that lands on the next document isn't recorded as this visit
 
   const [load] = ofType(box.entries(), 'load');
   assert.deepStrictEqual({ loadTime: load.loadTime, error: load.error }, { loadTime: null, error: 'the timing came from another document' });
+  assert.deepStrictEqual(ofType(box.entries(), 'vitals'), []);
 });
 
 test('a timing read keeps its visit through a hash jump or replaceState', async (t) => {
   const box = sandbox(t);
-  const page = await start(fakePage({ evaluate: async () => ({ documentUrl: 'https://example.com/#top', ...TIMING }) }));
+  const page = await start(fakePage({ evaluate: async (fn) => answer(fn, { documentUrl: 'https://example.com/#top', ...TIMING }) }));
   await navigate(page, 'https://example.com/');
 
   assert.strictEqual(ofType(box.entries(), 'load')[0].loadTime, 1200);
@@ -294,7 +347,7 @@ test("a popup whose history can't be read still gets its visit and its live mess
 
 test('a popup that loaded before the capture started is caught up once', async (t) => {
   const box = sandbox(t);
-  const page = await start(fakePage({ url: 'https://example.com/popup/', evaluate: async (fn) => (String(fn).includes('readyState') ? 'complete' : TIMING) }));
+  const page = await start(fakePage({ url: 'https://example.com/popup/', evaluate: async (fn) => (String(fn).includes('readyState') ? 'complete' : answer(fn, TIMING)) }));
   page.emit('load', page);
   await settle();
 
@@ -436,6 +489,14 @@ test('the timing read takes the viewport and the document from the page', async 
   assert.deepStrictEqual(timing, { documentUrl: 'https://example.com/', viewport: { width: 756, height: 469 }, loadTime: 812, domContentLoaded: 402, ttfb: 98, transferSize: 3100, resourceTransferSize: 1000, navType: 'reload' });
 });
 
+test("the timing read records the gate check's answer, and nothing on a page that isn't gated", async () => {
+  const nav = { name: 'https://example.com/', loadEventEnd: 900, domContentLoadedEventEnd: 400, responseStart: 90, transferSize: 3000, type: 'navigate' };
+  const page = (gate) => ({ location: { href: nav.name }, __kosh: { gate: (url) => ({ gate: url === nav.name ? gate : 'wrong url' }) }, innerWidth: 1920, innerHeight: 1080, performance: { getEntriesByType: (type) => (type === 'navigation' ? [nav] : []) } });
+
+  assert.equal((await runInPage(page('coming-soon'))).gate, 'coming-soon');
+  assert.ok(!('gate' in await runInPage(page(null))));
+});
+
 test('the timing read gives up on a page that never finishes loading', async () => {
   const realNow = Date.now;
   let now = 0;
@@ -443,6 +504,35 @@ test('the timing read gives up on a page that never finishes loading', async () 
 
   assert.strictEqual(Date.now, realNow);
   assert.deepStrictEqual(timing, { documentUrl: 'https://example.com/', viewport: { width: 375, height: 812 }, loadTime: null });
+});
+
+// The page's observers, holding the entries a buffered observe would hand back.
+const vitalsInPage = ({ paints = [], shifts = [], loadEventEnd = 1000, now = 3000 }) => JSON.parse(JSON.stringify(vm.runInNewContext(`(${capture.readVitals})()`, {
+  PerformanceObserver: class {
+    observe({ type }) { this.entries = type === 'layout-shift' ? shifts : paints; }
+    takeRecords() { return this.entries; }
+    disconnect() {}
+  },
+  performance: { timeOrigin: 42, now: () => now, getEntriesByType: () => [{ loadEventEnd }] },
+})));
+
+test('LCP is the last candidate, and CLS the worst burst of shifts under 1 s apart and 5 s long, input aside', () => {
+  const shift = (startTime, value, hadRecentInput = false) => ({ startTime, value, hadRecentInput });
+  const vitals = vitalsInPage({
+    paints: [{ startTime: 400.4 }, { startTime: 1250.6 }],
+    shifts: [
+      shift(100, 0.05), shift(900, 0.04),
+      shift(2000, 0.5, true),
+      shift(2100, 0.03), shift(3000, 0.03), shift(3900, 0.03), shift(4800, 0.03), shift(5700, 0.03), shift(6600, 0.03), shift(7500, 0.03),
+    ],
+    now: 8000,
+  });
+
+  assert.deepStrictEqual(vitals, { timeOrigin: 42, lcp: 1251, cls: 0.18, quietFor: 500, sinceLoad: 7000 });
+});
+
+test('a page with no candidate or shift has no LCP, a CLS of 0, and is quiet since its load', () => {
+  assert.deepStrictEqual(vitalsInPage({}), { timeOrigin: 42, lcp: null, cls: 0, quietFor: 2000, sinceLoad: 2000 });
 });
 
 test('the capture file is per session, and a strange session id stays in reports/data', () => {

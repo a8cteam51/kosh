@@ -13,7 +13,6 @@ const MULTI_LINE = {
   'aeo/SKILL.md': 34,
   'aeo/references/faq-detection.md': 1,
   'functional-design/SKILL.md': 2,
-  'performance/SKILL.md': 1,
   'shop/SKILL.md': 3,
 };
 

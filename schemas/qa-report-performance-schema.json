@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Kosh Performance Report",
-  "description": "Schema for the kosh performance report: load times, console messages and failed network requests across several pages of a WordPress site, at desktop and mobile viewports. Renders through the standard QA renderer in scripts/generate-report.js.",
+  "description": "Schema for the kosh performance report: LCP, CLS, load timings, console errors and failed network requests across several pages of a WordPress site, at desktop and mobile viewports. The measurements in pages[] come from the browser's page capture, not from the model. Renders through the standard QA renderer in scripts/generate-report.js.",
   "type": "object",
-  "required": ["url", "websiteName", "timestamp", "environment", "visitedPages", "mobile", "desktop", "issues"],
+  "required": ["url", "websiteName", "timestamp", "environment", "visitedPages", "pages", "issues"],
   "additionalProperties": false,
   "properties": {
     "url": {
@@ -46,10 +46,15 @@
           "items": { "type": "string" },
           "description": "The Playwright MCP arguments (the pinned version and its flags) in kosh's .mcp.json when the report was rendered. A session started before .mcp.json changed ran with the older ones. Added by scripts/run-qa-report.sh — do not write this field."
         },
+        "captureSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the page capture archived beside the report as <name>.capture.jsonl, which a performance report's pages[] are built from. Added by scripts/run-qa-report.sh — do not write this field."
+        },
         "seal": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
-          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors and playwrightMcp, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
+          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors, playwrightMcp and captureSha256, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
         }
       }
     },
@@ -64,16 +69,34 @@
     },
     "visitedPages": {
       "type": "array",
+      "minItems": 1,
       "items": { "$ref": "#/definitions/webUrl" },
-      "description": "URLs of every page visited during the test."
+      "description": "URLs of every page the test covered. Each must have a captured visit in pages[], or the report is refused."
     },
-    "mobile": {
-      "$ref": "#/definitions/viewportResult",
-      "description": "Homepage measurements at the mobile viewport. Findings on other pages go in issues."
+    "pages": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/pageResult" },
+      "description": "One row per page and viewport the browser loaded on the report's host, built from the page capture. Added by scripts/run-qa-report.sh — do not write this field."
     },
-    "desktop": {
-      "$ref": "#/definitions/viewportResult",
-      "description": "Homepage measurements at the desktop viewport. Findings on other pages go in issues."
+    "explorationPass": {
+      "type": "array",
+      "description": "Threads investigated beyond the checks, recorded whatever the outcome, so an observation outside this test's scope survives here instead of becoming a finding. Findings themselves live in `issues`.",
+      "items": {
+        "type": "object",
+        "required": ["check", "outcome", "detail"],
+        "additionalProperties": false,
+        "properties": {
+          "check": { "type": "string", "description": "What was examined, specific enough for someone else to repeat it." },
+          "outcome": {
+            "type": "string",
+            "enum": ["no-issue", "finding-raised", "inconclusive", "out-of-scope"],
+            "description": "no-issue = investigated and fine. finding-raised = became an entry in `issues`. inconclusive = cannot be settled without access not available during the run. out-of-scope = a real problem outside performance, in which case set `referredTo`."
+          },
+          "detail": { "type": "string", "description": "What was actually observed, including the evidence. For inconclusive outcomes, say what would settle it. For finding-raised, name the finding." },
+          "area": { "type": "string", "description": "Surface this relates to, e.g. Images, Fonts, Scripts. Free text." },
+          "referredTo": { "type": "string", "description": "For out-of-scope outcomes, the kosh test that covers this territory, e.g. a11y or functional-design." }
+        }
+      }
     },
     "issues": {
       "type": "object",
@@ -89,12 +112,12 @@
         "high": {
           "type": "array",
           "items": { "$ref": "#/definitions/finding" },
-          "description": "Significant user impact: load time over 3s, broken images, mixed content on scripts, recurring JS errors."
+          "description": "Significant user impact: LCP or CLS in the poor band (LCP over 4 s, CLS over 0.25), broken images, mixed content on scripts, recurring JS errors."
         },
         "medium": {
           "type": "array",
           "items": { "$ref": "#/definitions/finding" },
-          "description": "Noticeable but not blocking: load time 2–3s, non-critical 404s, console warnings."
+          "description": "Noticeable but not blocking: LCP or CLS that needs improvement (LCP over 2.5 s, CLS over 0.1), non-critical 404s, console warnings."
         },
         "low": {
           "type": "array",
@@ -111,55 +134,56 @@
       "pattern": "^https?://",
       "description": "An http(s) URL of a page kosh navigated to. URLs observed on the site, such as a failed request's, are plain strings: a malformed one is something to report, not to fix in the JSON."
     },
-    "viewportResult": {
+    "pageResult": {
       "type": "object",
-      "required": ["viewport", "title", "url", "loadTime", "console", "network"],
+      "required": ["url", "redirectedFrom", "viewport", "status", "visits", "loadTime", "domContentLoaded", "ttfb", "transferSize", "resourceTransferSize", "lcp", "cls", "vitalsSettled", "console", "network"],
       "additionalProperties": false,
       "properties": {
-        "viewport": {
-          "type": "string",
-          "description": "Viewport size as WIDTHxHEIGHT, e.g. 375x812 or 1920x1080."
-        },
-        "title": {
-          "type": "string",
-          "description": "The page title."
-        },
-        "url": {
-          "$ref": "#/definitions/webUrl",
-          "description": "The page measured, normally the homepage."
-        },
-        "loadTime": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "Page load time in milliseconds. Never 0: loadEventEnd reads 0 when taken before the load event, so re-measure instead."
-        },
+        "url": { "$ref": "#/definitions/webUrl", "description": "The page's URL after any redirects." },
+        "redirectedFrom": { "type": "array", "items": { "type": "string" }, "description": "URLs that redirected to this one, as observed." },
+        "viewport": { "type": ["string", "null"], "pattern": "^\\d+x\\d+$", "description": "WIDTHxHEIGHT as the page saw it; null when no timing was read." },
+        "status": { "type": ["integer", "null"], "description": "HTTP status of the document; null when it got no response." },
+        "failure": { "type": "string", "description": "Why the document failed to load, e.g. net::ERR_NAME_NOT_RESOLVED." },
+        "visits": { "type": "integer", "minimum": 1, "description": "Loads of this page at this viewport. Only the first is measured, since a revisit loads from a warm cache." },
+        "loadTime": { "type": ["number", "null"], "description": "loadEventEnd in milliseconds; null when not measured." },
+        "domContentLoaded": { "type": ["number", "null"], "description": "domContentLoadedEventEnd in milliseconds." },
+        "ttfb": { "type": ["number", "null"], "description": "responseStart in milliseconds." },
+        "transferSize": { "type": ["number", "null"], "description": "Bytes transferred for the document." },
+        "resourceTransferSize": { "type": ["number", "null"], "description": "Bytes transferred for subresources by the time of the load event; near zero on a warm cache." },
+        "timingError": { "type": "string", "description": "Why no timing was recorded." },
+        "lcp": { "type": ["number", "null"], "description": "Largest Contentful Paint in milliseconds, one lab load; null when the page reported none." },
+        "cls": { "type": ["number", "null"], "description": "Cumulative Layout Shift over the visit, up to 10 s after load, one lab load." },
+        "vitalsSettled": { "type": ["boolean", "null"], "description": "false when a new LCP candidate or layout shift arrived in the last second before the read ended; null when not read." },
         "console": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["type", "text"],
+            "required": ["level", "text"],
             "additionalProperties": false,
             "properties": {
-              "type": { "type": "string", "description": "Console message type as the browser reports it, e.g. error, warning, log." },
-              "text": { "type": "string", "description": "The message text." }
+              "level": { "type": "string", "description": "error, warning, or pageerror for an uncaught exception." },
+              "text": { "type": "string", "description": "The message text, clipped." },
+              "source": { "type": "string", "description": "The script URL that logged it." }
             }
           },
-          "description": "Console messages logged on this page."
+          "description": "Console errors and warnings, and uncaught exceptions, from every visit to this page at this viewport."
         },
         "network": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["url", "status", "type"],
+            "required": ["url", "status", "resourceType"],
             "additionalProperties": false,
             "properties": {
               "url": { "type": "string", "description": "The requested URL, as observed." },
               "status": { "type": ["integer", "null"], "description": "HTTP status; null for a request that got no response, such as blocked mixed content." },
-              "type": { "type": "string", "description": "Resource type, e.g. script, stylesheet, image, font." }
+              "failure": { "type": "string", "description": "The browser's reason for a request that got no response." },
+              "resourceType": { "type": "string", "description": "Resource type, e.g. script, stylesheet, image, font." }
             }
           },
-          "description": "Failed requests only: 4xx and 5xx responses, and mixed content. Successful responses and 3xx redirects are left out."
-        }
+          "description": "Failed subresource requests only: status 400 and up, or no response."
+        },
+        "truncated": { "type": "boolean", "description": "true when a visit stopped recording rows at its limit." }
       }
     },
     "finding": {
@@ -170,7 +194,7 @@
         "category": {
           "type": "string",
           "enum": ["Performance", "JavaScript", "Network", "MixedContent", "ServerError"],
-          "description": "Performance = load times exceeding targets. JavaScript = console errors from JS failures. Network = 4xx/5xx failed resource requests. MixedContent = HTTP resources on HTTPS pages. ServerError = 5xx server-side failures."
+          "description": "Performance = LCP or CLS outside the good band. JavaScript = console errors from JS failures. Network = 4xx/5xx failed resource requests. MixedContent = HTTP resources on HTTPS pages. ServerError = 5xx server-side failures."
         },
         "issue": {
           "type": "string",

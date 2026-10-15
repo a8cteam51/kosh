@@ -67,7 +67,7 @@ If you detect signs of a non-production environment that wasn't explicitly speci
 
 ---
 
-## Reachability Gate Check — MANDATORY before any testing
+## Reachability gate check
 
 Some WordPress sites are gated and not publicly reachable: the browser loads a coming-soon launchpad, a password prompt, or a private-site notice instead of the real site. Others have moved, and the URL redirects to another host. Testing either produces an empty or misleading report. **After the first navigation to the homepage, before any other step, run this check** with `browser_evaluate`, passing the URL you were asked to test:
 
@@ -636,7 +636,7 @@ After testing all pages, confirm:
 
 Populate `reports/data/qa-report-accessibility.json`:
 
-- ✅ Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `scripts/run-qa-report.sh` adds the plugin version and skill hash.
+- Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `scripts/run-qa-report.sh` adds the plugin version and skill hash.
 
 ```json
 {

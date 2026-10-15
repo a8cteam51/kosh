@@ -1,0 +1,186 @@
+{
+  "url": "https://example.com/",
+  "websiteName": "Example Site",
+  "timestamp": "2026-10-14T15:06:46Z",
+  "provenance": {
+    "model": "claude-opus-5-5[1m]",
+    "pluginVersion": "1.3.0",
+    "skills": {
+      "performance": "80f50d7a2a50a48d9b5cb9c5858a9110ef43afb78aef1e40f77cd8d45c115f21"
+    },
+    "collectors": "370d27a1086eb3c3c4788202bbc646ef4a8574ff7e271856e9857edd569e0b77",
+    "playwrightMcp": [
+      "@playwright/mcp@0.0.82",
+      "--isolated",
+      "--no-webmcp",
+      "--init-script",
+      "collectors/kosh.js",
+      "--init-page",
+      "collectors/capture.js"
+    ],
+    "captureSha256": "c075d94131c1f185ab72804ea3448aab383877ee39f4a30cb6b6deb7b417f0fc",
+    "seal": "e337dfc0912b63e950e3a7abbb6069dac36d292efcccc190e3197a06bc4d7278"
+  },
+  "environment": "production",
+  "testMethodology": "Redacted text.",
+  "visitedPages": [
+    "https://example.com/",
+    "https://example.com/about/",
+    "https://example.com/2026/01/01/sample-post/",
+    "https://example.com/archive/",
+    "https://example.com/blog/"
+  ],
+  "issues": {
+    "critical": [],
+    "high": [],
+    "medium": [],
+    "low": []
+  },
+  "explorationPass": [
+    {
+      "check": "Redacted text.",
+      "outcome": "no-issue",
+      "detail": "Redacted text.",
+      "area": "Images"
+    },
+    {
+      "check": "Redacted text.",
+      "outcome": "inconclusive",
+      "detail": "Redacted text.",
+      "area": "Fonts"
+    },
+    {
+      "check": "Redacted text.",
+      "outcome": "inconclusive",
+      "detail": "Redacted text.",
+      "area": "Scripts"
+    },
+    {
+      "check": "Redacted text.",
+      "outcome": "inconclusive",
+      "detail": "Redacted text.",
+      "area": "Scripts"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://example.com/",
+      "redirectedFrom": [],
+      "viewport": "1920x1080",
+      "status": 200,
+      "visits": 1,
+      "loadTime": 510,
+      "domContentLoaded": 384,
+      "ttfb": 43,
+      "transferSize": 33715,
+      "resourceTransferSize": 359862,
+      "lcp": 372,
+      "cls": 0,
+      "vitalsSettled": true,
+      "console": [],
+      "network": []
+    },
+    {
+      "url": "https://example.com/about/",
+      "redirectedFrom": [],
+      "viewport": "1920x1080",
+      "status": 200,
+      "visits": 1,
+      "loadTime": 147,
+      "domContentLoaded": 61,
+      "ttfb": 14,
+      "transferSize": 34798,
+      "resourceTransferSize": 49556,
+      "lcp": 92,
+      "cls": 0,
+      "vitalsSettled": true,
+      "console": [],
+      "network": []
+    },
+    {
+      "url": "https://example.com/2026/01/01/sample-post/",
+      "redirectedFrom": [],
+      "viewport": "1920x1080",
+      "status": 200,
+      "visits": 1,
+      "loadTime": 798,
+      "domContentLoaded": 245,
+      "ttfb": 15,
+      "transferSize": 44105,
+      "resourceTransferSize": 130096,
+      "lcp": 132,
+      "cls": 0,
+      "vitalsSettled": true,
+      "console": [],
+      "network": []
+    },
+    {
+      "url": "https://example.com/archive/",
+      "redirectedFrom": [],
+      "viewport": "1920x1080",
+      "status": 200,
+      "visits": 1,
+      "loadTime": 131,
+      "domContentLoaded": 62,
+      "ttfb": 14,
+      "transferSize": 32365,
+      "resourceTransferSize": 9828,
+      "lcp": 104,
+      "cls": 0,
+      "vitalsSettled": true,
+      "console": [],
+      "network": []
+    },
+    {
+      "url": "https://example.com/blog/",
+      "redirectedFrom": [],
+      "viewport": "1920x1080",
+      "status": 200,
+      "visits": 1,
+      "loadTime": 127,
+      "domContentLoaded": 52,
+      "ttfb": 17,
+      "transferSize": 33491,
+      "resourceTransferSize": 0,
+      "lcp": 88,
+      "cls": 0,
+      "vitalsSettled": true,
+      "console": [],
+      "network": []
+    },
+    {
+      "url": "https://example.com/",
+      "redirectedFrom": [],
+      "viewport": "375x812",
+      "status": 200,
+      "visits": 1,
+      "loadTime": 119,
+      "domContentLoaded": 49,
+      "ttfb": 16,
+      "transferSize": 33680,
+      "resourceTransferSize": 0,
+      "lcp": 80,
+      "cls": 0,
+      "vitalsSettled": true,
+      "console": [],
+      "network": []
+    },
+    {
+      "url": "https://example.com/2026/01/01/sample-post/",
+      "redirectedFrom": [],
+      "viewport": "375x812",
+      "status": 200,
+      "visits": 1,
+      "loadTime": 156,
+      "domContentLoaded": 51,
+      "ttfb": 15,
+      "transferSize": 44179,
+      "resourceTransferSize": 0,
+      "lcp": 88,
+      "cls": 0,
+      "vitalsSettled": true,
+      "console": [],
+      "network": []
+    }
+  ]
+}

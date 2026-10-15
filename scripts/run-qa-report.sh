@@ -26,6 +26,7 @@ QA_REPORT_JSON="$1"
 SCRIPT_PATH="$(dirname "$0")/generate-report.js"
 STAMP_SCRIPT_PATH="$(dirname "$0")/stamp-provenance.js"
 CAPTURE_SCRIPT_PATH="$(dirname "$0")/archive-capture.js"
+MERGE_SCRIPT_PATH="$(dirname "$0")/page-capture.js"
 
 # Extract test type flags (everything after the JSON file argument)
 TEST_TYPE_FLAGS="${@:2}"
@@ -85,6 +86,19 @@ else
   echo -e "${YELLOW}  Test type: $TEST_TYPE_FLAGS${NC}"
 fi
 
+# Only a skill's own output, qa-report-<type>.json directly in the scripts' reports/data, belongs to the run in progress.
+DATA_DIR=$(node -p "require('path').dirname(require(require('path').resolve(process.argv[1])).captureFile())" "$(dirname "$0")/../collectors/capture.js")
+SKILL_OUTPUT=false
+if [ "$(dirname "$QA_REPORT_JSON")" -ef "$DATA_DIR" ] && [[ "$(basename "$QA_REPORT_JSON")" =~ ^qa-report-[a-z]+\.json$ ]]; then
+  SKILL_OUTPUT=true
+  # Before the stamp, so the seal covers the capture a performance report's pages[] came from.
+  # A performance report the merge didn't reach would render the model's own numbers.
+  if ! node "$MERGE_SCRIPT_PATH" merge "$QA_REPORT_JSON" $TEST_TYPE_FLAGS; then
+    echo -e "${RED}Error: could not merge this session's page capture into $QA_REPORT_JSON. Nothing was rendered.${NC}"
+    exit 1
+  fi
+fi
+
 # A missing stamp costs comparability, not the report, so it warns rather than exits.
 node "$STAMP_SCRIPT_PATH" "$QA_REPORT_JSON" $TEST_TYPE_FLAGS \
   || echo -e "${YELLOW}Warning: could not stamp provenance on $QA_REPORT_JSON${NC}"
@@ -111,7 +125,6 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   echo -e "  ${YELLOW}Low Priority Issues:${NC} $LOW_COUNT"
 
   # Step 5: Archive the source JSON under the HTML's basename, then clear the path the skill wrote it to.
-  DATA_DIR="$(dirname "$REPORT_FILE")/data"
   ARCHIVE_DIR="$DATA_DIR/archive"
   ARCHIVE_JSON="$ARCHIVE_DIR/$(basename "${REPORT_FILE%.html}").json"
   ARCHIVE_CAPTURE="${ARCHIVE_JSON%.json}.capture.jsonl"
@@ -130,7 +143,7 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   elif mkdir -p "$ARCHIVE_DIR" && cp "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
     echo -e "${BLUE}Source data archived: $ARCHIVE_JSON${NC}"
     # Only a skill's own output goes, so the next run saves its report without reading this one first.
-    if [ "$(dirname "$QA_REPORT_JSON")" -ef "$DATA_DIR" ] && [[ "$(basename "$QA_REPORT_JSON")" =~ ^qa-report-[a-z]+\.json$ ]]; then
+    if $SKILL_OUTPUT; then
       # A skill's rendered report ends its run, so the session's page capture goes with it.
       node "$CAPTURE_SCRIPT_PATH" "$ARCHIVE_JSON" "$ARCHIVE_CAPTURE" \
         || echo -e "${YELLOW}Warning: could not archive this session's page capture${NC}"

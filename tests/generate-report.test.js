@@ -164,3 +164,99 @@ test('both renderers forbid scripts, and neither report needs one', (t) => {
     assert.doesNotMatch(html, /<script|\son[a-z]+\s*=/i);
   }
 });
+
+const fixture = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'));
+const renderPerformance = ({ root, reportsDir }, report, flags = []) => {
+  const input = path.join(root, 'qa-report-performance.json');
+  fs.writeFileSync(input, JSON.stringify(report));
+  const { status, stdout, stderr } = spawnSync('node', [GENERATOR, input, '--performance', ...flags], { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: reportsDir } });
+  assert.equal(status, 0, stdout + stderr);
+  return fs.readFileSync(stdout.match(/^HTML report generated: (.+)$/m)[1], 'utf8');
+};
+const withPages = (rows, edit = () => {}) => {
+  const report = fixture('performance-opus-5-5-2026-10-13.json');
+  report.pages = report.pages.slice(0, rows.length).map((page, i) => ({ ...page, ...rows[i] }));
+  report.visitedPages = [...new Set(report.pages.map((page) => page.url))];
+  edit(report);
+  return report;
+};
+const cells = (html, metric) => [...html.matchAll(/<td class="vital vital--(\w+)">([^<]*)/g)].filter((_, i) => i % 2 === (metric === 'lcp' ? 0 : 1)).map(([, band, value]) => `${value} ${band}`);
+
+test('LCP and CLS are banded at the Core Web Vitals thresholds, with an unsettled read marked', (t) => {
+  const html = renderPerformance(sandbox(t), withPages([
+    { lcp: 2500, cls: 0.1 }, { lcp: 2501, cls: 0.1004 }, { lcp: 4000, cls: 0.25 }, { lcp: 4001, cls: 0.251, vitalsSettled: false },
+  ]));
+
+  assert.deepEqual(cells(html, 'lcp'), ['2.500 s good', '2.501 s fair', '4.000 s fair', '4.001 s* poor']);
+  assert.deepEqual(cells(html, 'cls'), ['0.100 good', '0.100 good', '0.250 fair', '0.251* poor'], 'a value shown as a threshold is in that threshold\'s band');
+  assert.match(html, /LCP good up to 2\.5 s, poor over 4 s; CLS good up to 0\.1, poor over 0\.25/);
+  assert.doesNotMatch(html, /passes Core Web Vitals/i);
+});
+
+test('a message on every page that loaded is site-wide, and the rest name their pages', (t) => {
+  const error = { level: 'error', text: 'Uncaught TypeError' };
+  const html = renderPerformance(sandbox(t), withPages([
+    { console: [error] }, { console: [error, { level: 'warning', text: 'only here' }] }, { failure: 'net::ERR_FAILED', status: null, console: [] },
+  ]));
+
+  assert.match(html, /<code>error: Uncaught TypeError<\/code> <span class="muted">Site-wide<\/span>/);
+  assert.match(html, /<code>warning: only here<\/code> <span class="muted">\/videos\/ \(Desktop 1920×1080\)<\/span>/);
+  assert.match(html, /<span class="page-status">Failed: net::ERR_FAILED<\/span>/);
+});
+
+// The HTML document is fetched on every load, so only the files' own transfer shows a warm cache.
+test("a page's files are a column of their own, so a warm load reads as 0 KB", (t) => {
+  const html = renderPerformance(sandbox(t), withPages([{ transferSize: 33715, resourceTransferSize: 0 }, { transferSize: null, resourceTransferSize: null }]));
+
+  assert.match(html, /<td class="num">33 KB<\/td>\s*<td class="num">0 KB<\/td>/);
+  assert.match(html, /<td class="num">—<\/td>\s*<td class="num">—<\/td>/);
+  assert.match(html, /<th scope="col">HTML<\/th><th scope="col">Files<\/th>/);
+});
+
+test('a message missing from one loaded page, or seen on the only one, is not site-wide', (t) => {
+  const box = sandbox(t);
+  const error = { level: 'error', text: 'Uncaught TypeError' };
+
+  assert.doesNotMatch(renderPerformance(box, withPages([{ console: [error] }, { console: [] }, { failure: 'net::ERR_FAILED', status: null, console: [error] }])), /Site-wide/);
+  assert.doesNotMatch(renderPerformance(box, withPages([{ console: [error] }])), /Site-wide/);
+});
+
+test('fewer than four covered pages is flagged, and four is not', (t) => {
+  const box = sandbox(t);
+  assert.match(renderPerformance(box, withPages([{}, {}, {}])), /This run covered 3 pages; the performance check covers at least 4/);
+  assert.doesNotMatch(renderPerformance(box, withPages([{}, {}, {}, {}])), /This run covered/);
+});
+
+// Every string in pages[] was written by the tested site or read off it.
+test('site text in the page table renders as text, and no site URL becomes a script link', (t) => {
+  const hostile = '<img src=x onerror=alert(1)>';
+  const html = renderPerformance(sandbox(t), withPages([{
+    url: 'https://example.com/"><img/src=x/onerror=alert(1)>',
+    viewport: `1x1${hostile}`,
+    failure: hostile,
+    status: null,
+    visits: `2${hostile}`,
+    console: [{ level: hostile, text: hostile, source: 'javascript:alert(1)' }],
+    network: [{ url: 'javascript:alert(1)', status: null, failure: hostile, resourceType: hostile }],
+  }]), ['--skip-validation']);
+
+  const table = html.slice(html.indexOf('<section class="pages-measured">'), html.indexOf('</section>', html.indexOf('<section class="pages-measured">')));
+  assert.doesNotMatch(table, /<img|onerror=alert\(1\)>|href="javascript/i);
+  assert.match(table, /Failed: &lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.match(table, /<code>&lt;img src=x onerror=alert\(1\)&gt;: &lt;img src=x onerror=alert\(1\)&gt;<\/code>/);
+  assert.match(table, /<td>unknown viewport<\/td>/);
+  assert.doesNotMatch(html, /<script|<[^>]*\son[a-z]+\s*=/i);
+});
+
+test('a performance report from before pages[] still renders, with no page table', (t) => {
+  const html = renderPerformance(sandbox(t), fixture('performance-opus-5-5-run-3.json'), ['--skip-validation']);
+
+  assert.match(html, /<title>kosh performance QA report/);
+  assert.doesNotMatch(html, /pages-measured"/);
+});
+
+test('a report with no methodology prints none, rather than "Not recorded."', (t) => {
+  const html = renderPerformance(sandbox(t), withPages([{}], (r) => { delete r.testMethodology; }));
+
+  assert.match(html, /<h2>Methodology<\/h2>\s*<div class="visited-pages">/);
+});
