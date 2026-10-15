@@ -548,3 +548,7 @@ test('the capture file is per session, and a strange session id stays in reports
   }
   assert.strictEqual(capture.captureFile({}), path.join(__dirname, '../reports/data/capture.jsonl'));
 });
+
+test('the capture exposes no function a page can call', () => {
+  assert.doesNotMatch(fs.readFileSync(require.resolve('../collectors/capture.js'), 'utf8'), /expose(Binding|Function)/);
+});

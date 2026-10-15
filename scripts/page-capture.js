@@ -40,7 +40,7 @@ const take = (file = captureFile()) => {
   return taken;
 };
 
-// A page can redirect off the report's host mid-run, and it's still a page the run asked for.
+// The report's host, plus pages the run asked for there that redirected elsewhere; other sites the browser loaded stay out of the report and its archive.
 const reportEntries = (entries, reportUrl) => {
   const site = host(reportUrl);
   const visits = new Set(entries.filter((entry) => entry.type === 'visit' && site && [entry.url, ...(entry.redirectedFrom ?? [])].some((url) => host(url) === site)).map((entry) => entry.visit));

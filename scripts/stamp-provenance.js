@@ -83,6 +83,7 @@ function stamp(report, flags, env = process.env) {
   }
 
   const plugin = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude-plugin/plugin.json'), 'utf8'));
+  // collectors/ and .mcp.json are read as they are now, so a session started before a pull ran older ones.
   const mcp = JSON.parse(fs.readFileSync(path.join(ROOT, '.mcp.json'), 'utf8'));
   const facts = sessionFacts(env);
   const stamped = {

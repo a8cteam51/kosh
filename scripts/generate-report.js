@@ -148,7 +148,7 @@ if (looksLikeAeo && !modeIsAeo) {
   console.error('Error: report has AEO-shaped `criteria` but is missing `mode: "aeo"`. Add the field and re-run.');
   process.exit(1);
 }
-// process.exit would cut off a long refusal still being written to a pipe; a top-level return lets it drain.
+// Every render path checks here; a top-level return, not process.exit, lets a long refusal drain to a pipe.
 if (!args.includes('--skip-validation') && !checkReport(report, inputFile, typesFor(args, report))) {
   process.exitCode = 1;
   return;
@@ -200,6 +200,7 @@ const inlineScreenshot = (relPath) => {
   return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
 };
 
+// Inlined because every run shares reports/screenshots/, so a later run can overwrite the files an older report names.
 const renderScreenshots = (screenshots) => {
   if (!Array.isArray(screenshots) || screenshots.length === 0) return '';
   const figures = screenshots

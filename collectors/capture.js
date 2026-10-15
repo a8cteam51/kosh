@@ -1,4 +1,4 @@
-// Playwright MCP's --init-page calls `default` with each tab's page, in Node: it only serializes site data and must never throw.
+// Playwright MCP's --init-page calls `default` with each tab's page, in Node with the server's file and shell access: it only serializes site data, exposes nothing a page can call, and never throws.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -48,6 +48,7 @@ const readTiming = () => new Promise((resolve) => {
   const started = Date.now();
   const read = () => {
     const nav = performance.getEntriesByType('navigation')[0];
+    // Read from the page because headed Playwright reports no viewport.
     const viewport = { width: innerWidth, height: innerHeight };
     if (nav && nav.loadEventEnd > 0) {
       const resources = performance.getEntriesByType('resource');
@@ -158,6 +159,7 @@ exports.default = async ({ page }) => {
       else if (visit.rows === MAX_ROWS_PER_VISIT + 1) write({ type: 'truncated', visit: visit.id, reason: 'rows' });
     };
 
+    // URL, status and type only: headers, cookies and bodies can carry a client's session.
     const networkRow = (visit, request, response) => {
       const failure = request.failure()?.errorText;
       if (!failure && !(response?.status() >= 400)) return;
