@@ -140,11 +140,16 @@ test('a redirect is one visit at the final url', async (t) => {
   assert.deepStrictEqual(visits[0].redirectedFrom, ['https://example.com/old/']);
 });
 
-test('a redirect hop on another host keeps only its origin and path, so a login token is never written', async (t) => {
+test('only the first redirect step, on the site, keeps its query, so a login token is never written', async (t) => {
   const box = sandbox(t);
-  await navigate(await start(fakePage()), 'https://example.com/', { redirects: [['https://login.example.net/remote-login.php?token=secret&back=x', 302], ['https://www.example.com/?p=5', 301]] });
+  const page = await start(fakePage());
+  await navigate(page, 'https://example.com/', { redirects: [['https://www.example.com/?p=5', 301], ['https://login.example.net/remote-login.php?token=secret&back=x', 302], ['https://example.com/?remote_login=validate&token=secret', 302]] });
+  await navigate(page, 'https://example.com/b/', { redirects: [['https://login.example.net/magic?token=secret', 302]] });
 
-  assert.deepStrictEqual(ofType(box.entries(), 'visit')[0].redirectedFrom, ['https://login.example.net/remote-login.php', 'https://www.example.com/?p=5']);
+  assert.deepStrictEqual(ofType(box.entries(), 'visit').map((visit) => visit.redirectedFrom), [
+    ['https://www.example.com/?p=5', 'https://login.example.net/remote-login.php', 'https://example.com/'],
+    ['https://login.example.net/magic'],
+  ]);
   assert.doesNotMatch(fs.readFileSync(box.file, 'utf8'), /secret/);
 });
 

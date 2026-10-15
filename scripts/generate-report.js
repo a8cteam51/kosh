@@ -384,7 +384,9 @@ const pageRow = (page) => {
 
 // A row seen on every page that loaded is site-wide; the rest name the pages they were seen on.
 const placeOf = (page) => `${pathOf(page.url)} (${viewportLabel(page.viewport)})`;
-const loadedPlaces = measuredPages.filter((page) => !page.failure).map(placeOf);
+const loadedPages = measuredPages.filter((page) => !page.failure);
+const loadedPlaces = loadedPages.map(placeOf);
+const loadedPaths = new Set(loadedPages.map((page) => pathOf(page.url)));
 const patterns = (kind, describe) => {
   const seen = new Map();
   for (const page of measuredPages) {
@@ -395,7 +397,7 @@ const patterns = (kind, describe) => {
     }
   }
   return [...seen].map(([text, where]) => {
-    const scope = loadedPlaces.length > 1 && loadedPlaces.every((place) => where.has(place)) ? 'Site-wide' : [...where].join(', ');
+    const scope = loadedPaths.size > 1 && loadedPlaces.every((place) => where.has(place)) ? 'Site-wide' : [...where].join(', ');
     return `<li><code>${escHtml(text)}</code> <span class="muted">${escHtml(scope)}</span></li>`;
   }).join('');
 };

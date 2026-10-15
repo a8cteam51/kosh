@@ -25,12 +25,12 @@ const clip = (value, max) => {
 const isWeb = (url) => /^https?:/i.test(url);
 const bare = (url) => String(url).split('#')[0];
 
-// A hop on another host is a login or single sign-on step, whose query can carry a token.
-const hopUrl = (from, to) => {
+// Only the site URL the run asked for keeps its query: a step the server or a login host chose can carry a token.
+const hopUrl = (from, to, first) => {
   try {
     const hop = new URL(from);
     const host = (url) => url.host.replace(/^www\./, '');
-    return host(hop) === host(new URL(to)) ? from : `${hop.origin}${hop.pathname}`;
+    return first && host(hop) === host(new URL(to)) ? from : `${hop.origin}${hop.pathname}`;
   } catch {
     return '';
   }
@@ -167,7 +167,7 @@ exports.default = async ({ page }) => {
     const consoleRow = (entry) => (held ? held.push([current, entry]) : row(current, entry));
 
     const writeVisit = (visit) => {
-      write({ type: 'visit', visit: visit.id, url: clip(visit.url, MAX_URL), status: visit.status, redirectedFrom: visit.redirectedFrom.map((from) => hopUrl(from, visit.url)), ...(visit.failure && { failure: clip(visit.failure, MAX_TEXT) }), ...(visit.caughtUp && { caughtUp: true }) });
+      write({ type: 'visit', visit: visit.id, url: clip(visit.url, MAX_URL), status: visit.status, redirectedFrom: visit.redirectedFrom.map((from, index) => hopUrl(from, visit.url, index === 0)), ...(visit.failure && { failure: clip(visit.failure, MAX_TEXT) }), ...(visit.caughtUp && { caughtUp: true }) });
     };
 
     // Late shifts count, so this reads until the visit ends or ten seconds after load, writing each change; the visit's last line is its value.

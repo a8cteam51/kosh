@@ -386,6 +386,17 @@ test('a report with pages[] gets them from the capture whatever flag it was rend
   assert.deepEqual(archivedReport.pages.map(({ loadTime, lcp }) => [loadTime, lcp]), [[900, 700]]);
 });
 
+test("a performance report with rows the merge didn't write is refused, pointing at the skill's own path", (t) => {
+  const box = sandbox(t);
+
+  const { status, output } = run(box, WRAPPER, [write(box, 'reports/data/qa-report-performance-example.json', performanceReport(INVENTED))]);
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /pages\[\] has rows the page capture didn't write/);
+  assert.ok(output.includes(path.join(box.reportsDir, 'data', 'qa-report-performance.json')), output);
+  assert.ok(!fs.existsSync(archivedPerformance(box)), 'the report was archived');
+});
+
 test("a merge that fails stops the render, so the model's numbers never reach a report", (t) => {
   const box = sandbox(t);
   writeCapture(box, SESSION, MEASURED);

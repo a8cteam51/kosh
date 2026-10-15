@@ -213,12 +213,13 @@ test("a page's files are a column of their own, so a warm load reads as 0 KB", (
   assert.match(html, /<th scope="col">HTML<\/th><th scope="col">Files<\/th>/);
 });
 
-test('a message missing from one loaded page, or seen on the only one, is not site-wide', (t) => {
+test('a message missing from one loaded page, or seen on the only page, is not site-wide', (t) => {
   const box = sandbox(t);
   const error = { level: 'error', text: 'Uncaught TypeError' };
 
   assert.doesNotMatch(renderPerformance(box, withPages([{ console: [error] }, { console: [] }, { failure: 'net::ERR_FAILED', status: null, console: [error] }])), /Site-wide/);
   assert.doesNotMatch(renderPerformance(box, withPages([{ console: [error] }])), /Site-wide/);
+  assert.doesNotMatch(renderPerformance(box, withPages([{ console: [error] }, { url: 'https://example.com/', viewport: '375x812', console: [error] }])), /Site-wide/);
 });
 
 test('fewer than four covered pages is flagged, and four is not', (t) => {
