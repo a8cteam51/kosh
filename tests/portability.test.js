@@ -41,3 +41,8 @@ test('ALLOWED names only real files and rules', () => {
     for (const rule of Object.keys(counts)) assert.ok(RULES.includes(rule), `no rule ${rule}`);
   }
 });
+
+// Claude Code reads AGENTS.md through this import, and other hosts read only AGENTS.md, so nothing else belongs in CLAUDE.md.
+test('CLAUDE.md only imports AGENTS.md', () => {
+  assert.equal(fs.readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8').trim(), '@AGENTS.md');
+});

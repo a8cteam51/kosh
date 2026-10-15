@@ -6,7 +6,7 @@ const { captureFile } = require('../collectors/capture.js');
 // kosh's own layout, so it holds from any folder and in any checkout.
 const IN_REPORTS = /reports\/data\/[^\s]*capture[^\s]*\.jsonl/i;
 
-// Broader patterns, for commands that can reach the folder holding kosh's reports/.
+// Broader patterns only for commands that can reach kosh's reports/, since plugin hooks run in every project.
 const IN_KOSH = [
   /capture[^\s]*\.jsonl/i,
   /capture[\w-]*\*/i,
