@@ -122,6 +122,7 @@ test('with no session log the self-report stays, labelled, and effort comes from
 test('the requested model, with its context variant, is recorded only when it is the one that served', (t) => {
   for (const [line, expected] of [
     [assistant('claude-fallback', 'xhigh', { requestedModel: 'claude-requested[1m]' }), 'claude-fallback'],
+    [assistant('claude-opus-5', 'xhigh', { requestedModel: 'claude-opus-5-5[1m]' }), 'claude-opus-5'],
     [assistant('claude-served', 'xhigh'), 'claude-served'],
   ]) {
     const report = freshRun();

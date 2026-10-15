@@ -49,7 +49,7 @@ function sessionFacts(env = process.env) {
     const model = entry?.message?.model;
     if (entry?.type === 'assistant' && !entry.isSidechain && typeof model === 'string' && model && model !== '<synthetic>') {
       // requestedModel adds the context variant ([1m]); after a fallback to another model, the served one stands.
-      const id = typeof entry.requestedModel === 'string' && entry.requestedModel.startsWith(model) ? entry.requestedModel : model;
+      const id = typeof entry.requestedModel === 'string' && entry.requestedModel.startsWith(`${model}[`) ? entry.requestedModel : model;
       return { model: id, effort: typeof entry.effort === 'string' && entry.effort ? entry.effort : effort };
     }
   }
