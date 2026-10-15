@@ -6,6 +6,11 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { buildPages } = require('../scripts/page-capture.js');
 
+// Inside Claude Code these point the stamp at the real session's transcript and effort.
+delete process.env.CLAUDE_CODE_SESSION_ID;
+delete process.env.CLAUDE_EFFORT;
+process.env.CLAUDE_CONFIG_DIR = path.join(os.tmpdir(), 'kosh-no-claude-config');
+
 const WRAPPER = path.join(__dirname, '../scripts/run-qa-report.sh');
 const RENDERER = path.join(__dirname, '../scripts/generate-report.js');
 
@@ -36,8 +41,8 @@ const write = (box, name, value) => {
 
 const SESSION = 'wrapper-test';
 
-const run = (box, command, args) => {
-  const { status, stdout, stderr, error } = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir, CLAUDE_CODE_SESSION_ID: SESSION } });
+const run = (box, command, args, env = {}) => {
+  const { status, stdout, stderr, error } = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir, CLAUDE_CODE_SESSION_ID: SESSION, ...env } });
   assert.ifError(error);
   return { status, output: (stdout + stderr).replace(/\x1b\[[0-9;]*m/g, '') };
 };
@@ -81,6 +86,26 @@ test("a ' in the path doesn't hide an aeo report's mode", (t) => {
 });
 
 const stampable = () => report((r) => { r.provenance = { model: 'claude-test-1' }; });
+
+test("only a skill's own output takes the session's model and effort; a re-render keeps its self-report", (t) => {
+  const box = sandbox(t);
+  const project = path.join(box.root, 'claude', 'projects', '-kosh');
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(path.join(project, `${SESSION}.jsonl`), JSON.stringify({ type: 'assistant', message: { model: 'claude-served' }, requestedModel: 'claude-served[1m]', effort: 'xhigh' }));
+  const env = { CLAUDE_CONFIG_DIR: path.join(box.root, 'claude'), CLAUDE_EFFORT: 'medium' };
+  const provenance = () => JSON.parse(fs.readFileSync(archiveCopy(box), 'utf8')).provenance;
+
+  const own = run(box, WRAPPER, [write(box, SKILL_OUTPUT, stampable())], env);
+  assert.equal(own.status, 0, own.output);
+  assert.deepEqual([provenance().model, provenance().modelSource, provenance().effort], ['claude-served[1m]', 'transcript', 'xhigh']);
+
+  const archived = JSON.parse(fs.readFileSync(archiveCopy(box), 'utf8'));
+  archived.provenance = { model: 'claude-test-1', seal: 'b'.repeat(64) };
+  fs.writeFileSync(archiveCopy(box), JSON.stringify(archived));
+  const rerender = run(box, WRAPPER, [archiveCopy(box)], env);
+  assert.equal(rerender.status, 0, rerender.output);
+  assert.deepEqual([provenance().model, provenance().modelSource, provenance().effort], ['claude-test-1', 'self-report', undefined]);
+});
 
 // The quoted pair reaches the stamp and the renderer as two flags, because the wrapper word-splits its flags.
 for (const flags of [['--functional', '--performance'], ['--functional --performance'], ['--functional', '--a11y']]) {

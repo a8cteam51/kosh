@@ -100,7 +100,8 @@ if [ "$(dirname "$QA_REPORT_JSON")" -ef "$DATA_DIR" ] && [[ "$(basename "$QA_REP
 fi
 
 # A missing stamp costs comparability, not the report, so it warns rather than exits.
-node "$STAMP_SCRIPT_PATH" "$QA_REPORT_JSON" $TEST_TYPE_FLAGS \
+# The session's model and effort describe the run only for its own output, not a re-render.
+( $SKILL_OUTPUT || unset CLAUDE_CODE_SESSION_ID CLAUDE_EFFORT; node "$STAMP_SCRIPT_PATH" "$QA_REPORT_JSON" $TEST_TYPE_FLAGS ) \
   || echo -e "${YELLOW}Warning: could not stamp provenance on $QA_REPORT_JSON${NC}"
 
 # Capture the generator's output so Step 4 reads back the path it prints rather than

@@ -9,8 +9,27 @@ const { schemaFor } = require('../scripts/validate-report.js');
 
 const ROOT = path.join(__dirname, '..');
 
+// Inside Claude Code these point the stamp at the real session's transcript.
+delete process.env.CLAUDE_CODE_SESSION_ID;
+delete process.env.CLAUDE_EFFORT;
+
 const HASH = /^[0-9a-f]{64}$/;
+const SESSION = '0bfb41e4-test-session';
 const freshRun = () => ({ timestamp: '2026-09-21T12:00:00Z', provenance: { model: 'claude-test-1' } });
+
+const assistant = (model, effort, extra = {}) => JSON.stringify({ type: 'assistant', message: { model }, effort, ...extra });
+
+// Claude Code writes a subagent's replies to <session>/subagents/, never to the main transcript.
+const sessionLog = (t, lines, subagentLines = []) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-claude-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const project = path.join(dir, 'projects', '-kosh');
+  fs.mkdirSync(path.join(dir, 'projects', '-another-project'), { recursive: true });
+  fs.mkdirSync(path.join(project, SESSION, 'subagents'), { recursive: true });
+  fs.writeFileSync(path.join(project, `${SESSION}.jsonl`), lines.join('\n'));
+  fs.writeFileSync(path.join(project, SESSION, 'subagents', 'agent-a1.jsonl'), subagentLines.join('\n'));
+  return { CLAUDE_CODE_SESSION_ID: SESSION, CLAUDE_CONFIG_DIR: dir };
+};
 
 const tempSkillDir = (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-skill-'));
@@ -26,6 +45,8 @@ test('a fresh run is stamped with version, model, skill hash and seal', () => {
 
   assert.equal(stamp(report, ['--functional']), 'stamped');
   assert.equal(report.provenance.model, 'claude-test-1');
+  assert.equal(report.provenance.modelSource, 'self-report');
+  assert.equal('effort' in report.provenance, false);
   assert.match(report.provenance.pluginVersion, /^\d+\.\d+\.\d+$/);
   assert.match(report.provenance.skills['functional-design'], HASH);
   assert.equal(report.provenance.collectors, hashSkill(path.join(ROOT, 'collectors')));
@@ -56,6 +77,76 @@ test('a block sealed before collectors and playwrightMcp existed is kept', () =>
   const sealed = structuredClone(report);
 
   assert.equal(stamp(report, ['--functional']), 'kept');
+  assert.deepEqual(report, sealed);
+});
+
+test("on Claude Code the model and effort come from the session log's latest main-thread reply", (t) => {
+  const env = sessionLog(t, [
+    JSON.stringify({ type: 'user', message: { content: 'run the performance test' } }),
+    assistant('claude-earlier', 'high'),
+    assistant('claude-served', 'xhigh', { requestedModel: 'claude-served[1m]' }),
+    JSON.stringify({ type: 'assistant', message: { model: '<synthetic>' }, isApiErrorMessage: true }),
+    JSON.stringify({ type: 'attachment' }),
+    '{"type":"assistant","message":{"mod',
+  ], [assistant('claude-subagent', 'low')]);
+  const report = freshRun();
+
+  assert.equal(stamp(report, ['--performance'], { ...env, CLAUDE_EFFORT: 'medium' }), 'stamped');
+  assert.equal(report.provenance.model, 'claude-served[1m]');
+  assert.equal(report.provenance.modelSource, 'transcript');
+  assert.equal(report.provenance.effort, 'xhigh');
+});
+
+test('with no session log the self-report stays, labelled, and effort comes from CLAUDE_EFFORT', (t) => {
+  const log = sessionLog(t, [assistant('claude-served', 'xhigh')]);
+  fs.writeFileSync(path.join(log.CLAUDE_CONFIG_DIR, 'projects', 'escaped.jsonl'), assistant('claude-escaped', 'max'));
+  const envs = [
+    {},
+    { CLAUDE_CODE_SESSION_ID: 'no-such-session', CLAUDE_CONFIG_DIR: log.CLAUDE_CONFIG_DIR },
+    { CLAUDE_CODE_SESSION_ID: '../escaped', CLAUDE_CONFIG_DIR: log.CLAUDE_CONFIG_DIR },
+    { CLAUDE_CODE_SESSION_ID: SESSION, CLAUDE_CONFIG_DIR: path.join(log.CLAUDE_CONFIG_DIR, 'missing') },
+    sessionLog(t, [JSON.stringify({ type: 'user' })], [assistant('claude-subagent', 'low')]),
+  ];
+
+  for (const env of envs) {
+    for (const effort of [undefined, 'medium']) {
+      const report = freshRun();
+      stamp(report, ['--performance'], effort ? { ...env, CLAUDE_EFFORT: effort } : env);
+      assert.equal(report.provenance.model, 'claude-test-1');
+      assert.equal(report.provenance.modelSource, 'self-report');
+      assert.equal(report.provenance.effort, effort);
+    }
+  }
+});
+
+test('the requested model, with its context variant, is recorded only when it is the one that served', (t) => {
+  for (const [line, expected] of [
+    [assistant('claude-fallback', 'xhigh', { requestedModel: 'claude-requested[1m]' }), 'claude-fallback'],
+    [assistant('claude-served', 'xhigh'), 'claude-served'],
+  ]) {
+    const report = freshRun();
+    stamp(report, ['--performance'], sessionLog(t, [line]));
+    assert.equal(report.provenance.model, expected);
+  }
+});
+
+test('a sealed block with its model, modelSource or effort edited is restamped', (t) => {
+  const env = sessionLog(t, [assistant('claude-served', 'xhigh')]);
+  for (const edit of [(p) => { p.model = 'claude-other'; }, (p) => { p.modelSource = 'self-report'; }, (p) => { p.effort = 'low'; }, (p) => { delete p.effort; }]) {
+    const report = freshRun();
+    stamp(report, ['--performance'], env);
+    assert.equal(stamp(report, ['--performance'], {}), 'kept');
+    edit(report.provenance);
+
+    assert.equal(stamp(report, ['--performance'], {}), 'stamped');
+  }
+});
+
+test('a block sealed before modelSource existed keeps its seal and its self-reported model', (t) => {
+  const report = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'performance-opus-5-5-2026-10-14.json'), 'utf8'));
+  const sealed = structuredClone(report);
+
+  assert.equal(stamp(report, ['--performance'], sessionLog(t, [assistant('claude-served', 'xhigh')])), 'kept');
   assert.deepEqual(report, sealed);
 });
 
@@ -163,15 +254,17 @@ test('skill hash ignores dotfiles, hidden directories and broken symlinks', (t) 
 test('describeProvenance shortens hashes and tolerates partial blocks', () => {
   assert.equal(
     describeProvenance({ model: 'm', pluginVersion: '1.1.0', skills: { aeo: 'abcdef0123456789' } }),
-    'kosh 1.1.0 · model m · skill aeo@abcdef012345'
+    'kosh 1.1.0 · model m (self-reported) · skill aeo@abcdef012345'
   );
-  assert.equal(describeProvenance({ model: 'm' }), 'kosh ? · model m');
+  assert.equal(describeProvenance({ model: 'm' }), 'kosh ? · model m (self-reported)');
+  assert.equal(describeProvenance({ model: 'm', modelSource: 'transcript', effort: 'xhigh' }), 'kosh ? · model m · effort xhigh');
+  assert.equal(describeProvenance({ model: 'm', modelSource: 'self-report' }), 'kosh ? · model m (self-reported)');
 });
 
 test('every JSON Schema documents exactly the fields the stamp writes, the same way', () => {
   const report = freshRun();
   report.provenance.captureSha256 = 'e'.repeat(64);
-  stamp(report, ['--shop']);
+  stamp(report, ['--shop'], { CLAUDE_EFFORT: 'high' });
   const schemas = ['shop', 'aeo', 'performance'].map((type) => schemaFor(type).properties.provenance);
 
   assert.deepEqual(Object.keys(schemas[0].properties).sort(), Object.keys(report.provenance).sort());

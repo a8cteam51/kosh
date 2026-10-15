@@ -6,6 +6,11 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { schemaFor, validate } = require('../scripts/validate-report.js');
 
+// Inside Claude Code these point the stamp at the real session's transcript and effort.
+delete process.env.CLAUDE_CODE_SESSION_ID;
+delete process.env.CLAUDE_EFFORT;
+process.env.CLAUDE_CONFIG_DIR = path.join(os.tmpdir(), 'kosh-no-claude-config');
+
 const ROOT = path.join(__dirname, '..');
 
 const jsonSchemaTypes = fs.readdirSync(path.join(ROOT, 'schemas'))

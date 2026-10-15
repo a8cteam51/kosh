@@ -20,7 +20,7 @@ const block = (file) => {
   const pages = Array.isArray(report.pages) ? report.pages : null;
   const urls = [...(report.visitedPages ?? []), ...(pages ?? []).map((page) => page.url)];
   const lines = [
-    `=== ${path.basename(file)} — ${report.timestamp} — model ${p.model ?? '?'}`,
+    `=== ${path.basename(file)} — ${report.timestamp} — model ${p.model ?? '?'} — effort ${p.effort ?? '?'}`,
     `inputs: skill ${short(Object.values(p.skills ?? {})[0])} collectors ${short(p.collectors)} capture ${short(p.captureSha256)} mcp ${(p.playwrightMcp ?? ['?']).join(' ')}`,
     `hosts: ${[...new Set(urls.map(hostOf).filter(Boolean))].join(', ')}`,
     `invented keys: ${Object.keys(report).filter((key) => !KNOWN.has(key)).join(', ') || 'none'}`,

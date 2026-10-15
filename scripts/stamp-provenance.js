@@ -3,6 +3,7 @@
 // Usage: node stamp-provenance.js <report.json> [--functional|--performance|--accessibility|--shop|--aeo]
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -24,16 +25,48 @@ function hashSkill(dir) {
   return hash.digest('hex');
 }
 
+// No hook or env var carries the model, so it comes from Claude Code's session log; the message running this command isn't in it yet, earlier ones are.
+function sessionFacts(env = process.env) {
+  const effort = env.CLAUDE_EFFORT || undefined;
+  const session = env.CLAUDE_CODE_SESSION_ID;
+  if (!/^[A-Za-z0-9-]+$/.test(session ?? '')) return { effort };
+
+  const projects = path.join(env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'projects');
+  // ponytail: main thread only; a skill run inside a subagent (replies in <session>/subagents/) gets the parent's model.
+  let lines = [];
+  try {
+    const transcript = fs.readdirSync(projects)
+      .map((dir) => path.join(projects, dir, `${session}.jsonl`))
+      .find((file) => fs.existsSync(file));
+    if (transcript) lines = fs.readFileSync(transcript, 'utf8').split('\n');
+  } catch {
+    return { effort };
+  }
+
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    let entry;
+    try { entry = JSON.parse(lines[i]); } catch { continue; }
+    const model = entry?.message?.model;
+    if (entry?.type === 'assistant' && !entry.isSidechain && typeof model === 'string' && model && model !== '<synthetic>') {
+      // requestedModel adds the context variant ([1m]); after a fallback to another model, the served one stands.
+      const id = typeof entry.requestedModel === 'string' && entry.requestedModel.startsWith(model) ? entry.requestedModel : model;
+      return { model: id, effort: typeof entry.effort === 'string' && entry.effort ? entry.effort : effort };
+    }
+  }
+  return { effort };
+}
+
 // Catches accidental copy-forward and echoed blocks (new run, new timestamp, seal mismatch); unkeyed, so not proof against deliberate forgery.
-function sealFor(report, { pluginVersion, skills, collectors, playwrightMcp, captureSha256 }) {
+function sealFor(report, { model, modelSource, effort, pluginVersion, skills, collectors, playwrightMcp, captureSha256 }) {
   const fields = [report.timestamp, pluginVersion, Object.entries(skills || {}).sort()];
   // Blocks sealed before these fields existed keep their seal.
   if (collectors !== undefined || playwrightMcp !== undefined) fields.push(collectors, playwrightMcp);
   if (captureSha256 !== undefined) fields.push(captureSha256);
+  if (modelSource !== undefined) fields.push(model, modelSource, effort);
   return crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex');
 }
 
-function stamp(report, flags) {
+function stamp(report, flags, env = process.env) {
   const existing = report.provenance;
   if (!existing || typeof existing !== 'object') return 'absent';
   if (existing.seal && existing.seal === sealFor(report, existing)) return 'kept';
@@ -51,8 +84,11 @@ function stamp(report, flags) {
 
   const plugin = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude-plugin/plugin.json'), 'utf8'));
   const mcp = JSON.parse(fs.readFileSync(path.join(ROOT, '.mcp.json'), 'utf8'));
+  const facts = sessionFacts(env);
   const stamped = {
-    model: String(existing.model || 'unknown'),
+    model: facts.model || String(existing.model || 'unknown'),
+    modelSource: facts.model ? 'transcript' : 'self-report',
+    ...(facts.effort && { effort: facts.effort }),
     pluginVersion: plugin.version,
     skills,
     collectors: hashSkill(path.join(ROOT, 'collectors')),
@@ -68,7 +104,9 @@ function describeProvenance(provenance) {
   const skills = Object.entries(provenance.skills || {})
     .map(([name, hash]) => `${name}@${String(hash).slice(0, 12)}`)
     .join(', ');
-  const parts = [`kosh ${provenance.pluginVersion || '?'}`, `model ${provenance.model || 'unknown'}`];
+  const selfReported = provenance.modelSource !== 'transcript' ? ' (self-reported)' : '';
+  const parts = [`kosh ${provenance.pluginVersion || '?'}`, `model ${provenance.model || 'unknown'}${selfReported}`];
+  if (provenance.effort) parts.push(`effort ${provenance.effort}`);
   if (skills) parts.push(`skill ${skills}`);
   return parts.join(' · ');
 }
