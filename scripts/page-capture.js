@@ -125,6 +125,8 @@ const merge = (reportPath, flags) => {
   if (!fs.existsSync(taken)) console.warn(missingCapture(captureFile()));
   const entries = reportEntries(readEntries(taken), report.url);
 
+  // Without the hash, validation reads a performance report's pages[] as the model's.
+  if (visitCount(entries)) report.provenance ??= {};
   if (report.provenance && typeof report.provenance === 'object') {
     if (visitCount(entries)) report.provenance.captureSha256 = crypto.createHash('sha256').update(archiveText(entries)).digest('hex');
     else delete report.provenance.captureSha256;

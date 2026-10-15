@@ -227,14 +227,20 @@ test('a same-day rerun moves the previous capture aside with its report', (t) =>
   assert.equal(lines(archivedCapture(box)).length, 5);
 });
 
-test('rendering the same report again adds to its archived capture', (t) => {
+test("rendering the same report again keeps each run's capture beside its own JSON", (t) => {
   const box = sandbox(t);
-  for (let i = 0; i < 2; i += 1) {
-    writeCapture(box);
+  for (const loadTime of [900, 950]) {
+    writeCapture(box, SESSION, [CAPTURE[0], { ...CAPTURE[1], loadTime }]);
     assert.equal(run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]).status, 0);
   }
 
-  assert.equal(lines(archivedCapture(box)).length, 10);
+  const reports = archived(box).filter((name) => name.endsWith('.json'));
+  assert.equal(reports.length, 2);
+  for (const name of reports) {
+    const json = path.join(box.reportsDir, 'data', 'archive', name);
+    const capture = fs.readFileSync(json.replace(/\.json$/, '.capture.jsonl'));
+    assert.equal(JSON.parse(fs.readFileSync(json, 'utf8')).provenance.captureSha256, require('crypto').createHash('sha256').update(capture).digest('hex'), name);
+  }
 });
 
 test("a skill's report is sealed to the capture the archive holds, whatever its type, and a copied hash is replaced", (t) => {
@@ -395,6 +401,19 @@ test("a performance report with rows the merge didn't write is refused, pointing
   assert.match(output, /pages\[\] has rows the page capture didn't write/);
   assert.ok(output.includes(path.join(box.reportsDir, 'data', 'qa-report-performance.json')), output);
   assert.ok(!fs.existsSync(archivedPerformance(box)), 'the report was archived');
+});
+
+test('a skill report with no provenance block still gets its pages from the capture, sealed to it', (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, MEASURED);
+
+  const { status, output } = run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, performanceReport((r) => { delete r.provenance; }))]);
+
+  assert.equal(status, 0, output);
+  const archivedReport = JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8'));
+  assert.match(archivedReport.provenance.captureSha256, /^[0-9a-f]{64}$/);
+  assert.equal(archivedReport.provenance.model, 'unknown');
+  assert.deepEqual(archivedReport.pages.map(({ loadTime, lcp }) => [loadTime, lcp]), [[900, 700]]);
 });
 
 test("a merge that fails stops the render, so the model's numbers never reach a report", (t) => {

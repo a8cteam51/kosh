@@ -14,8 +14,8 @@ const kept = reportEntries(entries, reportUrl);
 const visits = visitCount(kept);
 
 try {
-  // A captureSha256 is over exactly this text; an unsealed rerun of the same report keeps both runs' entries.
-  if (visits) (report.provenance?.captureSha256 ? fs.writeFileSync : fs.appendFileSync)(destination, archiveText(kept));
+  // Overwritten, not appended: the report's captureSha256 is over exactly this text.
+  if (visits) fs.writeFileSync(destination, archiveText(kept));
 } catch (error) {
   console.warn(`Warning: could not write ${destination} (${error.code ?? error.message}); this run's capture is still at ${taken}`);
   process.exit(1);
