@@ -4,6 +4,8 @@
   "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
   "provenance": {
     "model": "claude-sonnet-5",
+    "modelSource": "transcript or self-report, added by scripts/run-qa-report.sh — do not write this field",
+    "effort": "the reasoning effort the run was sent at, added by scripts/run-qa-report.sh — do not write this field",
     "pluginVersion": "added by scripts/run-qa-report.sh — do not write this field",
     "skills": {"functional-design": "sha256 of the skill directory, added by scripts/run-qa-report.sh — do not write this field"},
     "collectors": "sha256 of collectors/, added by scripts/run-qa-report.sh — do not write this field",

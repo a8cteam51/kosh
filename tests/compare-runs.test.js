@@ -16,7 +16,7 @@ const compare = (...files) => {
 test('a run from before pages[] prints its homepage numbers, its filter check and its invented keys', () => {
   const out = compare(fixture('performance-opus-5-run-1.json'));
 
-  assert.match(out, /^=== performance-opus-5-run-1\.json — 2026-09-22T15:19:32Z — model claude-opus-5\[1m\]$/m);
+  assert.match(out, /^=== performance-opus-5-run-1\.json — 2026-09-22T15:19:32Z — model claude-opus-5\[1m\] — effort \?$/m);
   assert.match(out, /^invented keys: summary$/m);
   assert.match(out, /^homepage: desktop 413ms console=2 network=0 \| mobile 205ms console=2 network=0$/m);
   assert.match(out, /^filter check \(should be 0\): analytics\/3xx\/OPTIONS in network: 0$/m);

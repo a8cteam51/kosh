@@ -25,7 +25,17 @@
       "properties": {
         "model": {
           "type": "string",
-          "description": "Exact model ID the skill ran as, self-reported by the model; \"unknown\" when its system prompt does not state one. The only provenance field the skill writes."
+          "description": "Exact model ID the run was served by. For a skill's own output on Claude Code, read from the session log by scripts/run-qa-report.sh; elsewhere self-reported by the model, \"unknown\" when its system prompt does not state one. The only provenance field the skill writes."
+        },
+        "modelSource": {
+          "type": "string",
+          "enum": ["transcript", "self-report"],
+          "description": "Where model came from: \"transcript\" is Claude Code's session log (the model that served the run's latest reply), \"self-report\" is the skill's own claim, used when there is no session log and when the report is re-rendered. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "effort": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The reasoning effort the run's latest reply was sent at, from Claude Code's session log or its CLAUDE_EFFORT variable; absent on hosts that set neither. Added by scripts/run-qa-report.sh — do not write this field."
         },
         "pluginVersion": {
           "type": "string",
@@ -54,7 +64,7 @@
         "seal": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
-          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors, playwrightMcp and captureSha256, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
+          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors, playwrightMcp, captureSha256, model, modelSource and effort, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
         }
       }
     },
