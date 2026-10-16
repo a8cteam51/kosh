@@ -56,7 +56,7 @@ collectors/      → code Playwright MCP loads: `kosh.js` into every page as `wi
 scripts/         → report generation, validation, provenance, the page-capture merge, summary and archive, and the run comparison
 hooks/           → session hooks (create reports/data/ on startup) and the PreToolUse capture guard
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
-tests/           → `node --test` checks for the scripts, the collectors, the capture and its guard, skill-embedded snippets, shared-block copies, Claude Code-only constructs in skills, tracked JSON files, the Playwright MCP flags and allowlist, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
+tests/           → `node --test` checks for the scripts, the collectors, the capture and its guard, skill-embedded snippets, shared-block copies, Claude Code-only constructs in skills, tracked JSON files, the Playwright MCP flags and allowlist, the promptfoo eval wiring, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
 docs/            → user-facing guides (getting-started.md)
 .github/         → the CI workflow (runs tests/ on every PR)
 .mcp.json        → Playwright MCP server configuration (see above)
@@ -90,7 +90,7 @@ A skill is a prompt the model reads once and follows for the whole run. `skills/
 - Carries the blocks in `shared/` as verbatim copies, because skills can't include files and a skill folder must hold everything it runs: every skill carries the preamble, the gate check and the `provenance.model` line, and the skills in `CARRIERS` in `tests/shared-blocks.test.js` carry the others (the screenshot rule, performance only so far). Edit the `shared/` file and every copy together; the test fails otherwise.
 - Don't add Claude Code-only constructs (host tool names like `PushNotification`, `/kosh:` references, `mcp__` tool names, `CLAUDE_…` variables, `$ARGUMENTS`, "Claude prompt"): other hosts load skill text verbatim. `tests/portability.test.js` holds today's count per file, counting each `shared/` block once in `shared/` rather than in every copy; lower a count when a rewrite removes one, never raise it.
 - Put page-side code in `collectors/kosh.js` and call it from the skill in one line (`() => __kosh.<name>(…)`), not as a multi-line `javascript` block. `tests/skill-snippets.test.js` holds today's count of multi-line blocks per file; lower it when a block moves out, never raise it.
-- Test your changes by running the skill against a real site and reviewing the report. For `functional-design`, also run the promptfoo evals — see `evals/README.md`.
+- Test your changes by running the skill against a real site and reviewing the report. For `functional-design` and `performance`, also run the promptfoo evals — see `evals/README.md`.
 
 ### Adding or editing a schema
 

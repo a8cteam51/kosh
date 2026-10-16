@@ -1,0 +1,151 @@
+description: functional-design
+config:
+  - prompts: [functional-design]
+    assert:
+      - type: skill-used
+        value: functional-design
+tests:
+  - description: WCAG cited for contrast only, /kosh:a11y recommended for the rest
+    vars:
+      request: |
+        During desktop testing on the About page, https://example.com/about/,
+        you observed two problems:
+
+        1. Six content images have no alt text.
+        2. The Section 1.5 contrast script flagged footer body text
+           (16px, weight 400) at a ratio of 3.2 against a threshold of 4.5.
+           You saved a screenshot of the footer at
+           reports/screenshots/about-footer-desktop.png.
+
+        Write both findings as they would appear in the report, following the
+        skill's rules about WCAG citations and recommendations.
+    options:
+      # Grade only the report entries: commentary around them can name the criterion it chose not to cite.
+      transform: '[...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((block) => block[1]).join("\n")'
+    assert:
+      - type: contains
+        value: '1.4.3'
+      - type: not-contains
+        value: '1.1.1'
+      - type: contains
+        value: 'kosh:a11y'
+
+  - description: Markup-category image finding recommends a sizes fix, not a re-upload
+    vars:
+      request: |
+        The Section 1.4 image resolution script returned this result on the
+        homepage:
+
+        {
+          "src": "hero-banner.jpg",
+          "naturalSize": "485x303px",
+          "renderedCSS": "800x500px",
+          "neededForCrisp": "1600x1000px (2x DPR)",
+          "resolutionRatio": 0.3,
+          "status": "flag",
+          "diagnosisCategory": "markup",
+          "largestSrcsetCandidate": "1600w",
+          "sizesAttr": "(max-width: 1024px) 485px, 485px"
+        }
+
+        Answer in three lines:
+        1. MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does the fix change the page markup?
+        3. The one-sentence recommended fix as it would appear in the report.
+    assert:
+      - type: regex
+        value: '^[\s*_#>\d.)]*MARKUP\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*YES\b'
+      - type: icontains
+        value: sizes
+
+  - description: Source-category image finding points at the asset, not the markup
+    vars:
+      request: |
+        The Section 1.4 image resolution script returned this result on the
+        homepage:
+
+        {
+          "src": "team-photo.jpg",
+          "naturalSize": "768x480px",
+          "renderedCSS": "800x500px",
+          "neededForCrisp": "1600x1000px (2x DPR)",
+          "resolutionRatio": 0.48,
+          "status": "flag",
+          "diagnosisCategory": "source",
+          "largestSrcsetCandidate": "768w",
+          "sizesAttr": "100vw"
+        }
+
+        Answer in three lines:
+        1. MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does the fix change the page markup?
+        3. The one-sentence recommended action as it would appear in the report.
+    assert:
+      - type: regex
+        value: '^[\s*_#>\d.)]*SOURCE\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*NO\b'
+      - type: regex
+        value: '([Uu]pload|[Oo]riginal|[Gg]enerator)'
+
+  - description: Request-category image finding fixes the requested size, not the upload
+    vars:
+      request: |
+        The Section 1.4 image resolution script returned this result on a
+        blog post:
+
+        {
+          "src": "related-thumb.jpg?resize=350%2C200&ssl=1",
+          "naturalSize": "350x200px",
+          "renderedCSS": "305x172px",
+          "neededForCrisp": "610x344px (2x DPR)",
+          "resolutionRatio": 0.57,
+          "status": "flag",
+          "diagnosisCategory": "request",
+          "largestSrcsetCandidate": "none",
+          "sizesAttr": "missing"
+        }
+
+        Answer in three lines:
+        1. REQUEST, MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does this evidence alone justify recommending a re-upload?
+        3. The one-sentence recommended fix as it would appear in the report.
+    assert:
+      - type: regex
+        value: '^[\s*_#>\d.)]*REQUEST\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*NO\b'
+      - type: regex
+        value: '([Tt]emplate|[Bb]lock|requested|requests)'
+
+  - description: Request-category finding still owns the fix when the CDN rounded a pixel off the requested size
+    vars:
+      request: |
+        The Section 1.4 image resolution script returned this result on a
+        blog post:
+
+        {
+          "src": "workflow-diagram.png?w=1024",
+          "naturalSize": "1023x644px",
+          "renderedCSS": "710x447px",
+          "neededForCrisp": "1420x894px (2x DPR)",
+          "resolutionRatio": 0.72,
+          "status": "flag",
+          "diagnosisCategory": "request",
+          "largestSrcsetCandidate": "none",
+          "sizesAttr": "missing"
+        }
+
+        Answer in three lines:
+        1. REQUEST, MARKUP or SOURCE, naming which category owns the fix.
+        2. YES or NO: does this evidence alone justify recommending a re-upload?
+        3. The one-sentence recommended fix as it would appear in the report.
+    assert:
+      - type: regex
+        value: '^[\s*_#>\d.)]*REQUEST\b'
+      - type: regex
+        value: '^[^\n]*\n[\s*_#>\d.)]*NO\b'
+      - type: regex
+        value: '([Tt]emplate|[Bb]lock|requested|requests)'

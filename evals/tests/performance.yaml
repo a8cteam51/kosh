@@ -1,0 +1,127 @@
+description: performance
+config:
+  - prompts: [performance]
+    vars:
+      environment: production
+      note: ''
+    options:
+      # Grade only the report JSON (commentary can name a finding it chose not to raise); an unparseable answer fails instead of erroring.
+      transform: '(() => { try { return JSON.parse([...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].at(-1)[1]); } catch { return output; } })()'
+    assert:
+      - type: skill-used
+        value: performance
+tests:
+  - description: Third-party analytics console error on production is a low finding
+    vars:
+      rows: &analytics-rows |
+        [
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":612,"domContentLoaded":455,"ttfb":88,"transferSize":41210,"resourceTransferSize":684330,"lcp":540,"cls":0.01,"vitalsSettled":true,"console":[{"level":"error","text":"Analytics: dataLayer not initialised, 3 events dropped","source":"https://analytics.example.net/tag.js"}],"network":[]},
+          {"url":"https://example.com/about/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":498,"domContentLoaded":362,"ttfb":71,"transferSize":36880,"resourceTransferSize":512904,"lcp":430,"cls":0,"vitalsSettled":true,"console":[{"level":"error","text":"Analytics: dataLayer not initialised, 3 events dropped","source":"https://analytics.example.net/tag.js"}],"network":[]},
+          {"url":"https://example.com/blog/hello-world/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":655,"domContentLoaded":470,"ttfb":94,"transferSize":44102,"resourceTransferSize":701455,"lcp":610,"cls":0.02,"vitalsSettled":true,"console":[{"level":"error","text":"Analytics: dataLayer not initialised, 3 events dropped","source":"https://analytics.example.net/tag.js"}],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":580,"domContentLoaded":421,"ttfb":83,"transferSize":39417,"resourceTransferSize":655210,"lcp":520,"cls":0.01,"vitalsSettled":true,"console":[{"level":"error","text":"Analytics: dataLayer not initialised, 3 events dropped","source":"https://analytics.example.net/tag.js"}],"network":[]},
+          {"url":"https://example.com/contact/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":701,"domContentLoaded":503,"ttfb":79,"transferSize":35560,"resourceTransferSize":590120,"lcp":480,"cls":0,"vitalsSettled":true,"console":[{"level":"error","text":"Analytics: dataLayer not initialised, 3 events dropped","source":"https://analytics.example.net/tag.js"}],"network":[]},
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":640,"domContentLoaded":470,"ttfb":90,"transferSize":41210,"resourceTransferSize":612770,"lcp":590,"cls":0.03,"vitalsSettled":true,"console":[{"level":"error","text":"Analytics: dataLayer not initialised, 3 events dropped","source":"https://analytics.example.net/tag.js"}],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":602,"domContentLoaded":440,"ttfb":85,"transferSize":39417,"resourceTransferSize":590330,"lcp":560,"cls":0.02,"vitalsSettled":true,"console":[{"level":"error","text":"Analytics: dataLayer not initialised, 3 events dropped","source":"https://analytics.example.net/tag.js"}],"network":[]}
+        ]
+    assert:
+      - type: javascript
+        value: 'output.issues.low.some((finding) => /analytics/i.test(JSON.stringify(finding))) && output.issues.critical.length + output.issues.high.length + output.issues.medium.length === 0'
+
+  - description: The same third-party analytics console error on local is not a finding
+    vars:
+      environment: local
+      rows: *analytics-rows
+    assert:
+      - type: javascript
+        value: 'Object.values(output.issues).every((findings) => findings.length === 0)'
+
+  - description: A 404 on the theme's font file is critical
+    vars:
+      rows: |
+        [
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":612,"domContentLoaded":455,"ttfb":88,"transferSize":41210,"resourceTransferSize":684330,"lcp":540,"cls":0.01,"vitalsSettled":true,"console":[{"level":"error","text":"Failed to load resource: the server responded with a status of 404 ()","source":"https://example.com/wp-content/themes/example/fonts/body.woff2"}],"network":[{"url":"https://example.com/wp-content/themes/example/fonts/body.woff2","status":404,"resourceType":"font"}]},
+          {"url":"https://example.com/about/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":498,"domContentLoaded":362,"ttfb":71,"transferSize":36880,"resourceTransferSize":512904,"lcp":430,"cls":0,"vitalsSettled":true,"console":[{"level":"error","text":"Failed to load resource: the server responded with a status of 404 ()","source":"https://example.com/wp-content/themes/example/fonts/body.woff2"}],"network":[{"url":"https://example.com/wp-content/themes/example/fonts/body.woff2","status":404,"resourceType":"font"}]},
+          {"url":"https://example.com/blog/hello-world/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":655,"domContentLoaded":470,"ttfb":94,"transferSize":44102,"resourceTransferSize":701455,"lcp":610,"cls":0.02,"vitalsSettled":true,"console":[{"level":"error","text":"Failed to load resource: the server responded with a status of 404 ()","source":"https://example.com/wp-content/themes/example/fonts/body.woff2"}],"network":[{"url":"https://example.com/wp-content/themes/example/fonts/body.woff2","status":404,"resourceType":"font"}]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":580,"domContentLoaded":421,"ttfb":83,"transferSize":39417,"resourceTransferSize":655210,"lcp":520,"cls":0.01,"vitalsSettled":true,"console":[{"level":"error","text":"Failed to load resource: the server responded with a status of 404 ()","source":"https://example.com/wp-content/themes/example/fonts/body.woff2"}],"network":[{"url":"https://example.com/wp-content/themes/example/fonts/body.woff2","status":404,"resourceType":"font"}]},
+          {"url":"https://example.com/contact/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":701,"domContentLoaded":503,"ttfb":79,"transferSize":35560,"resourceTransferSize":590120,"lcp":480,"cls":0,"vitalsSettled":true,"console":[{"level":"error","text":"Failed to load resource: the server responded with a status of 404 ()","source":"https://example.com/wp-content/themes/example/fonts/body.woff2"}],"network":[{"url":"https://example.com/wp-content/themes/example/fonts/body.woff2","status":404,"resourceType":"font"}]},
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":640,"domContentLoaded":470,"ttfb":90,"transferSize":41210,"resourceTransferSize":612770,"lcp":590,"cls":0.03,"vitalsSettled":true,"console":[{"level":"error","text":"Failed to load resource: the server responded with a status of 404 ()","source":"https://example.com/wp-content/themes/example/fonts/body.woff2"}],"network":[{"url":"https://example.com/wp-content/themes/example/fonts/body.woff2","status":404,"resourceType":"font"}]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":602,"domContentLoaded":440,"ttfb":85,"transferSize":39417,"resourceTransferSize":590330,"lcp":560,"cls":0.02,"vitalsSettled":true,"console":[{"level":"error","text":"Failed to load resource: the server responded with a status of 404 ()","source":"https://example.com/wp-content/themes/example/fonts/body.woff2"}],"network":[{"url":"https://example.com/wp-content/themes/example/fonts/body.woff2","status":404,"resourceType":"font"}]}
+        ]
+    assert:
+      - type: javascript
+        value: 'output.issues.critical.some((finding) => JSON.stringify(finding).includes("body.woff2"))'
+
+  - description: A mixed-content script blocked on a production page is high, not critical
+    vars:
+      rows: |
+        [
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":612,"domContentLoaded":455,"ttfb":88,"transferSize":41210,"resourceTransferSize":684330,"lcp":540,"cls":0.01,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/about/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":498,"domContentLoaded":362,"ttfb":71,"transferSize":36880,"resourceTransferSize":512904,"lcp":430,"cls":0,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/hello-world/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":655,"domContentLoaded":470,"ttfb":94,"transferSize":44102,"resourceTransferSize":701455,"lcp":610,"cls":0.02,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":580,"domContentLoaded":421,"ttfb":83,"transferSize":39417,"resourceTransferSize":655210,"lcp":520,"cls":0.01,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/contact/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":701,"domContentLoaded":503,"ttfb":79,"transferSize":35560,"resourceTransferSize":590120,"lcp":480,"cls":0,"vitalsSettled":true,"console":[{"level":"error","text":"Mixed Content: The page at 'https://example.com/contact/' was loaded over HTTPS, but requested an insecure script 'http://forms.example.net/embed.js'. This request has been blocked; the content must be served over HTTPS.","source":"https://example.com/contact/"}],"network":[{"url":"http://forms.example.net/embed.js","status":null,"failure":"mixed-content","resourceType":"script"}]},
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":640,"domContentLoaded":470,"ttfb":90,"transferSize":41210,"resourceTransferSize":612770,"lcp":590,"cls":0.03,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":602,"domContentLoaded":440,"ttfb":85,"transferSize":39417,"resourceTransferSize":590330,"lcp":560,"cls":0.02,"vitalsSettled":true,"console":[],"network":[]}
+        ]
+    assert:
+      - type: javascript
+        value: 'output.issues.high.some((finding) => JSON.stringify(finding).includes("embed.js"))'
+      - type: javascript
+        value: '!output.issues.critical.some((finding) => JSON.stringify(finding).includes("embed.js"))'
+
+  - description: An LCP of 3.1 s on a page loaded mid-run is in the needs-improvement band, without a Core Web Vitals verdict
+    vars:
+      rows: |
+        [
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":612,"domContentLoaded":455,"ttfb":88,"transferSize":41210,"resourceTransferSize":684330,"lcp":540,"cls":0.01,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/about/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":498,"domContentLoaded":362,"ttfb":71,"transferSize":36880,"resourceTransferSize":512904,"lcp":430,"cls":0,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/hello-world/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":3410,"domContentLoaded":530,"ttfb":92,"transferSize":44102,"resourceTransferSize":1860400,"lcp":3140,"cls":0.02,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":580,"domContentLoaded":421,"ttfb":83,"transferSize":39417,"resourceTransferSize":655210,"lcp":520,"cls":0.01,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/contact/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":701,"domContentLoaded":503,"ttfb":79,"transferSize":35560,"resourceTransferSize":590120,"lcp":480,"cls":0,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":640,"domContentLoaded":470,"ttfb":90,"transferSize":41210,"resourceTransferSize":612770,"lcp":590,"cls":0.03,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":602,"domContentLoaded":440,"ttfb":85,"transferSize":39417,"resourceTransferSize":590330,"lcp":560,"cls":0.02,"vitalsSettled":true,"console":[],"network":[]}
+        ]
+    assert:
+      - type: javascript
+        value: 'output.issues.medium.some((finding) => JSON.stringify(finding).includes("LCP")) && !output.issues.high.some((finding) => JSON.stringify(finding).includes("LCP"))'
+      - type: javascript
+        value: '!/\b(pass(es|ed)?|fail(s|ed)?)\b\W+(\w+\W+){0,3}(Core Web Vitals?|CWV)\b|\b(Core Web Vitals?|CWV)\W+(\w+\W+){0,3}(pass(es|ed)?|fail(s|ed)?)\b/i.test(JSON.stringify(output.issues))'
+
+  - description: The run's first load is its measurement, so a cold 3.1 s homepage LCP is a finding, not warm-up
+    vars:
+      rows: |
+        [
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":3410,"domContentLoaded":1180,"ttfb":240,"transferSize":41210,"resourceTransferSize":684330,"lcp":3140,"cls":0.01,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/about/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":498,"domContentLoaded":362,"ttfb":71,"transferSize":36880,"resourceTransferSize":512904,"lcp":430,"cls":0,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/hello-world/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":655,"domContentLoaded":470,"ttfb":94,"transferSize":44102,"resourceTransferSize":701455,"lcp":610,"cls":0.02,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":580,"domContentLoaded":421,"ttfb":83,"transferSize":39417,"resourceTransferSize":655210,"lcp":520,"cls":0.01,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/contact/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":701,"domContentLoaded":503,"ttfb":79,"transferSize":35560,"resourceTransferSize":590120,"lcp":480,"cls":0,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":640,"domContentLoaded":470,"ttfb":90,"transferSize":41210,"resourceTransferSize":612770,"lcp":590,"cls":0.03,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":602,"domContentLoaded":440,"ttfb":85,"transferSize":39417,"resourceTransferSize":590330,"lcp":560,"cls":0.02,"vitalsSettled":true,"console":[],"network":[]}
+        ]
+    assert:
+      - type: javascript
+        value: 'output.issues.medium.some((finding) => JSON.stringify(finding).includes("LCP")) && !output.issues.high.some((finding) => JSON.stringify(finding).includes("LCP"))'
+
+  - description: A heavy font and eager-loaded images go in explorationPass, not issues
+    vars:
+      rows: |
+        [
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":612,"domContentLoaded":455,"ttfb":88,"transferSize":41210,"resourceTransferSize":684330,"lcp":540,"cls":0.01,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/about/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":498,"domContentLoaded":362,"ttfb":71,"transferSize":36880,"resourceTransferSize":512904,"lcp":430,"cls":0,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/hello-world/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":655,"domContentLoaded":470,"ttfb":94,"transferSize":44102,"resourceTransferSize":701455,"lcp":610,"cls":0.02,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":580,"domContentLoaded":421,"ttfb":83,"transferSize":39417,"resourceTransferSize":655210,"lcp":520,"cls":0.01,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/contact/","redirectedFrom":[],"viewport":"1920x1080","status":200,"visits":1,"loadTime":701,"domContentLoaded":503,"ttfb":79,"transferSize":35560,"resourceTransferSize":590120,"lcp":480,"cls":0,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":640,"domContentLoaded":470,"ttfb":90,"transferSize":41210,"resourceTransferSize":612770,"lcp":590,"cls":0.03,"vitalsSettled":true,"console":[],"network":[]},
+          {"url":"https://example.com/blog/","redirectedFrom":[],"viewport":"375x812","status":200,"visits":1,"loadTime":602,"domContentLoaded":440,"ttfb":85,"transferSize":39417,"resourceTransferSize":590330,"lcp":560,"cls":0.02,"vitalsSettled":true,"console":[],"network":[]}
+        ]
+      note: |
+        While looking into the homepage row, `browser_network_requests` showed
+        the theme's body font (https://example.com/wp-content/themes/example/fonts/body-var.woff2,
+        345 KB) loading on every page, and `browser_snapshot` showed four
+        images below the fold on https://example.com/blog/ with `loading="eager"`.
+    assert:
+      - type: javascript
+        value: 'Object.values(output.issues).every((findings) => findings.length === 0)'
+      - type: javascript
+        value: 'output.explorationPass.some((entry) => /font|eager/i.test(JSON.stringify(entry)))'
