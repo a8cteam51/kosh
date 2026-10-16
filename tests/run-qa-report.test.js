@@ -393,13 +393,13 @@ test("a performance report's pages[] is built from the capture, replacing the mo
     { type: 'visit', visit: 'p-0', browser: 'earlier', url: 'https://example.com/', status: 200, redirectedFrom: [] },
     { type: 'load', visit: 'p-0', viewport: { width: 1920, height: 1080 }, loadTime: 5000, domContentLoaded: 500, ttfb: 80, transferSize: 4000, resourceTransferSize: 60000 },
   ];
-  writeCapture(box, SESSION, [...earlierRun, ...MEASURED, { type: 'network', visit: 'p-1', url: 'https://example.com/sitemap.xml', status: 404, resourceType: 'fetch', byModel: true }]);
+  writeCapture(box, SESSION, [...earlierRun, ...MEASURED, { type: 'network', visit: 'p-1', url: 'https://example.com/sitemap.xml', status: 404, resourceType: 'fetch', byModel: true }, { type: 'console', visit: 'p-1', level: 'error', text: 'sitemap fetch failed', source: 'kosh-evaluate', byModel: true }]);
   const json = write(box, PERFORMANCE_OUTPUT, performanceReport((r) => { r.pages = [{ url: 'https://example.com/', loadTime: 1 }]; }));
 
   const { status, output } = run(box, WRAPPER, [json]);
 
   assert.equal(status, 0, output);
-  assert.match(output, /Page capture merged: 1 page × viewport rows from 1 visits on example\.com, leaving out 1 row from the model's own requests and 1 visit from an earlier browser\n/);
+  assert.match(output, /Page capture merged: 1 page × viewport rows from 1 visits on example\.com, leaving out 2 rows from the model's own code and 1 visit from an earlier browser\n/);
   const archivedReport = JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8'));
   assert.deepEqual(archivedReport.pages.map(({ url, viewport, loadTime, lcp, network }) => [url, viewport, loadTime, lcp, network]), [['https://example.com/', '1920x1080', 900, 700, []]]);
   const capture = fs.readFileSync(archivedPerformance(box, 'capture.jsonl'));

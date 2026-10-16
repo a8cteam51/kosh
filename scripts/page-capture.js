@@ -154,7 +154,7 @@ const merge = (reportPath, flags) => {
   const earlier = siteVisits(all, report.url).length - visitCount(entries);
   const leftOut = [
     gated && `${gated} gate page${gated > 1 ? 's' : ''}`,
-    fromModel && `${fromModel} row${fromModel > 1 ? 's' : ''} from the model's own requests`,
+    fromModel && `${fromModel} row${fromModel > 1 ? 's' : ''} from the model's own code`,
     earlier && `${earlier} visit${earlier > 1 ? 's' : ''} from an earlier browser`,
   ].filter(Boolean);
   console.log(`Page capture merged: ${report.pages.length} page × viewport rows from ${visitCount(entries)} visits on ${host(report.url)}${leftOut.length ? `, leaving out ${leftOut.join(' and ')}` : ''}`);
