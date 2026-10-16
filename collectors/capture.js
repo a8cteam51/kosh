@@ -162,8 +162,10 @@ const writerFor = (file) => {
   return write;
 };
 
-const consoleEntry = (message) => ({ type: 'console', level: message.type(), text: clip(message.text(), MAX_TEXT), source: clip(redactUrl(message.location()?.url), MAX_URL) });
-const pageErrorEntry = (error) => ({ type: 'console', level: 'pageerror', text: clip(error?.message, MAX_TEXT) });
+// Chrome quotes whole URLs in CORS, CSP and mixed-content messages, and a page error can carry one.
+const redactText = (text) => String(text ?? '').replace(/https?:\/\/[^\s'"]+/g, (url) => redactUrl(url) || url);
+const consoleEntry = (message) => ({ type: 'console', level: message.type(), text: clip(redactText(message.text()), MAX_TEXT), source: clip(redactUrl(message.location()?.url), MAX_URL) });
+const pageErrorEntry = (error) => ({ type: 'console', level: 'pageerror', text: clip(redactText(error?.message), MAX_TEXT) });
 const isReported = (message) => ['error', 'warning'].includes(message.type());
 
 const processId = crypto.randomBytes(3).toString('hex');

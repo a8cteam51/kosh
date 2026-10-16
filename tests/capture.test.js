@@ -542,6 +542,22 @@ test('the url filter drops credential names and email values, keeps every other 
   for (const [url, expected] of Object.entries(cases)) assert.strictEqual(capture.redactUrl(url), expected, url);
 });
 
+test('a url quoted in a console message or page error drops its credentials, and the rest of the text stays', async (t) => {
+  const box = sandbox(t);
+  const page = await start(fakePage());
+  await navigate(page, 'https://example.com/?p=5&share=secret');
+  page.emit('console', message('error', "Mixed Content: The page at 'https://example.com/?p=5&share=secret' was loaded over HTTPS, but requested an insecure image 'http://cdn.example.net/a.png?token=secret'. This content should also be served over HTTPS.", 'https://example.com/?p=5&share=secret'));
+  page.emit('console', message('error', "Access to fetch at 'https://api.example.net/data?access_token=secret&v=2' from origin 'https://example.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource."));
+  page.emit('pageerror', new Error('could not load https://example.com/?p=5&share=secret'));
+
+  assert.deepStrictEqual(ofType(box.entries(), 'console').map((row) => row.text), [
+    "Mixed Content: The page at 'https://example.com/?p=5' was loaded over HTTPS, but requested an insecure image 'http://cdn.example.net/a.png'. This content should also be served over HTTPS.",
+    "Access to fetch at 'https://api.example.net/data?v=2' from origin 'https://example.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+    'could not load https://example.com/?p=5',
+  ]);
+  assert.doesNotMatch(fs.readFileSync(box.file, 'utf8'), /secret/);
+});
+
 test('console keeps errors, warnings and page errors, clipped', async (t) => {
   const box = sandbox(t);
   const page = await start(fakePage());
