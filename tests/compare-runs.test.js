@@ -42,6 +42,17 @@ test('a page with no transfer measured prints a dash, not 0 KB', (t) => {
   assert.match(compare(path.join(dir, 'run.json')), /\thtml —\tfiles —\t/);
 });
 
+test('a page measured logged in says so, so a logged-in run never passes for a faster visitor run', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-compare-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const report = JSON.parse(fs.readFileSync(fixture('performance-opus-5-5-2026-10-14.json'), 'utf8'));
+  report.pages = [{ ...report.pages[0], loggedIn: true }, { ...report.pages[0], viewport: '375x812' }];
+  fs.writeFileSync(path.join(dir, 'run.json'), JSON.stringify(report));
+
+  const rows = compare(path.join(dir, 'run.json')).split('\n').filter((line) => /\tfailed /.test(line));
+  assert.deepEqual(rows.map((row) => row.endsWith('\tlogged in')), [true, false]);
+});
+
 test('runs print one block each, in the order given', () => {
   const out = compare(fixture('performance-opus-5-5-2026-10-13.json'), fixture('performance-opus-5-run-3.json'));
 

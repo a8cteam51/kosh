@@ -25,4 +25,4 @@ fs.unlinkSync(taken);
 const site = host(reportUrl);
 if (!site) console.warn(`Warning: the report has no usable url, so this session's page capture (${entries.length} entries) was dropped`);
 else if (!visits) console.log(`No page capture for ${site} (${entries.length} entries for other hosts dropped)`);
-else console.log(`Page capture archived: ${destination} (${visits} visits on ${site}, ${entries.length - kept.length} entries for other hosts dropped)`);
+else console.log(`Page capture archived: ${destination} (${visits} visits on ${site}, ${entries.length - kept.length} entries for other hosts or an earlier browser dropped)`);

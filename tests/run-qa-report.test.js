@@ -171,7 +171,7 @@ test("a skill's rendered report takes its session's page capture, for its own ho
   const { status, output } = run(box, WRAPPER, [json]);
 
   assert.equal(status, 0, output);
-  assert.match(output, /Page capture archived: .*\(2 visits on example\.com, 2 entries for other hosts dropped\)/);
+  assert.match(output, /Page capture archived: .*\(2 visits on example\.com, 2 entries for other hosts or an earlier browser dropped\)/);
   assert.ok(!fs.existsSync(capture), 'the capture is still there for the next run to inherit');
   assert.deepEqual(lines(archivedCapture(box)), CAPTURE.filter((entry) => entry.visit !== 'a-2'));
 });
@@ -389,16 +389,22 @@ const MEASURED = [
 
 test("a performance report's pages[] is built from the capture, replacing the model's, and sealed to the archived capture", (t) => {
   const box = sandbox(t);
-  writeCapture(box, SESSION, MEASURED);
+  const earlierRun = [
+    { type: 'visit', visit: 'p-0', browser: 'earlier', url: 'https://example.com/', status: 200, redirectedFrom: [] },
+    { type: 'load', visit: 'p-0', viewport: { width: 1920, height: 1080 }, loadTime: 5000, domContentLoaded: 500, ttfb: 80, transferSize: 4000, resourceTransferSize: 60000 },
+  ];
+  writeCapture(box, SESSION, [...earlierRun, ...MEASURED, { type: 'network', visit: 'p-1', url: 'https://example.com/sitemap.xml', status: 404, resourceType: 'fetch', byModel: true }]);
   const json = write(box, PERFORMANCE_OUTPUT, performanceReport((r) => { r.pages = [{ url: 'https://example.com/', loadTime: 1 }]; }));
 
   const { status, output } = run(box, WRAPPER, [json]);
 
   assert.equal(status, 0, output);
-  assert.match(output, /Page capture merged: 1 page × viewport rows from 1 visits on example\.com/);
+  assert.match(output, /Page capture merged: 1 page × viewport rows from 1 visits on example\.com, leaving out 1 row from the model's own requests and 1 visit from an earlier browser\n/);
   const archivedReport = JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8'));
-  assert.deepEqual(archivedReport.pages.map(({ url, viewport, loadTime, lcp }) => [url, viewport, loadTime, lcp]), [['https://example.com/', '1920x1080', 900, 700]]);
+  assert.deepEqual(archivedReport.pages.map(({ url, viewport, loadTime, lcp, network }) => [url, viewport, loadTime, lcp, network]), [['https://example.com/', '1920x1080', 900, 700, []]]);
   const capture = fs.readFileSync(archivedPerformance(box, 'capture.jsonl'));
+  assert.match(String(capture), /"url":"https:\/\/example\.com\/sitemap\.xml".*"byModel":true/);
+  assert.doesNotMatch(String(capture), /"p-0"/);
   assert.equal(archivedReport.provenance.captureSha256, require('crypto').createHash('sha256').update(capture).digest('hex'));
   assert.ok(archivedReport.provenance.seal);
   assert.deepEqual(fs.readdirSync(path.join(box.reportsDir, 'data')), ['archive']);
@@ -406,15 +412,40 @@ test("a performance report's pages[] is built from the capture, replacing the mo
 
 const INVENTED = (r) => { r.pages = buildPages(MEASURED).map((page) => ({ ...page, loadTime: 1, lcp: 1 })); };
 
-test('a report with pages[] gets them from the capture whatever flag it was rendered with', (t) => {
+test('a report with pages[] gets them from the capture whatever its name says', (t) => {
   const box = sandbox(t);
   writeCapture(box, SESSION, MEASURED);
 
-  const { status, output } = run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, performanceReport(INVENTED)), '--functional']);
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, performanceReport(INVENTED))]);
 
   assert.equal(status, 0, output);
   const archivedReport = JSON.parse(fs.readFileSync(path.join(box.reportsDir, 'data', 'archive', 'WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json'), 'utf8'));
   assert.deepEqual(archivedReport.pages.map(({ loadTime, lcp }) => [loadTime, lcp]), [[900, 700]]);
+});
+
+for (const [output, flags] of [[PERFORMANCE_OUTPUT, ['--functional']], [SKILL_OUTPUT, ['--functional', '--performance']]]) {
+  test(`${path.basename(output)} with ${flags.join(' ')} is refused before its capture is taken`, (t) => {
+    const box = sandbox(t);
+    writeCapture(box, SESSION, MEASURED);
+    const json = write(box, output, performanceReport(INVENTED));
+    const before = fs.readFileSync(json, 'utf8');
+
+    const { status, output: printed } = run(box, WRAPPER, [json, ...flags]);
+
+    assert.notEqual(status, 0, printed);
+    assert.match(printed, /but was given --(functional|performance)\. Run it again with --\w+ or no flag\. Nothing was rendered\./);
+    assert.equal(fs.readFileSync(json, 'utf8'), before);
+    assert.deepEqual(fs.readdirSync(path.join(box.reportsDir, 'data')).sort(), [path.basename(captureAt(box)), path.basename(output)].sort());
+  });
+}
+
+test("a skill's own output with its own flag renders", (t) => {
+  const box = sandbox(t);
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, stampable()), '--functional']);
+
+  assert.equal(status, 0, output);
+  assert.deepEqual(archived(box), ['WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json']);
 });
 
 test("a performance report with rows the merge didn't write is refused, pointing at the skill's own path", (t) => {

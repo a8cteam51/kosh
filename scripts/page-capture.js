@@ -2,14 +2,14 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { captureFile } = require('../collectors/capture.js');
+const { captureFile, redactUrl } = require('../collectors/capture.js');
 
 const host = (url) => {
   try { return new URL(url).host.replace(/^www\./, ''); } catch { return null; }
 };
 const normal = (url) => {
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(redactUrl(url));
     parsed.hash = '';
     parsed.hostname = parsed.hostname.replace(/^www\./, '');
     return parsed.href;
@@ -41,9 +41,16 @@ const take = (file = captureFile()) => {
 };
 
 // The report's host, plus pages the run asked for there that redirected elsewhere; other sites the browser loaded stay out of the report and its archive.
-const reportEntries = (entries, reportUrl) => {
+const siteVisits = (entries, reportUrl) => {
   const site = host(reportUrl);
-  const visits = new Set(entries.filter((entry) => entry.type === 'visit' && site && [entry.url, ...(entry.redirectedFrom ?? [])].some((url) => host(url) === site)).map((entry) => entry.visit));
+  return entries.filter((entry) => entry.type === 'visit' && site && [entry.url, ...(entry.redirectedFrom ?? [])].some((url) => host(url) === site));
+};
+
+// A run starts by closing the browser, so an earlier browser's visits are an earlier run's.
+const reportEntries = (entries, reportUrl) => {
+  const onSite = siteVisits(entries, reportUrl);
+  const browser = onSite.at(-1)?.browser;
+  const visits = new Set(onSite.filter((entry) => entry.browser === browser).map((entry) => entry.visit));
   return entries.filter((entry) => (entry.visit ? visits.has(entry.visit) : entry.type === 'truncated'));
 };
 
@@ -61,7 +68,7 @@ const buildPages = (entries) => {
   const visits = new Map(entries.filter((entry) => entry.type === 'visit').map((entry) => [entry.visit, { entry, load: null, vitals: null, console: [], network: [], truncated: false }]));
   for (const entry of entries) {
     const visit = visits.get(entry.visit);
-    if (!visit) continue;
+    if (!visit || entry.byModel) continue;
     if (entry.type === 'load' || entry.type === 'vitals') visit[entry.type] = entry;
     else if (entry.type === 'console') visit.console.push({ level: entry.level, text: entry.text, ...(entry.source && { source: entry.source }) });
     else if (entry.type === 'network') visit.network.push({ url: entry.url, status: entry.status, ...(entry.failure && { failure: entry.failure }), resourceType: entry.resourceType });
@@ -96,6 +103,7 @@ const buildPages = (entries) => {
       transferSize: number(load?.transferSize),
       resourceTransferSize: number(load?.resourceTransferSize),
       ...(load?.error && { timingError: load.error }),
+      ...(load?.loggedIn === true && { loggedIn: true }),
       lcp: number(vitals?.lcp),
       cls: number(vitals?.cls),
       vitalsSettled: vitals ? vitals.settled === true : null,
@@ -123,7 +131,8 @@ const merge = (reportPath, flags) => {
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   const taken = take();
   if (!fs.existsSync(taken)) console.warn(missingCapture(captureFile()));
-  const entries = reportEntries(readEntries(taken), report.url);
+  const all = readEntries(taken);
+  const entries = reportEntries(all, report.url);
 
   // Without the hash, validation reads a performance report's pages[] as the model's.
   if (visitCount(entries)) report.provenance ??= {};
@@ -141,7 +150,14 @@ const merge = (reportPath, flags) => {
   const listed = report.visitedPages ?? [];
   const unlisted = report.pages.filter((page) => !listed.some((url) => covers(page, url)));
   const gated = entries.filter((entry) => entry.type === 'load' && entry.gate).length;
-  console.log(`Page capture merged: ${report.pages.length} page × viewport rows from ${visitCount(entries)} visits on ${host(report.url)}${gated ? `, leaving out ${gated} gate page${gated > 1 ? 's' : ''}` : ''}`);
+  const fromModel = entries.filter((entry) => entry.byModel).length;
+  const earlier = siteVisits(all, report.url).length - visitCount(entries);
+  const leftOut = [
+    gated && `${gated} gate page${gated > 1 ? 's' : ''}`,
+    fromModel && `${fromModel} row${fromModel > 1 ? 's' : ''} from the model's own requests`,
+    earlier && `${earlier} visit${earlier > 1 ? 's' : ''} from an earlier browser`,
+  ].filter(Boolean);
+  console.log(`Page capture merged: ${report.pages.length} page × viewport rows from ${visitCount(entries)} visits on ${host(report.url)}${leftOut.length ? `, leaving out ${leftOut.join(' and ')}` : ''}`);
   if (unlisted.length) console.log(`  Captured but not in visitedPages: ${unlisted.map((page) => `${page.url} (${page.viewport ?? 'no viewport'})`).join(', ')}`);
 };
 

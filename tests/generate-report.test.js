@@ -228,6 +228,14 @@ test('fewer than four covered pages is flagged, and four is not', (t) => {
   assert.doesNotMatch(renderPerformance(box, withPages([{}, {}, {}, {}])), /This run covered/);
 });
 
+test('rows measured logged in are marked, with a note saying how many', (t) => {
+  const html = renderPerformance(sandbox(t), withPages([{ loggedIn: true }, {}, {}, {}]));
+
+  assert.match(html, /<p class="pages-measured__note">1 of 4 rows were measured logged in to WordPress/);
+  assert.equal(html.match(/<span class="muted">\(logged in\)<\/span>/g).length, 1);
+  assert.doesNotMatch(renderPerformance(sandbox(t), withPages([{}, {}, {}, {}])), /measured logged in|\(logged in\)/);
+});
+
 // Every string in pages[] was written by the tested site or read off it.
 test('site text in the page table renders as text, and no site URL becomes a script link', (t) => {
   const hostile = '<img src=x onerror=alert(1)>';

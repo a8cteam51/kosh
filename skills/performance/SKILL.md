@@ -25,7 +25,7 @@ If the URL suggests an environment the request didn't name, apply its row and sa
 
 ## Start cold
 
-Call `browser_close` first, even if no browser is open: a browser left open by an earlier run in this session would serve this run's pages from its cache. Then `browser_resize` to 1920×1080 and navigate to the homepage. That is the run's only close. Closing the browser drops a gate login, so if you close it again for any reason, run the gate check again before loading anything else.
+Call `browser_close` first, even if no browser is open: a browser left open by an earlier run in this session would serve this run's pages from its cache. Then `browser_resize` to 1920×1080 and navigate to the homepage. That is the run's only close: the page table is built from the last browser's pages, so a later close drops everything measured before it.
 
 ## Reachability gate check
 

@@ -140,10 +140,10 @@ test('a redirect is one visit at the final url', async (t) => {
   assert.deepStrictEqual(visits[0].redirectedFrom, ['https://example.com/old/']);
 });
 
-test('only the first redirect step, on the site, keeps its query, so a login token is never written', async (t) => {
+test('only the first redirect step, on the site, keeps its page query, so a login token is never written', async (t) => {
   const box = sandbox(t);
   const page = await start(fakePage());
-  await navigate(page, 'https://example.com/', { redirects: [['https://www.example.com/?p=5', 301], ['https://login.example.net/remote-login.php?token=secret&back=x', 302], ['https://example.com/?remote_login=validate&token=secret', 302]] });
+  await navigate(page, 'https://example.com/', { redirects: [['https://www.example.com/?p=5&token=secret', 301], ['https://login.example.net/remote-login.php?token=secret&back=x', 302], ['https://example.com/?remote_login=validate&token=secret', 302]] });
   await navigate(page, 'https://example.com/b/', { redirects: [['https://login.example.net/magic?token=secret', 302]] });
 
   assert.deepStrictEqual(ofType(box.entries(), 'visit').map((visit) => visit.redirectedFrom), [
@@ -151,6 +151,23 @@ test('only the first redirect step, on the site, keeps its query, so a login tok
     ['https://login.example.net/magic'],
   ]);
   assert.doesNotMatch(fs.readFileSync(box.file, 'utf8'), /secret/);
+});
+
+test("a visit's url drops parameters named like credentials or holding an email address, on any host, and keeps the rest", async (t) => {
+  const box = sandbox(t);
+  const page = await start(fakePage());
+  const urls = {
+    'https://wordpress.com/log-in/link/use?client_id=1&email=someone%40example.com&token=secret': 'https://wordpress.com/log-in/link/use?client_id=1',
+    'https://example.com/?share=secret': 'https://example.com/',
+    'https://example.com/?p=5&preview=true&preview_nonce=secret': 'https://example.com/?p=5&preview=true',
+    'https://example.com/?page_id=3&accessToken=secret&ref=someone@example.com': 'https://example.com/?page_id=3',
+    'https://example.com/?product=blue-shirt&lang=fr': 'https://example.com/?product=blue-shirt&lang=fr',
+    'https://example.com/?author=2&s=two+words': 'https://example.com/?author=2&s=two+words',
+  };
+  for (const url of Object.keys(urls)) await navigate(page, url);
+
+  assert.deepStrictEqual(ofType(box.entries(), 'visit').map((visit) => visit.url), Object.values(urls));
+  assert.doesNotMatch(fs.readFileSync(box.file, 'utf8'), /secret|someone/);
 });
 
 test('a same-document navigation is not a visit', async (t) => {
@@ -409,6 +426,122 @@ test('a service worker request without a frame is still recorded', async (t) => 
   assert.deepStrictEqual(ofType(box.entries(), 'network').map((row) => row.url), ['https://example.com/sw-asset.js']);
 });
 
+test("a visit names its page's browser: one per context, so a tab or popup shares it and a new browser doesn't", async (t) => {
+  const box = sandbox(t);
+  const [first, second] = [{}, {}];
+  for (const context of [first, first, second, null]) {
+    const page = await start(Object.assign(fakePage(), { context: () => context ?? (() => { throw new Error('no context'); })() }));
+    await navigate(page, 'https://example.com/');
+  }
+
+  const browsers = ofType(box.entries(), 'visit').map((visit) => visit.browser);
+  assert.match(browsers[0], /^[0-9a-f]{6}-b\d+$/);
+  assert.deepStrictEqual(browsers.map((browser) => browsers.indexOf(browser)), [0, 0, 2, 3]);
+  assert.strictEqual(browsers[3], undefined);
+});
+
+// Chrome's initiator stack, innermost frame first.
+const initiated = (url, frames) => ({ request: { url }, initiator: { type: 'script', stack: { callFrames: frames.map((frameUrl) => ({ url: frameUrl })) } } });
+// The function browser_evaluate passes to page.evaluate, with the model's code as its argument.
+const mcpEvaluate = async (expr) => {
+  const value = eval(`(${expr})`);
+  return typeof value === 'function' ? value() : value;
+};
+
+test("browser_evaluate's code is named for Chrome's initiator stack and keeps its value, and other evaluates pass through", async (t) => {
+  sandbox(t);
+  const seen = [];
+  const page = await start(fakePage({ evaluate: async (fn, arg) => (seen.push(arg), typeof arg === 'string' ? fn(arg) : answer(fn, { documentUrl: 'about:blank', ...TIMING })) }));
+
+  assert.strictEqual(await page.evaluate(mcpEvaluate, 'async () => 6 * 7'), 42);
+  assert.strictEqual(await page.evaluate(mcpEvaluate, 'function () { return "a function"; }'), 'a function');
+  assert.strictEqual(await page.evaluate(mcpEvaluate, '"an expression"'), 'an expression');
+  assert.match(seen.at(-1), new RegExp(`//# sourceURL=${capture.EVALUATE_URL}`));
+  await page.evaluate(capture.readTiming);
+  assert.strictEqual(seen.at(-1), undefined);
+  await page.evaluate((text) => text, 'data from browser_run_code_unsafe');
+  assert.strictEqual(seen.at(-1), 'data from browser_run_code_unsafe');
+});
+
+test("the model's own requests and their console errors are tagged, until the next visit, and a site request from Playwright's own URL-less select isn't", async (t) => {
+  const box = sandbox(t);
+  const cdp = Object.assign(new EventEmitter(), { send: async () => {} });
+  const page = await start(Object.assign(fakePage(), { context: () => ({ newCDPSession: async () => cdp }) }));
+  await navigate(page, 'https://example.com/');
+  cdp.emit('Network.requestWillBeSent', initiated('https://example.com/sitemap.xml', ['https://example.com/wrap.js', capture.EVALUATE_URL, '']));
+  cdp.emit('Network.requestWillBeSent', initiated('https://example.com/site.json', ['https://example.com/app.js']));
+  cdp.emit('Network.requestWillBeSent', initiated('https://example.com/variation', ['https://example.com/app.js', '', '']));
+  cdp.emit('Network.requestWillBeSent', { request: { url: 'https://example.com/logo.png' }, initiator: { type: 'parser' } });
+  for (const url of ['https://example.com/sitemap.xml', 'https://example.com/site.json', 'https://example.com/variation', 'https://example.com/logo.png']) {
+    page.emit('response', response(request(url, { frame: page.main, type: 'fetch' }), 404));
+    page.emit('console', message('error', 'Failed to load resource: the server responded with a status of 404 ()', url));
+  }
+  page.emit('console', message('error', 'TypeError: x is undefined', 'https://example.com/sitemap.xml'));
+  await navigate(page, 'https://example.com/about/');
+  page.emit('response', response(request('https://example.com/sitemap.xml', { frame: page.main, type: 'fetch' }), 404));
+
+  const rows = box.entries().filter((entry) => ['network', 'console'].includes(entry.type));
+  assert.deepStrictEqual(rows.map((row) => [row.type, (row.url ?? row.source).replace('https://example.com', ''), row.byModel ?? false]), [
+    ['network', '/sitemap.xml', true],
+    ['console', '/sitemap.xml', true],
+    ['network', '/site.json', false],
+    ['console', '/site.json', false],
+    ['network', '/variation', false],
+    ['console', '/variation', false],
+    ['network', '/logo.png', false],
+    ['console', '/logo.png', false],
+    ['console', '/sitemap.xml', false],
+    ['network', '/sitemap.xml', false],
+  ]);
+});
+
+test("a console call from browser_evaluate's code is the model's, and the site's own messages aren't", async (t) => {
+  const box = sandbox(t);
+  const page = await start(fakePage());
+  await navigate(page, 'https://example.com/');
+  page.emit('console', message('error', 'model error', capture.EVALUATE_URL));
+  page.emit('console', message('warning', 'site warning', 'https://example.com/app.js'));
+  page.emit('console', message('error', 'inline site error', ''));
+
+  assert.deepStrictEqual(ofType(box.entries(), 'console').map((row) => [row.text, row.byModel ?? false]), [['model error', true], ['site warning', false], ['inline site error', false]]);
+});
+
+test("a failed request's url and a console source drop credentials too, while the model's tag still matches the url it was sent with", async (t) => {
+  const box = sandbox(t);
+  const cdp = Object.assign(new EventEmitter(), { send: async () => {} });
+  const page = await start(Object.assign(fakePage(), { context: () => ({ newCDPSession: async () => cdp }) }));
+  await navigate(page, 'https://example.com/');
+  const site = 'https://example.com/wp-json/wp/v2/x?_wpnonce=secret&a=1';
+  const model = 'https://example.com/wp-json/wp/v2/pages?access_token=secret';
+  cdp.emit('Network.requestWillBeSent', initiated(model, [capture.EVALUATE_URL]));
+  for (const url of [site, model]) {
+    page.emit('response', response(request(url, { frame: page.main, type: 'fetch' }), 403));
+    page.emit('console', message('error', 'Failed to load resource: the server responded with a status of 403 ()', url));
+  }
+
+  const rows = box.entries().filter((entry) => ['network', 'console'].includes(entry.type));
+  assert.deepStrictEqual(rows.map((row) => [row.url ?? row.source, row.byModel ?? false]), [
+    ['https://example.com/wp-json/wp/v2/x?a=1', false],
+    ['https://example.com/wp-json/wp/v2/x?a=1', false],
+    ['https://example.com/wp-json/wp/v2/pages', true],
+    ['https://example.com/wp-json/wp/v2/pages', true],
+  ]);
+  assert.doesNotMatch(fs.readFileSync(box.file, 'utf8'), /secret/);
+});
+
+test('the url filter drops credential names and email values, keeps every other parameter byte for byte, and drops the fragment', () => {
+  const cases = {
+    'https://example.com/?country_code=US&sort_key=price&promo_code=X': 'https://example.com/?country_code=US&sort_key=price&promo_code=X',
+    'https://example.com/?secret_key=a&access_key=b&private_key=c&auth_key=d&license_key=e&page=2': 'https://example.com/?page=2',
+    'https://example.com/?_wpnonce=a&apikey=b&PHPSESSID=c&csrf_token=d&X-Amz-Signature=e&share=f&code=g': 'https://example.com/',
+    'https://example.com/?s=a%20b,c&token=x': 'https://example.com/?s=a%20b,c',
+    'https://example.com/?ref=someone%40example.com&author=2': 'https://example.com/?author=2',
+    'https://example.com/?p=1#access_token=secret': 'https://example.com/?p=1',
+    'not a url': '',
+  };
+  for (const [url, expected] of Object.entries(cases)) assert.strictEqual(capture.redactUrl(url), expected, url);
+});
+
 test('console keeps errors, warnings and page errors, clipped', async (t) => {
   const box = sandbox(t);
   const page = await start(fakePage());
@@ -502,6 +635,14 @@ test("the timing read records the gate check's answer, and nothing on a page tha
   assert.ok(!('gate' in await runInPage(page(null))));
 });
 
+test("the timing read records WordPress's logged-in body class, and nothing for a visitor or a body it can't read", async () => {
+  const nav = { name: 'https://example.com/', loadEventEnd: 900, domContentLoadedEventEnd: 400, responseStart: 90, transferSize: 3000, type: 'navigate' };
+  const page = (contains) => ({ document: contains && { body: { classList: { contains } } }, innerWidth: 1920, innerHeight: 1080, performance: { getEntriesByType: (type) => (type === 'navigation' ? [nav] : []) } });
+
+  assert.equal((await runInPage(page((name) => name === 'logged-in'))).loggedIn, true);
+  for (const contains of [() => false, () => 'yes', undefined]) assert.ok(!('loggedIn' in await runInPage(page(contains))));
+});
+
 test('the timing read gives up on a page that never finishes loading', async () => {
   const realNow = Date.now;
   let now = 0;
@@ -534,6 +675,13 @@ test('LCP is the last candidate, and CLS the worst burst of shifts under 1 s apa
   });
 
   assert.deepStrictEqual(vitals, { timeOrigin: 42, lcp: 1251, cls: 0.18, quietFor: 500, sinceLoad: 7000 });
+});
+
+test("a page that filled Chrome's 150-shift buffer is never quiet, however long ago its last kept shift was", () => {
+  const shifts = (count) => Array.from({ length: count }, (_, i) => ({ startTime: 100 + i, value: 0.001, hadRecentInput: i % 2 === 0 }));
+
+  assert.strictEqual(vitalsInPage({ shifts: shifts(149) }).quietFor, 2000);
+  assert.strictEqual(vitalsInPage({ shifts: shifts(150) }).quietFor, 0);
 });
 
 test('a page with no candidate or shift has no LCP, a CLS of 0, and is quiet since its load', () => {

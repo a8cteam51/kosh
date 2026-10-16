@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { buildPages, take, uncovered } = require('../scripts/page-capture.js');
+const { buildPages, reportEntries, take, uncovered } = require('../scripts/page-capture.js');
 
 const DESKTOP = { width: 1920, height: 1080 };
 const MOBILE = { width: 375, height: 812 };
@@ -29,6 +29,38 @@ test('the first visit per page and viewport is the measurement, and a revisit on
   assert.deepEqual(pages[0].redirectedFrom, ['https://example.com/index.php']);
   assert.equal(pages[0].console.length, 1, 'the same message on a revisit is listed twice');
   assert.deepEqual(pages[0].network, [{ url: 'https://cdn.example.net/font.woff2', status: 404, resourceType: 'font' }]);
+});
+
+test("a report keeps the visits from the last browser that loaded its site, and a capture from before browsers were named stays whole", () => {
+  const visit = (id, browser, url = 'https://example.com/') => ({ type: 'visit', visit: id, ...(browser && { browser }), url, status: 200, redirectedFrom: [] });
+  const kept = (entries) => reportEntries(entries, 'https://example.com/').map((entry) => entry.visit);
+
+  assert.deepEqual(kept([visit('a-1', 'b1'), { type: 'console', visit: 'a-1', level: 'error', text: 'old' }, visit('a-2', 'b2'), visit('a-3', 'b2'), visit('a-4', 'b3', 'https://other.example.org/')]), ['a-2', 'a-3']);
+  assert.deepEqual(kept([visit('a-1'), visit('a-2')]), ['a-1', 'a-2']);
+});
+
+test('a row is marked logged in only when its first load saw the logged-in class', () => {
+  const pages = buildPages([
+    { type: 'visit', visit: 'a-1', url: 'https://example.com/', status: 200, redirectedFrom: [] },
+    load('a-1', DESKTOP, 900, { loggedIn: true }),
+    { type: 'visit', visit: 'a-2', url: 'https://example.com/about/', status: 200, redirectedFrom: [] },
+    load('a-2', DESKTOP, 900, { loggedIn: 'true' }),
+  ]);
+
+  assert.deepEqual(pages.map((page) => page.loggedIn), [true, undefined]);
+});
+
+test("rows from the model's own requests stay out of the page's rows", () => {
+  const [page] = buildPages([
+    { type: 'visit', visit: 'a-1', url: 'https://example.com/', status: 200, redirectedFrom: [] },
+    load('a-1', DESKTOP, 900),
+    { type: 'network', visit: 'a-1', url: 'https://example.com/sitemap.xml', status: 404, resourceType: 'fetch', byModel: true },
+    { type: 'console', visit: 'a-1', level: 'error', text: 'Failed to load resource: the server responded with a status of 404 ()', source: 'https://example.com/sitemap.xml', byModel: true },
+    { type: 'network', visit: 'a-1', url: 'https://example.com/font.woff2', status: 404, resourceType: 'font' },
+  ]);
+
+  assert.deepEqual(page.network.map((row) => row.url), ['https://example.com/font.woff2']);
+  assert.deepEqual(page.console, []);
 });
 
 test('a failed visit, a lost timing read and a cut-off visit keep their rows, with nulls for what was not measured', () => {
@@ -86,6 +118,14 @@ test('a listed page is covered by its own url or a url that redirected to it, wh
   const pages = [{ url: 'https://example.com/donate/', redirectedFrom: ['https://example.com/donate'] }];
 
   assert.deepEqual(uncovered(['https://example.com/donate/#form', 'https://EXAMPLE.com/donate', 'https://example.com/about/', 'not a url'], pages), ['https://example.com/about/', 'not a url']);
+});
+
+test("a listed page with a share key is covered by its row, which never had one, and a page's own query still tells it apart", () => {
+  const visit = (id, url) => ({ type: 'visit', visit: id, url, status: 200, redirectedFrom: [] });
+  const pages = buildPages([visit('a-1', 'https://example.com/'), visit('a-2', 'https://example.com/?product=blue-shirt')]);
+
+  assert.deepEqual(pages.map((page) => page.url), ['https://example.com/', 'https://example.com/?product=blue-shirt']);
+  assert.deepEqual(uncovered(['https://example.com/?share=secret', 'https://example.com/?product=blue-shirt&share=secret', 'https://example.com/?product=red-shirt'], pages), ['https://example.com/?product=red-shirt']);
 });
 
 test('taking the capture again adds what the browser wrote since to what was taken before', (t) => {

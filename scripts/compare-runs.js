@@ -30,7 +30,7 @@ const block = (file) => {
   if (pages) {
     lines.push('measured:');
     for (const page of pages) {
-      lines.push(`  ${pathOf(page.url)}\t${page.viewport ?? '?'}\tLCP ${num(typeof page.lcp === 'number' ? page.lcp / 1000 : null, ' s', 2)}\tCLS ${num(page.cls, '', 3)}${page.vitalsSettled === false ? '*' : ''}\tload ${num(page.loadTime, ' ms')}\thtml ${kb(page.transferSize)}\tfiles ${kb(page.resourceTransferSize)}\tconsole ${page.console.length}\tfailed ${page.network.length}${page.visits > 1 ? `\tvisits ${page.visits}` : ''}`);
+      lines.push(`  ${pathOf(page.url)}\t${page.viewport ?? '?'}\tLCP ${num(typeof page.lcp === 'number' ? page.lcp / 1000 : null, ' s', 2)}\tCLS ${num(page.cls, '', 3)}${page.vitalsSettled === false ? '*' : ''}\tload ${num(page.loadTime, ' ms')}\thtml ${kb(page.transferSize)}\tfiles ${kb(page.resourceTransferSize)}\tconsole ${page.console.length}\tfailed ${page.network.length}${page.visits > 1 ? `\tvisits ${page.visits}` : ''}${page.loggedIn === true ? '\tlogged in' : ''}`);
     }
   } else {
     const viewport = (name) => `${name} ${report[name]?.loadTime}ms console=${report[name]?.console?.length} network=${report[name]?.network?.length}`;

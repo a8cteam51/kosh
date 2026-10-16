@@ -161,9 +161,10 @@
         "transferSize": { "type": ["number", "null"], "description": "Bytes transferred for the document." },
         "resourceTransferSize": { "type": ["number", "null"], "description": "Bytes transferred for subresources by the time of the load event; near zero on a warm cache." },
         "timingError": { "type": "string", "description": "Why no timing was recorded." },
+        "loggedIn": { "const": true, "description": "Present when the page loaded for a logged-in WordPress user (its `logged-in` body class), so it also loaded the admin bar and logged-in tools a visitor doesn't." },
         "lcp": { "type": ["number", "null"], "description": "Largest Contentful Paint in milliseconds, one lab load; null when the page reported none." },
         "cls": { "type": ["number", "null"], "description": "Cumulative Layout Shift over the visit, up to 10 s after load, one lab load." },
-        "vitalsSettled": { "type": ["boolean", "null"], "description": "false when a new LCP candidate or layout shift arrived in the last second before the read ended; null when not read." },
+        "vitalsSettled": { "type": ["boolean", "null"], "description": "false when a new LCP candidate or layout shift arrived in the last second before the read ended, or when Chrome's buffer of 150 layout shifts filled, which makes `cls` a lower bound; null when not read." },
         "console": {
           "type": "array",
           "items": {

@@ -368,9 +368,10 @@ const pageRow = (page) => {
   const ok = !page.failure && isNumber(page.status) && page.status < 300;
   const status = ok ? '' : `<span class="page-status">${escHtml(page.failure ? `Failed: ${page.failure}` : `HTTP ${page.status ?? 'status unknown'}`)}</span>`;
   const visits = page.visits > 1 ? ` <span class="muted">(${escHtml(page.visits)} loads, first measured)</span>` : '';
+  const loggedIn = page.loggedIn === true ? ' <span class="muted">(logged in)</span>' : '';
   return `
         <tr>
-          <th scope="row">${renderLink(page.url, pathOf(page.url))}${visits}${status}</th>
+          <th scope="row">${renderLink(page.url, pathOf(page.url))}${visits}${loggedIn}${status}</th>
           <td>${escHtml(viewportLabel(page.viewport))}</td>
           ${vitalCell('lcp', page.lcp, page.vitalsSettled)}
           ${vitalCell('cls', page.cls, page.vitalsSettled)}
@@ -406,12 +407,14 @@ const consolePatterns = patterns('console', (row) => `${row.level}: ${row.text}`
 const networkPatterns = patterns('network', (row) => `${row.status ?? row.failure ?? 'no response'} ${row.resourceType}: ${row.url}`);
 
 const coveredPages = new Set(visitedPages).size;
+const loggedInRows = measuredPages.filter((page) => page.loggedIn === true).length;
 const pagesSection = measuredPages.length
   ? `
   <section class="pages-measured">
     <h2>Pages measured</h2>
-    <p class="pages-measured__intro">Numbers recorded by the browser, not reported by the model: the first load of each page at each viewport, one lab load each. LCP and CLS are banded by the Core Web Vitals thresholds (LCP good up to 2.5 s, poor over 4 s; CLS good up to 0.1, poor over 0.25), which ranks the pages against each other but is not a Core Web Vitals assessment: that needs field data from real visitors. * means a new LCP candidate or layout shift arrived in the last second before the read ended. HTML and Files are the bytes transferred for the page's document and for everything else it loaded. Files near 0 KB means they came from a warm cache, which flatters the page's numbers.</p>
-    ${coveredPages < PERFORMANCE_FLOOR ? `<p class="pages-measured__coverage">This run covered ${coveredPages} page${coveredPages === 1 ? '' : 's'}; the performance check covers at least ${PERFORMANCE_FLOOR} where the site has them.</p>` : ''}
+    <p class="pages-measured__intro">Numbers recorded by the browser, not reported by the model: the first load of each page at each viewport, one lab load each. LCP and CLS are banded by the Core Web Vitals thresholds (LCP good up to 2.5 s, poor over 4 s; CLS good up to 0.1, poor over 0.25), which ranks the pages against each other but is not a Core Web Vitals assessment: that needs field data from real visitors. * means a new LCP candidate or layout shift arrived in the last second before the read ended, or the page shifted more often than the 150 times Chrome keeps, so its CLS is at least the number shown. HTML and Files are the bytes transferred for the page's document and for everything else it loaded. Files near 0 KB means they came from a warm cache, which flatters the page's numbers.</p>
+    ${coveredPages < PERFORMANCE_FLOOR ? `<p class="pages-measured__note">This run covered ${coveredPages} page${coveredPages === 1 ? '' : 's'}; the performance check covers at least ${PERFORMANCE_FLOOR} where the site has them.</p>` : ''}
+    ${loggedInRows ? `<p class="pages-measured__note">${loggedInRows} of ${measuredPages.length} rows were measured logged in to WordPress, marked (logged in): those pages also loaded the admin bar and the tools WordPress adds for a logged-in user, which a visitor doesn't get, so they can be slower and heavier than a visitor's.</p>` : ''}
     <div class="pages-measured__scroll">
       <table>
         <thead>
@@ -787,7 +790,7 @@ const styles = `
   .pages-measured h2 { font-size: 1.125rem; margin: 0 0 0.375rem; }
   .pages-measured h3 { font-size: 0.875rem; margin: 1rem 0 0.375rem; color: ${t.muted}; text-transform: uppercase; letter-spacing: 0.04em; }
   .pages-measured__intro { margin: 0 0 0.875rem; color: ${t.muted}; font-size: 0.875rem; max-width: 72ch; }
-  .pages-measured__coverage { margin: 0 0 0.875rem; padding: 0.5rem 0.75rem; background: ${t.checkOpenBg}; color: ${t.checkOpenFg}; border-radius: 6px; font-size: 0.875rem; }
+  .pages-measured__note { margin: 0 0 0.875rem; padding: 0.5rem 0.75rem; background: ${t.checkOpenBg}; color: ${t.checkOpenFg}; border-radius: 6px; font-size: 0.875rem; }
   .pages-measured__scroll { overflow-x: auto; background: ${t.surface}; border: 1px solid ${t.border}; border-radius: 6px; }
   .pages-measured table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
   .pages-measured th, .pages-measured td { padding: 0.5rem 0.5rem; border-bottom: 1px solid ${t.border}; text-align: left; vertical-align: top; }
