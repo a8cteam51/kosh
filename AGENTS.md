@@ -20,7 +20,7 @@ node scripts/compare-runs.js reports/data/archive/<name>.json…       # one blo
 
 ## How a report is produced
 
-1. A skill drives the browser through Playwright MCP and writes `reports/data/qa-report-<type>.json`. Meanwhile `collectors/capture.js` records every page the browser loads (timings, LCP and CLS, console errors, failed requests) into `reports/data/capture-<session id>.jsonl`.
+1. A skill drives the browser through Playwright MCP and writes `reports/data/qa-report-<type>.json`. Meanwhile `collectors/capture.js` records every page the browser loads (timings, LCP and CLS, console errors, failed requests, tagging `byModel` those the model's own `browser_evaluate` made, from Chrome's initiator stack) into `reports/data/capture-<session id>.jsonl`.
 2. `scripts/run-qa-report.sh` then, for that skill's own output:
    - merges the capture (`scripts/page-capture.js merge`), and for performance rebuilds `pages[]` from it, replacing anything the model wrote;
    - stamps `provenance` (`scripts/stamp-provenance.js`): plugin version, skill and `collectors/` hashes, the Playwright MCP args, the model and effort from the session's transcript, and a seal;
@@ -31,13 +31,14 @@ node scripts/compare-runs.js reports/data/archive/<name>.json…       # one blo
 Things that catch contributors out:
 
 - `hooks/guard-capture.js` refuses edits to `capture*.jsonl` files and, for commands that can reach kosh's `reports/`, also `*.jsonl` globs and any `rm` or `mv` of `reports/`, `reports/data` or the archive, so clearing them is done by hand.
+- The merge keeps only the visits from the last browser that loaded the report's host, since a performance run starts with `browser_close`. A skill that closes the browser mid-run drops what it measured before.
 - The scripts resolve `reports/` from their own location. `KOSH_REPORTS_DIR` moves where the scripts look (the tests use it), not where the skills write.
 
 ## Playwright MCP (`.mcp.json`)
 
 `.mcp.json` can't hold comments, so its reasons live here. `plugin.json` points at it, and `tests/mcp-config.test.js` pins all of it.
 
-- The version is pinned: `@latest` would make it an unrecorded input to every run, so a bump is its own PR.
+- The version is pinned: `@latest` would make it an unrecorded input to every run, so a bump is its own PR. A bump must check that `browser_evaluate` still passes its code to ``eval(`(${expr})`)``, which is how `capture.js` recognizes the model's requests; if it doesn't, they quietly read as the site's.
 - `--isolated` keeps the browser profile in memory, so no cache, cookies or logins carry over from an earlier session.
 - `--no-webmcp` stops a tested page from registering tools the model could call.
 - `--init-script collectors/kosh.js` defines a frozen `window.__kosh` in every page; `--init-page collectors/capture.js` runs the capture in Node for every tab. Both paths are relative to the folder Claude Code starts in, so launch from the kosh folder: from anywhere else the server fails to start and no skill has a browser. `capture.js` must never throw, since an init-page error breaks every browser tool, and an edit to it needs a server restart.

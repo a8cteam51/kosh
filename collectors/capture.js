@@ -10,6 +10,7 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const VITALS_FOR_MS = 10000;
 const VITALS_QUIET_MS = 1000;
 const VITALS_POLL_MS = 500;
+const EVALUATE_URL = 'kosh-evaluate';
 
 const captureFile = (env = process.env) => {
   const reportsDir = path.resolve(env.KOSH_REPORTS_DIR || path.join(__dirname, '../reports'));
@@ -25,12 +26,38 @@ const clip = (value, max) => {
 const isWeb = (url) => /^https?:/i.test(url);
 const bare = (url) => String(url).split('#')[0];
 
-// Only the site URL the run asked for keeps its query: a step the server or a login host chose can carry a token.
+// ponytail: a name ending in a credential word or equal to an ambiguous one, or an email value, is dropped; a token under any other name is written.
+const CREDENTIAL_ENDING = /(token|nonce|secret|password|pwd|apikey|secretkey|accesskey|privatekey|authkey|licensekey|sessid|sessionid|signature|jwt|otp)$/;
+const CREDENTIAL_NAME = new Set(['key', 'code', 'share', 'hash', 'sig', 'auth', 'email', 'pass', 'sid', 'session']);
+const decode = (text) => {
+  try { return decodeURIComponent(text.replace(/\+/g, ' ')); } catch { return text; }
+};
+const isCredential = (pair) => {
+  const split = pair.indexOf('=');
+  const name = decode(split === -1 ? pair : pair.slice(0, split)).toLowerCase().replace(/[^a-z0-9]/g, '');
+  return CREDENTIAL_ENDING.test(name) || CREDENTIAL_NAME.has(name) || (split !== -1 && decode(pair.slice(split + 1)).includes('@'));
+};
+// Pair by pair on the raw query, so what's kept is byte for byte what the browser loaded.
+const redactUrl = (url) => {
+  try {
+    const parsed = new URL(url);
+    const pairs = parsed.search.slice(1).split('&');
+    const kept = pairs.filter((pair) => !isCredential(pair));
+    if (kept.length === pairs.length && !parsed.hash) return url;
+    parsed.search = kept.join('&');
+    parsed.hash = '';
+    return parsed.href;
+  } catch {
+    return '';
+  }
+};
+
+// Only the site URL the run asked for keeps its page query: a step the server or a login host chose can carry a token anywhere.
 const hopUrl = (from, to, first) => {
   try {
     const hop = new URL(from);
     const host = (url) => url.host.replace(/^www\./, '');
-    return first && host(hop) === host(new URL(to)) ? from : `${hop.origin}${hop.pathname}`;
+    return first && host(hop) === host(new URL(to)) ? redactUrl(from) : `${hop.origin}${hop.pathname}`;
   } catch {
     return '';
   }
@@ -54,8 +81,11 @@ const readTiming = () => new Promise((resolve) => {
       const resources = performance.getEntriesByType('resource');
       let gate = null;
       try { gate = __kosh.gate(location.href).gate; } catch {}
+      let loggedIn = false;
+      try { loggedIn = document.body.classList.contains('logged-in'); } catch {}
       return resolve({
         ...(gate && { gate: String(gate) }),
+        ...(loggedIn === true && { loggedIn }),
         documentUrl: nav.name,
         timeOrigin: performance.timeOrigin,
         viewport,
@@ -83,7 +113,8 @@ const readVitals = () => {
     return entries;
   };
   const paints = buffered('largest-contentful-paint');
-  const shifts = buffered('layout-shift').filter((shift) => !shift.hadRecentInput);
+  const buffer = buffered('layout-shift');
+  const shifts = buffer.filter((shift) => !shift.hadRecentInput);
   let cls = 0;
   let burst = 0;
   let first = 0;
@@ -100,7 +131,8 @@ const readVitals = () => {
     timeOrigin: performance.timeOrigin,
     lcp: paints.length ? Math.round(paints.at(-1).startTime) : null,
     cls: Math.round(cls * 1000) / 1000,
-    quietFor: now - Math.max(loaded, ...paints.map((entry) => entry.startTime), ...shifts.map((entry) => entry.startTime)),
+    // ponytail: Chrome buffers 150 layout shifts and drops the rest, so a full buffer reads as never quiet; an observer started in kosh.js would see them all.
+    quietFor: buffer.length >= 150 ? 0 : now - Math.max(loaded, ...paints.map((entry) => entry.startTime), ...shifts.map((entry) => entry.startTime)),
     sinceLoad: now - loaded,
   };
 };
@@ -130,27 +162,50 @@ const writerFor = (file) => {
   return write;
 };
 
-const consoleEntry = (message) => ({ type: 'console', level: message.type(), text: clip(message.text(), MAX_TEXT), source: clip(message.location()?.url, MAX_URL) });
-const pageErrorEntry = (error) => ({ type: 'console', level: 'pageerror', text: clip(error?.message, MAX_TEXT) });
+// Chrome quotes whole URLs in CORS, CSP and mixed-content messages, and a page error can carry one.
+const redactText = (text) => String(text ?? '').replace(/https?:\/\/[^\s'"]+/g, (url) => redactUrl(url) || url);
+const consoleEntry = (message) => ({ type: 'console', level: message.type(), text: clip(redactText(message.text()), MAX_TEXT), source: clip(redactUrl(message.location()?.url), MAX_URL) });
+const pageErrorEntry = (error) => ({ type: 'console', level: 'pageerror', text: clip(redactText(error?.message), MAX_TEXT) });
 const isReported = (message) => ['error', 'warning'].includes(message.type());
 
 const processId = crypto.randomBytes(3).toString('hex');
 let visits = 0;
+let browserCount = 0;
+const browsers = new WeakMap();
+
+// browser_close ends the context, so a run that starts by closing the browser starts a new one.
+const browserOf = (page) => {
+  try {
+    const context = page.context();
+    if (!browsers.has(context)) browsers.set(context, `${processId}-b${++browserCount}`);
+    return browsers.get(context);
+  } catch {
+    return null;
+  }
+};
 
 exports.captureFile = captureFile;
+exports.redactUrl = redactUrl;
+exports.EVALUATE_URL = EVALUATE_URL;
 exports.readTiming = readTiming;
 exports.readVitals = readVitals;
 
 exports.default = async ({ page }) => {
   try {
     const write = writerFor(captureFile());
+    const browser = browserOf(page);
     const handled = new WeakSet();
     let pending = null;
     let current = null;
     let held = null;
+    // ponytail: matched by URL within a visit, so the site's own request for a URL the model fetched on that page is tagged too; CDP's requestId would separate them.
+    const fromModel = new Set();
 
     // isNavigationRequest() goes first: frame() throws for a service worker's requests.
     const isMainNavigation = (request) => request.isNavigationRequest() && request.frame() === page.mainFrame();
+    const byModel = (url) => fromModel.has(url) && { byModel: true };
+    // A console call in browser_evaluate's code is located there; a failed request's message is located at the request.
+    const byModelMessage = (message) => (message.location()?.url === EVALUATE_URL ? { byModel: true } : message.text().startsWith('Failed to load resource') && byModel(message.location()?.url));
 
     const row = (visit, entry) => {
       if (!visit) return;
@@ -163,13 +218,13 @@ exports.default = async ({ page }) => {
     const networkRow = (visit, request, response) => {
       const failure = request.failure()?.errorText;
       if (!failure && !(response?.status() >= 400)) return;
-      row(visit, { type: 'network', url: clip(request.url(), MAX_URL), status: failure ? null : response.status(), ...(failure && { failure: clip(failure, MAX_TEXT) }), resourceType: request.resourceType() });
+      row(visit, { type: 'network', url: clip(redactUrl(request.url()), MAX_URL), status: failure ? null : response.status(), ...(failure && { failure: clip(failure, MAX_TEXT) }), resourceType: request.resourceType(), ...byModel(request.url()) });
     };
 
     const consoleRow = (entry) => (held ? held.push([current, entry]) : row(current, entry));
 
     const writeVisit = (visit) => {
-      write({ type: 'visit', visit: visit.id, url: clip(visit.url, MAX_URL), status: visit.status, redirectedFrom: visit.redirectedFrom.map((from, index) => hopUrl(from, visit.url, index === 0)), ...(visit.failure && { failure: clip(visit.failure, MAX_TEXT) }), ...(visit.caughtUp && { caughtUp: true }) });
+      write({ type: 'visit', visit: visit.id, ...(browser && { browser }), url: clip(redactUrl(visit.url), MAX_URL), status: visit.status, redirectedFrom: visit.redirectedFrom.map((from, index) => hopUrl(from, visit.url, index === 0)), ...(visit.failure && { failure: clip(visit.failure, MAX_TEXT) }), ...(visit.caughtUp && { caughtUp: true }) });
     };
 
     // Late shifts count, so this reads until the visit ends or ten seconds after load, writing each change; the visit's last line is its value.
@@ -226,6 +281,7 @@ exports.default = async ({ page }) => {
       if (pending && (bare(url) === bare(pending.url) || (pending.failure && url.startsWith('chrome-error:')))) {
         current = pending;
         pending = null;
+        fromModel.clear();
         writeVisit(current);
       } else if (!isWeb(url)) {
         current = null;
@@ -235,7 +291,7 @@ exports.default = async ({ page }) => {
     page.on('load', safe(() => recordLoad(current)));
 
     page.on('console', safe((message) => {
-      if (isReported(message)) consoleRow(consoleEntry(message));
+      if (isReported(message)) consoleRow({ ...consoleEntry(message), ...byModelMessage(message) });
     }));
 
     page.on('pageerror', safe((error) => consoleRow(pageErrorEntry(error))));
@@ -287,5 +343,24 @@ exports.default = async ({ page }) => {
         if (await page.evaluate(() => document.readyState) === 'complete') await recordLoad(visit);
       })();
     }
+
+    // browser_evaluate hands page.evaluate the model's code as a string; naming it lets Chrome's initiator stack tell its requests from those of Playwright's own URL-less actions, like selectOption.
+    // Only browser_evaluate's wrapper evals its string; browser_run_code_unsafe hands the model this page, whose own strings are data.
+    const isModelCode = (fn, arg) => typeof arg === 'string' && String(fn).includes('eval(`(${expr})`)');
+    const evaluate = page.evaluate;
+    if (typeof evaluate === 'function') {
+      page.evaluate = function (fn, arg, ...rest) {
+        return evaluate.call(this, fn, isModelCode(fn, arg) ? `eval(${JSON.stringify(`(${arg})\n//# sourceURL=${EVALUATE_URL}`)})` : arg, ...rest);
+      };
+    }
+
+    // Chromium only.
+    safe(async () => {
+      const cdp = await page.context().newCDPSession(page);
+      cdp.on('Network.requestWillBeSent', safe(({ request, initiator }) => {
+        if (initiator.stack?.callFrames.some((frame) => frame.url === EVALUATE_URL)) fromModel.add(request.url);
+      }));
+      await cdp.send('Network.enable');
+    })();
   } catch {}
 };

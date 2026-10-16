@@ -91,6 +91,14 @@ DATA_DIR=$(node -p "require('path').dirname(require(require('path').resolve(proc
 SKILL_OUTPUT=false
 if [ "$(dirname "$QA_REPORT_JSON")" -ef "$DATA_DIR" ] && [[ "$(basename "$QA_REPORT_JSON")" =~ ^qa-report-[a-z]+\.json$ ]]; then
   SKILL_OUTPUT=true
+  # A flag naming another type would skip this type's merge and validation.
+  OWN_FLAG="--$(basename "$QA_REPORT_JSON" .json | sed 's/^qa-report-//')"
+  for FLAG in $TEST_TYPE_FLAGS; do
+    if [ "$FLAG" != "$OWN_FLAG" ]; then
+      echo -e "${RED}Error: $QA_REPORT_JSON is a $OWN_FLAG report, but was given $FLAG. Run it again with $OWN_FLAG or no flag. Nothing was rendered.${NC}"
+      exit 1
+    fi
+  done
   # Before the stamp, so the seal covers the capture a performance report's pages[] came from.
   # A performance report the merge didn't reach would render the model's own numbers.
   if ! node "$MERGE_SCRIPT_PATH" merge "$QA_REPORT_JSON" $TEST_TYPE_FLAGS; then
