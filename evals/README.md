@@ -9,23 +9,21 @@ These make real model calls and cost money. Run them by hand, not in CI.
 ```bash
 cd evals
 npm ci
-npm run eval                                   # one pass of every skill's cases
-npm run eval -- --repeat 5                     # repeat every case 5 times to measure stability
-npm run eval -- --filter-prompts performance   # one skill's cases only
+npm run eval                                       # one pass of every skill's cases
+npm run eval -- --repeat 5                         # repeat every case 5 times to measure stability
+npm run eval -- --filter-prompts performance       # one skill's cases only
+npm run eval -- --filter-providers '^Opus 5$'      # one model only; anchor it, since 'Opus 5' also matches 'Opus 5.5'
 ```
 
-Requires Node 20.20+ or 22.22+ and a Claude Code login. The provider is the Claude Agent SDK, so no API key is needed.
+Requires Node 22.22+ and a Claude Code login. The provider is the Claude Agent SDK, so no API key is needed.
 
-Every case runs on two providers, `Opus 5` (`claude-opus-5`) and `Opus 5.5` (`claude-opus-5-5`), so a pass costs twice what one model does. Both pin `model` and `effort` in `promptfooconfig.yaml`, and their `skills:` list sets which skills the model sees: every case sees every skill that has evals, as a real install lists all of kosh's skills, and `skill-used` fails a case that doesn't load its own. Without a model pin, the Claude Code CLI's default applies, which changes across versions and machines. Without an effort pin, the Agent SDK's default (`high`) applies, not the `effortLevel` in your own Claude Code settings, because the provider loads project settings only. Each case's `modelUsage` in the raw JSON records what actually served it.
+Every case runs on two providers, `Opus 5` (`claude-opus-5`) and `Opus 5.5` (`claude-opus-5-5`), so a pass costs twice what one model does. Both pin `model` and `effort` in `promptfooconfig.yaml`. Without a model pin, the Claude Code CLI's default applies, which changes across versions and machines. Without an effort pin, the Agent SDK's default (`high`) applies, not the `effortLevel` in your own Claude Code settings, because `setting_sources: ['project']` loads project settings only (promptfoo's own default loads none). Each case's `modelUsage` in the raw JSON records what actually served it, next to a Haiku entry for Claude Code's own background calls.
 
-The provider runs the Claude Code binary bundled in `@anthropic-ai/claude-agent-sdk`, not your installed `claude`, so it only knows the models that bundled version knows. A model newer than the pinned SDK fails with `Claude Code <version> does not support this model` until you bump the SDK (`npm install --save-dev @anthropic-ai/claude-agent-sdk@latest`, then commit the lockfile). The SDK's patch version tracks the bundled Claude Code's: SDK 0.3.280 ships Claude Code 2.1.280.
+The providers share one `skills:` list, which decides which skills the model can see: every skill that has evals. So each case sees the other evaluated skills too, and `skill-used` fails a case that doesn't load its own.
 
-To run one model, filter by label. Anchor the pattern, because `Opus 5` also matches `Opus 5.5`:
+The provider runs the Claude Code binary bundled in `@anthropic-ai/claude-agent-sdk`, not your installed `claude`, so it only knows the models that bundled version knows. A model newer than the bundled Claude Code fails with `Claude Code <version> does not support this model` until you bump the SDK.
 
-```bash
-npm run eval -- --filter-providers '^Opus 5$'
-npm run eval -- --filter-providers '^Opus 5\.5$'
-```
+`package.json` pins the SDK exactly, since a range lets any `npm install` move it, and the Claude Code under every eval with it; `tests/evals-config.test.js` checks the pin. promptfoo pins its own SDK version too, but the provider runs the top-level copy, so a promptfoo bump leaves ours alone and installs promptfoo's version nested and unused (about 230 MB). To bump, prefer the version the installed promptfoo pins (`npm view promptfoo@<version> optionalDependencies`): its provider was built against it, and there is then one copy. Run `npm install --save-dev --save-exact @anthropic-ai/claude-agent-sdk@<version>` and commit the lockfile; `npm view @anthropic-ai/claude-agent-sdk@<version> claudeCodeVersion` shows the Claude Code it bundles.
 
 Each run:
 
@@ -38,11 +36,11 @@ Each run:
 
 ## When to run
 
-When something the evals depend on changes, not on a schedule. Between changes the inputs are pinned: the skill text is in the repo, the model and effort are in `promptfooconfig.yaml`, and the Agent SDK and its bundled Claude Code are in `package-lock.json`. A repeat run mostly re-measures sampling noise, at about $4 for a cold run of both skills on both models (functional-design about $2.50, performance about $1.70); a run soon after another reuses the prompt cache and costs less.
+When something the evals depend on changes, not on a schedule. Between changes the inputs are pinned: the skill text is in the repo, the model and effort are in `promptfooconfig.yaml`, and promptfoo, the Agent SDK and its bundled Claude Code are in `package-lock.json`. A repeat run mostly re-measures sampling noise, at about $4 for a cold run of both skills on both models (functional-design about $2.50, performance about $1.70); a run soon after another reuses the prompt cache and costs less.
 
 - A skill with evals changes: before the PR merges, and before and after a rewrite.
 - The cases or `promptfooconfig.yaml` change.
-- A new model, or a bump of the Agent SDK or Claude Code.
+- A new model, or a bump of promptfoo, the Agent SDK or Claude Code.
 - A baseline or refactor phase starts, so there is a "before" to compare against.
 
 When a case set is new or changed, run it once with `--repeat 3` (or 5) to find the unstable cases. A stable case then only needs re-running on one of the triggers above.

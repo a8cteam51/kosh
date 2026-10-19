@@ -13,6 +13,13 @@ const scenarios = [...config.matchAll(/^  - file:\/\/tests\/(\S+)\.yaml$/gm)].ma
 const anchored = config.match(/^      skills: &(\S+) \[(.*)\]$/m);
 const enabled = anchored ? anchored[2].split(',').map((name) => name.trim().replace(/^'|'$/g, '')) : [];
 
+test('the agent sdk is pinned to an exact version', () => {
+  const declared = require(path.join(EVALS, 'package.json')).devDependencies['@anthropic-ai/claude-agent-sdk'];
+  const locked = require(path.join(EVALS, 'package-lock.json')).packages['node_modules/@anthropic-ai/claude-agent-sdk']?.version;
+  assert.match(declared, /^\d+\.\d+\.\d+$/, 'a range lets any npm install move the SDK, and the Claude Code it bundles under every eval; bump it with --save-exact');
+  assert.strictEqual(locked, declared, 'package-lock.json installs a different SDK than package.json declares');
+});
+
 test('every eval scenario file is listed in the config', () => {
   assert.deepStrictEqual([...scenarios].sort(), [...skills].sort(), 'a tests/<skill>.yaml missing from scenarios: never runs, and one listed without a file fails to load');
 });
