@@ -85,15 +85,16 @@ LCP and CLS are judged by the Core Web Vitals bands. They come from one lab load
 
 `loadTime` is context, not a finding: it runs to the load event, which a visitor doesn't wait for. A slow `ttfb` is the cause to name when it drives a slow LCP.
 
-Console messages and failed requests, by what they break:
+Console messages and failed requests, by what they break. A failed request is a `network` row with a 4xx or 5xx `status` or a `failure`, except `net::ERR_ABORTED`: that's the browser cancelling a request because the page moved on, which is not a finding. A stylesheet from a font service (`fonts.googleapis.com`, `use.typekit.net`, `fonts.bunny.net`) only loads fonts, so judge it as a font, and judge a request blocked as mixed content by the mixed-content rows.
 
 | Seen | Severity | Because |
 |---|---|---|
-| 404 or 5xx on a stylesheet, script, font or API call | critical | breaks the layout or a feature |
+| a failed stylesheet, script or API call | critical | breaks the layout or a feature |
 | 5xx on a page itself | critical | the page doesn't load |
 | uncaught exception or console error from the site's own code | high, critical if the page renders blank | features stop working without a visible error |
-| 404 on an image | high | visible broken content |
-| mixed content: an `http:` script on an `https:` page | high | the browser blocks it, and it's a security risk |
+| a failed image | high | visible broken content |
+| a failed font | high | text falls back to another typeface, and icon-font icons go missing |
+| mixed content: an `http:` script, stylesheet, font or API call on an `https:` page | high | the browser blocks it, and it's a security risk |
 | mixed content: an `http:` image | medium | a security warning; the image still shows |
 | console warning from the site's own code | medium | usually a deprecation that becomes an error later |
 | error or warning from a third-party script (analytics, ads, chat) | low | the site owner can't fix it directly |

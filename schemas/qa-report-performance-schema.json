@@ -117,22 +117,22 @@
         "critical": {
           "type": "array",
           "items": { "$ref": "#/definitions/finding" },
-          "description": "Site-breaking: JS errors causing a white screen, a CSS 404 breaking the layout, 5xx errors on core pages."
+          "description": "Site-breaking."
         },
         "high": {
           "type": "array",
           "items": { "$ref": "#/definitions/finding" },
-          "description": "Significant user impact: LCP or CLS in the poor band (LCP over 4 s, CLS over 0.25), broken images, mixed content on scripts, recurring JS errors."
+          "description": "Significant user impact."
         },
         "medium": {
           "type": "array",
           "items": { "$ref": "#/definitions/finding" },
-          "description": "Noticeable but not blocking: LCP or CLS that needs improvement (LCP over 2.5 s, CLS over 0.1), non-critical 404s, console warnings."
+          "description": "Noticeable but not blocking."
         },
         "low": {
           "type": "array",
           "items": { "$ref": "#/definitions/finding" },
-          "description": "Minor: console logs that shouldn't be in production, third-party script warnings."
+          "description": "Minor."
         }
       }
     }
@@ -205,7 +205,7 @@
         "category": {
           "type": "string",
           "enum": ["Performance", "JavaScript", "Network", "MixedContent", "ServerError"],
-          "description": "Performance = LCP or CLS outside the good band. JavaScript = console errors from JS failures. Network = 4xx/5xx failed resource requests. MixedContent = HTTP resources on HTTPS pages. ServerError = 5xx server-side failures."
+          "description": "Performance = LCP or CLS outside the good band. JavaScript = console errors from JS failures. Network = failed resource requests. MixedContent = HTTP resources on HTTPS pages. ServerError = 5xx server-side failures."
         },
         "issue": {
           "type": "string",

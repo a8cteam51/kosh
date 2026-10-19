@@ -36,7 +36,7 @@ Each run:
 
 ## When to run
 
-When something the evals depend on changes, not on a schedule. Between changes the inputs are pinned: the skill text is in the repo, the model and effort are in `promptfooconfig.yaml`, and promptfoo, the Agent SDK and its bundled Claude Code are in `package-lock.json`. A repeat run mostly re-measures sampling noise, at about $4 for a cold run of both skills on both models (functional-design about $2.50, performance about $1.70); a run soon after another reuses the prompt cache and costs less.
+When something the evals depend on changes, not on a schedule. Between changes the inputs are pinned: the skill text is in the repo, the model and effort are in `promptfooconfig.yaml`, and promptfoo, the Agent SDK and its bundled Claude Code are in `package-lock.json`. A repeat run mostly re-measures sampling noise, at about $5 for a cold run of both skills on both models (functional-design about $2.50, performance about $2.40); a run soon after another reuses the prompt cache and costs less.
 
 - A skill with evals changes: before the PR merges, and before and after a rewrite.
 - The cases or `promptfooconfig.yaml` change.
