@@ -85,7 +85,12 @@ LCP and CLS are judged by the Core Web Vitals bands. They come from one lab load
 
 `loadTime` is context, not a finding: it runs to the load event, which a visitor doesn't wait for. A slow `ttfb` is the cause to name when it drives a slow LCP.
 
-Console messages and failed requests, by what they break. A failed request is a `network` row with a 4xx or 5xx `status` or a `failure`, except `net::ERR_ABORTED`: that's the browser cancelling a request because the page moved on, which is not a finding. A stylesheet from a font service (`fonts.googleapis.com`, `use.typekit.net`, `fonts.bunny.net`) only loads fonts, so judge it as a font, and judge a request blocked as mixed content by the mixed-content rows.
+Console messages and failed requests, by what they break. A failed request is a `network` row with a 4xx or 5xx `status` or a `failure`, except `net::ERR_ABORTED`: that's the browser cancelling a request because the page moved on, which is not a finding. The "Failed to load resource" console error a failed request logs is part of that request's finding, not a second one. Where a failed request fits a more specific row than its type's, that row wins:
+
+- a stylesheet from a font service (`fonts.googleapis.com`, `use.typekit.net`, `fonts.bunny.net`) only loads fonts, so it's a font;
+- a request blocked as mixed content goes by the mixed-content rows;
+- a request a third-party script makes, such as an analytics beacon or an ad call, goes in the third-party row, but a failed request for a script the page loads, such as a form embed, is a failed script;
+- a 4xx other than 404 from the site's own API has its own row.
 
 | Seen | Severity | Because |
 |---|---|---|
@@ -96,8 +101,9 @@ Console messages and failed requests, by what they break. A failed request is a 
 | a failed font | high | text falls back to another typeface, and icon-font icons go missing |
 | mixed content: an `http:` script, stylesheet, font or API call on an `https:` page | high | the browser blocks it, and it's a security risk |
 | mixed content: an `http:` image | medium | a security warning; the image still shows |
+| a 4xx other than 404 from the site's own API, such as a 400 from `admin-ajax.php` | medium | usually the endpoint refusing a logged-out visitor: the site's code makes a call that can't work, but the visitor rarely sees it |
 | console warning from the site's own code | medium | usually a deprecation that becomes an error later |
-| error or warning from a third-party script (analytics, ads, chat) | low | the site owner can't fix it directly |
+| error, warning or failed request from a third-party script (analytics, ads, chat) | low | the site owner can't fix it directly |
 
 A message seen on every page is one site-wide finding listing all its pages, not one finding per page.
 
