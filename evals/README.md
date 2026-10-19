@@ -1,6 +1,6 @@
 # kosh skill evals
 
-Promptfoo regression checks for the skills' decision rules. Each case asks Claude Code, with a skill loaded, how it would handle a specific scenario, then asserts on the answer. Nothing here launches a browser: the prompt tells Claude this is a knowledge check about the skill's rules, not a test run.
+Promptfoo regression checks for the skills' decision rules. `promptfooconfig.yaml` runs every skill's cases in one pass, into one report; each skill's cases live in `tests/<skill>.yaml`. Each case asks Claude Code, with a skill loaded, how it would handle a specific scenario, then asserts on the answer. Nothing here launches a browser: the prompt tells Claude this is a knowledge check about the skill's rules, not a test run.
 
 These make real model calls and cost money. Run them by hand, not in CI.
 
@@ -9,13 +9,14 @@ These make real model calls and cost money. Run them by hand, not in CI.
 ```bash
 cd evals
 npm ci
-npm run eval                 # one pass
-npm run eval -- --repeat 5   # repeat every case 5 times to measure stability
+npm run eval                                   # one pass of every skill's cases
+npm run eval -- --repeat 5                     # repeat every case 5 times to measure stability
+npm run eval -- --filter-prompts performance   # one skill's cases only
 ```
 
 Requires Node 20.20+ or 22.22+ and a Claude Code login. The provider is the Claude Agent SDK, so no API key is needed.
 
-Every case runs on two providers, `Opus 5` (`claude-opus-5`) and `Opus 5.5` (`claude-opus-5-5`), so a pass costs twice what one model does. Both pin `model` and `effort` in `promptfooconfig.yaml`. Without a model pin, the Claude Code CLI's default applies, which changes across versions and machines. Without an effort pin, the Agent SDK's default (`high`) applies, not the `effortLevel` in your own Claude Code settings, because the provider loads project settings only. Each case's `modelUsage` in the raw JSON records what actually served it.
+Every case runs on two providers, `Opus 5` (`claude-opus-5`) and `Opus 5.5` (`claude-opus-5-5`), so a pass costs twice what one model does. Both pin `model` and `effort` in `promptfooconfig.yaml`, and their `skills:` list sets which skills the model sees: every case sees every skill that has evals, as a real install lists all of kosh's skills, and `skill-used` fails a case that doesn't load its own. Without a model pin, the Claude Code CLI's default applies, which changes across versions and machines. Without an effort pin, the Agent SDK's default (`high`) applies, not the `effortLevel` in your own Claude Code settings, because the provider loads project settings only. Each case's `modelUsage` in the raw JSON records what actually served it.
 
 The provider runs the Claude Code binary bundled in `@anthropic-ai/claude-agent-sdk`, not your installed `claude`, so it only knows the models that bundled version knows. A model newer than the pinned SDK fails with `Claude Code <version> does not support this model` until you bump the SDK (`npm install --save-dev @anthropic-ai/claude-agent-sdk@latest`, then commit the lockfile). The SDK's patch version tracks the bundled Claude Code's: SDK 0.3.280 ships Claude Code 2.1.280.
 
@@ -28,16 +29,16 @@ npm run eval -- --filter-providers '^Opus 5\.5$'
 
 Each run:
 
-1. Rebuilds `.workspaces/current/` from `skills/functional-design/` in the working tree, so the eval always tests your uncommitted edits.
+1. Rebuilds `.workspaces/current/` from `skills/` in the working tree, so the eval always tests your uncommitted edits.
 2. Runs `promptfooconfig.yaml` with caching off.
-3. Writes `results/functional-design.html` and `results/raw/functional-design.json`.
+3. Writes `results/evals.html` and `results/raw/evals.json`.
 4. Exits with promptfoo's failure code (100) when any case fails or errors.
 
 `.workspaces/`, `results/`, and `node_modules/` are gitignored.
 
 ## When to run
 
-When something the evals depend on changes, not on a schedule. Between changes the inputs are pinned: the skill text is in the repo, the model and effort are in `promptfooconfig.yaml`, and the Agent SDK and its bundled Claude Code are in `package-lock.json`. A repeat run mostly re-measures sampling noise, at about $3 for a cold run of both models.
+When something the evals depend on changes, not on a schedule. Between changes the inputs are pinned: the skill text is in the repo, the model and effort are in `promptfooconfig.yaml`, and the Agent SDK and its bundled Claude Code are in `package-lock.json`. A repeat run mostly re-measures sampling noise, at about $4 for a cold run of both skills on both models (functional-design about $2.50, performance about $1.70); a run soon after another reuses the prompt cache and costs less.
 
 - A skill with evals changes: before the PR merges, and before and after a rewrite.
 - The cases or `promptfooconfig.yaml` change.
@@ -48,7 +49,7 @@ When a case set is new or changed, run it once with `--repeat 3` (or 5) to find 
 
 ## Add a case
 
-Append to `tests:` in `promptfooconfig.yaml`. Keep each case to one rule and one scenario, and ask for the answer in a shape you can assert on: a leading keyword, a report excerpt, a yes/no.
+Append to `tests:` in `tests/<skill>.yaml`. Keep each case to one rule and one scenario, and ask for the answer in a shape you can assert on: a leading keyword, a report excerpt, a yes/no.
 
 Give the scenario every fact a real run would have: the page URL (on `example.com`), screenshot paths, the script output. A missing fact gets invented, and invented values differ between runs and models. Leave the judgments the case isn't testing, such as severity, to the model; they aren't asserted, and pinning them tests less of the skill.
 
@@ -67,13 +68,15 @@ Give the scenario every fact a real run would have: the page URL (on `example.co
 
 Useful assertion types: `contains`, `not-contains`, `icontains`, `regex`. See the [promptfoo assertion reference](https://www.promptfoo.dev/docs/configuration/expected-outputs/) for the rest.
 
-To eval a different skill, change the skill name in `scripts/reset-workspace.mjs`, and in `promptfooconfig.yaml` the prompt, the `skills:` lists and the `skill-used` value.
+Performance cases ask for the report's `issues` and `explorationPass` as one fenced JSON block, and the transform in `tests/performance.yaml`'s `config` parses it, so each case asserts with `javascript` on the parsed report, e.g. `output.issues.low.length > 0`.
+
+To eval another skill, add a prompt labelled with its name to `promptfooconfig.yaml`, add it to the `skills:` list (the second provider reuses it), and add `tests/<skill>.yaml` to `scenarios:`. Copy an existing file: its `config` names the prompt the cases use, the skill they must load, and the skill's defaults, which can't go in `defaultTest` because that applies to every skill's cases. `tests/evals-config.test.js` at the repo root checks that wiring, since promptfoo drops a scenario whose prompt label matches nothing and still exits 0.
 
 ## Design
 
 Two layers, kept separate:
 
 - **Snippet layer.** The fenced `javascript` blocks in the skills run against jsdom fixtures. Plain `node --test`, no model calls. Belongs in `tests/` at the repo root, not here.
-- **Judgment layer.** This directory. Recorded probe output plus the skill's rules go in, and the assertion checks the status, severity, or recommendation that comes out. Each case loads the whole skill through the Skill tool, the way a real run does, so the evals see its structure and not just the section that matches a search: a rule buried, contradicted or moved during a rewrite shows up here. `Read`, `Grep`, `Glob` and `Bash` are disallowed because the skill file stays readable on disk, and a `skill-used` assertion on every case (`defaultTest`) fails any answer given without loading it.
+- **Judgment layer.** This directory. Recorded probe output plus the skill's rules go in, and the assertion checks the status, severity, or recommendation that comes out. Each case loads the whole skill through the Skill tool, the way a real run does, so the evals see its structure and not just the section that matches a search: a rule buried, contradicted or moved during a rewrite shows up here. `Read`, `Grep`, `Glob` and `Bash` are disallowed because the skill file stays readable on disk, and a `skill-used` assertion on every case (in each `tests/<skill>.yaml`'s `config`) fails any answer given without loading it.
 
 Anchor assertions on report JSON fields where you can, since the schemas are the stable contract. Keep fixtures as plain files so they port to `claude plugin eval` mocks later. Do not build a `claude -p` replay runner here; end-to-end runs with recorded Playwright MCP mocks are what plugin eval provides.
