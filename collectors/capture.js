@@ -12,10 +12,26 @@ const VITALS_QUIET_MS = 1000;
 const VITALS_POLL_MS = 500;
 const EVALUATE_URL = 'kosh-evaluate';
 
-const captureFile = (env = process.env) => {
-  const reportsDir = path.resolve(env.KOSH_REPORTS_DIR || path.join(__dirname, '../reports'));
+// A capture in reports/data (with the merge's .taken or a failed archive's .<pid>), or an archived one.
+const CAPTURE_NAME = /^capture(?:-[A-Za-z0-9-]+)?\.jsonl(?:\.\w+)?$|\.capture\.jsonl$/;
+
+// Claude Code gives MCP servers and hooks the project root; Bash commands get none, so from a subfolder the scripts look up, no further than the git root, for the reports/ the capture made.
+const reportsDir = (env = process.env, cwd = process.cwd()) => {
+  if (env.KOSH_REPORTS_DIR || env.CLAUDE_PROJECT_DIR) return path.resolve(cwd, env.KOSH_REPORTS_DIR || path.join(env.CLAUDE_PROJECT_DIR, 'reports'));
+  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, 'reports', 'data'))) return path.join(dir, 'reports');
+    if (fs.existsSync(path.join(dir, '.git')) || path.dirname(dir) === dir) return path.resolve(cwd, 'reports');
+  }
+};
+
+// Reports hold client URLs and console text, so a reports/ kosh creates keeps itself out of the project's git.
+const makeReportsDir = (dir) => {
+  if (fs.mkdirSync(dir, { recursive: true }) !== undefined) fs.writeFileSync(path.join(dir, '.gitignore'), '*\n');
+};
+
+const captureFile = (env = process.env, cwd = process.cwd()) => {
   const session = env.CLAUDE_CODE_SESSION_ID;
-  return path.join(reportsDir, 'data', /^[A-Za-z0-9-]+$/.test(session ?? '') ? `capture-${session}.jsonl` : 'capture.jsonl');
+  return path.join(reportsDir(env, cwd), 'data', /^[A-Za-z0-9-]+$/.test(session ?? '') ? `capture-${session}.jsonl` : 'capture.jsonl');
 };
 
 const clip = (value, max) => {
@@ -154,6 +170,7 @@ const writerFor = (file) => {
     try {
       fs.appendFileSync(file, line);
     } catch {
+      makeReportsDir(path.dirname(path.dirname(file)));
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.appendFileSync(file, line);
     }
@@ -185,6 +202,9 @@ const browserOf = (page) => {
 };
 
 exports.captureFile = captureFile;
+exports.reportsDir = reportsDir;
+exports.makeReportsDir = makeReportsDir;
+exports.CAPTURE_NAME = CAPTURE_NAME;
 exports.redactUrl = redactUrl;
 exports.EVALUATE_URL = EVALUATE_URL;
 exports.readTiming = readTiming;

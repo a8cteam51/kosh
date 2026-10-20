@@ -8,21 +8,36 @@ const { spawnSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const HOOK = path.join(ROOT, 'hooks/guard-capture.js');
 
-// KOSH is the folder holding kosh's reports/, FRESH a clone no run has used yet, ELSEWHERE an unrelated project.
+// KOSH and SPACED are folders kosh has run in, FRESH a clone no run has used yet, ELSEWHERE an unrelated project,
+// OTHER one whose reports/data holds a log that only looks like a capture, NESTED a project inside KOSH.
 const folder = (name) => fs.mkdtempSync(path.join(os.tmpdir(), `kosh-guard-${name}-`));
-const KOSH = folder('kosh');
+const ranIn = (dir) => {
+  fs.mkdirSync(path.join(dir, 'reports/data/archive'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'reports/data/archive/EXAMPLE_SITE_PERFORMANCE_QA_REPORT_2026-10-13.capture.jsonl'), '{}\n');
+  return dir;
+};
+const KOSH = ranIn(folder('kosh'));
+const SPACED = ranIn(folder('Local Sites'));
 const FRESH = folder('fresh');
 const ELSEWHERE = folder('elsewhere');
-fs.mkdirSync(path.join(KOSH, 'reports/data/archive'), { recursive: true });
-test.after(() => { for (const dir of [KOSH, FRESH, ELSEWHERE]) fs.rmSync(dir, { recursive: true, force: true }); });
+const OTHER = folder('other');
+const NESTED = path.join(KOSH, 'nested-project');
+fs.mkdirSync(path.join(KOSH, 'scripts'));
+fs.mkdirSync(NESTED);
+fs.mkdirSync(path.join(FRESH, 'reports/data'), { recursive: true });
+fs.mkdirSync(path.join(OTHER, 'reports/data'), { recursive: true });
+fs.writeFileSync(path.join(OTHER, 'reports/data/screen-capture-log.jsonl'), '{}\n');
+test.after(() => { for (const dir of [KOSH, SPACED, FRESH, ELSEWHERE, OTHER]) fs.rmSync(dir, { recursive: true, force: true }); });
+const SESSION = '0b3f6c2e-5d1a';
 
 const RECASED = path.join(path.dirname(KOSH), path.basename(KOSH).toUpperCase());
 const caseInsensitiveDisk = fs.existsSync(RECASED);
 
-// `reports: null` runs the guard as installed, with KOSH_REPORTS_DIR unset.
-const guard = (input, { reports = KOSH, cwd = ROOT } = {}) => {
-  const env = { ...process.env, KOSH_REPORTS_DIR: reports && path.join(reports, 'reports') };
+// `reports: null` runs the guard as installed, with KOSH_REPORTS_DIR unset; `project` is the root Claude Code gives hooks.
+const guard = (input, { reports = KOSH, project, cwd = ROOT } = {}) => {
+  const env = { ...process.env, KOSH_REPORTS_DIR: reports && path.join(reports, 'reports'), CLAUDE_PROJECT_DIR: project };
   if (!reports) delete env.KOSH_REPORTS_DIR;
+  if (!project) delete env.CLAUDE_PROJECT_DIR;
   return spawnSync('node', [HOOK], { input: typeof input === 'string' ? input : JSON.stringify(input), encoding: 'utf8', cwd, env });
 };
 const call = (tool_name, tool_input, cwd = KOSH) => ({ hook_event_name: 'PreToolUse', cwd, tool_name, tool_input });
@@ -58,7 +73,23 @@ for (const [name, input, options] of [
   ['a capture in another checkout', call('Bash', { command: 'echo x >> /other-checkout/reports/data/capture-abc.jsonl' }, ELSEWHERE)],
   ['a capture under any reports/data, even in another project', call('Write', { file_path: path.join(ELSEWHERE, 'reports/data/capture.jsonl'), content: '{}' }, ELSEWHERE)],
   ['a call with no cwd, from the kosh folder', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'rm reports/data/*.jsonl' } }, { cwd: KOSH }],
-  ['the installed guard, from the kosh folder', call('Bash', { command: 'rm -rf reports/data/archive' }, ROOT), { reports: null }],
+  ['the installed guard, from the kosh folder', call('Bash', { command: 'rm -rf reports/data/archive' }, KOSH), { reports: null }],
+  ["a subfolder of the session's project, when kosh has run there", call('Bash', { command: 'rm ../reports/data/*.jsonl' }, path.join(KOSH, 'scripts')), { reports: null, project: KOSH }],
+  ["deleting a run folder's reports by absolute path, as installed", call('Bash', { command: `rm -rf ${path.join(KOSH, 'reports')}` }, ELSEWHERE), { reports: null }],
+  ['cd into a run folder, as installed', call('Bash', { command: `cd ${KOSH} && rm -rf reports/data/archive` }, ELSEWHERE), { reports: null }],
+  ["this session's capture by its variable, before the first run has made one", call('Bash', { command: 'cd reports/data && echo x > capture-$CLAUDE_CODE_SESSION_ID.jsonl' }, FRESH), { reports: null, project: FRESH }],
+  ["this session's capture by the quoted braced variable, before the first run", call('Bash', { command: 'echo x > "capture-${CLAUDE_CODE_SESSION_ID}.jsonl"' }, FRESH), { reports: null, project: FRESH }],
+  ["this session's capture by its id, before the first run", { ...call('Bash', { command: `cd reports/data && echo x > capture-${SESSION}.jsonl` }, FRESH), session_id: SESSION }, { reports: null, project: FRESH }],
+  ["writing this session's capture by its id, anywhere", { ...call('Write', { file_path: path.join(ELSEWHERE, `capture-${SESSION}.jsonl`), content: '{}' }, ELSEWHERE), session_id: SESSION }, { reports: null }],
+  ['a quoted run folder path with a space, from another project', call('Bash', { command: `rm -rf "${path.join(SPACED, 'reports')}"` }, ELSEWHERE), { reports: null }],
+  ['an escaped run folder path with a space, from another project', call('Bash', { command: `rm -rf ${path.join(SPACED, 'reports').replace(/ /g, '\\ ')}` }, ELSEWHERE), { reports: null }],
+  ['emptying the archive by glob', call('Bash', { command: 'rm -rf reports/data/archive/*' })],
+  ['deleting archived reports by glob', call('Bash', { command: 'rm reports/data/archive/*.json' })],
+  ['emptying reports/ by glob', call('Bash', { command: 'rm -rf reports/*' })],
+  ["deleting one archived report's files by a trailing glob", call('Bash', { command: 'rm reports/data/archive/EXAMPLE_SITE_PERFORMANCE_QA_REPORT_2026-10-13.*' })],
+  ['deleting archived reports by a name prefix', call('Bash', { command: 'rm reports/data/archive/EXAMPLE*' })],
+  ['deleting archived reports by brace expansion', call('Bash', { command: 'rm reports/data/archive/{a,b}.json' })],
+  ['deleting archived reports by a single-character glob', call('Bash', { command: 'rm reports/data/archive/report-?.json' })],
 ]) {
   test(`the guard blocks ${name}`, () => {
     const { status, stderr } = guard(input, options);
@@ -94,6 +125,14 @@ for (const [name, input, options] of [
   ['a folder whose name only starts with the kosh folder', call('Bash', { command: 'rm -rf reports/data' }, `${KOSH}-old`)],
   ["a command naming a folder whose name only starts with the kosh folder's", call('Bash', { command: `rm -rf ${KOSH}-old/reports` }, ELSEWHERE)],
   ['the installed guard, from another project', call('Bash', { command: 'rm -rf reports/data/archive' }, ELSEWHERE), { reports: null }],
+  ['deleting reports/data in a clone no run has used yet', call('Bash', { command: 'rm -rf reports/data' }, FRESH), { reports: FRESH }],
+  ["the session's project, when kosh hasn't run there", call('Bash', { command: 'cat logs/*.jsonl' }, FRESH), { reports: null, project: FRESH }],
+  ['a project inside a folder kosh has run in', call('Bash', { command: 'rm -rf reports/data' }, NESTED), { reports: null, project: NESTED }],
+  ['a project inside a folder kosh has run in, without CLAUDE_PROJECT_DIR', call('Bash', { command: 'rm -rf reports/data' }, NESTED), { reports: null }],
+  ["a log that only looks like a capture in another project's reports/data", call('Bash', { command: 'cat logs/*.jsonl' }, OTHER), { reports: null, project: OTHER }],
+  ["another session's capture name, before the first run", { ...call('Bash', { command: 'cat capture-1111.jsonl' }, FRESH), session_id: SESSION }, { reports: null, project: FRESH }],
+  ['emptying the screenshots folder by glob', call('Bash', { command: 'rm -rf reports/screenshots/*' })],
+  ['deleting one named archived report', call('Bash', { command: 'rm reports/data/archive/EXAMPLE_SITE_PERFORMANCE_QA_REPORT_2026-10-13.json' })],
 ]) {
   test(`the guard allows ${name}`, () => {
     const { status, stderr } = guard(input, options);

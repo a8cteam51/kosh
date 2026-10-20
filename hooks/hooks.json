@@ -5,10 +5,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "mkdir -p ${CLAUDE_PLUGIN_ROOT}/reports/data ${CLAUDE_PLUGIN_ROOT}/reports/screenshots"
-          },
-          {
-            "type": "command",
             "command": "cd ${CLAUDE_PLUGIN_ROOT} && git fetch origin --quiet 2>/dev/null && BEHIND=$(git rev-list HEAD..@{u} --count 2>/dev/null) && [ \"${BEHIND:-0}\" -gt 0 ] && echo \"kosh has ${BEHIND} update(s) available — run: git pull && npm ci\" || true"
           }
         ]
