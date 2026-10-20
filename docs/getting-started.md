@@ -6,7 +6,7 @@ A step-by-step guide to installing and running your first test with kosh.
 
 Before you start, make sure you have the following installed:
 
-1. **Claude Code:** Anthropic's CLI tool. If you don't have it yet, head to [claude.ai/code](https://claude.ai/code) and follow the install instructions for your platform. You'll need version 1.0.33 or later.
+1. **Claude Code:** Anthropic's CLI tool. If you don't have it yet, head to [claude.ai/code](https://claude.ai/code) and follow the install instructions for your platform. You'll need version 2.1.163 or later.
 
 2. **Node.js:** Used for generating reports. Download it from [nodejs.org](https://nodejs.org) if you don't already have it. The LTS version is fine.
 
@@ -52,7 +52,7 @@ From inside the `kosh` folder, run:
 claude --plugin-dir .
 ```
 
-This starts Claude Code with kosh loaded as a plugin. Stay inside the `kosh` folder for the whole session: the tests save their results relative to the folder you're in, so starting from anywhere else puts them in the wrong place. It also keeps the browser from starting: if kosh's browser tools are missing, or `/mcp` lists the `playwright` server as failed, check that you started Claude Code from the `kosh` folder.
+This starts Claude Code with kosh loaded as a plugin. Stay inside the `kosh` folder for the whole session: the tests save their results in the folder you started in, and the browser tools are only pre-approved there (next step). If kosh's browser tools are missing, check that `/mcp` lists `plugin:kosh:playwright` as connected.
 
 ### Trust the project settings
 
@@ -180,7 +180,8 @@ A couple of notes:
 - **Every run's JSON is kept** in `reports/data/archive/`, named to match its HTML report. A same-day rerun of the same site keeps the earlier copy with its timestamp appended.
 - **Beside it, a `.capture.jsonl` file** holds what the browser itself recorded on that site's pages during the run: load timings, LCP and CLS, console errors and warnings, and failed requests. Requests Claude made itself, like fetching the sitemap, are marked in it and left out of the page table. A performance report's page table is built from it, and Claude can read it but isn't allowed to change it, so it stays a record of what happened.
 - **To re-render an archived report**, run `node scripts/generate-report.js reports/data/archive/<name>.json --<type>` with the type in its name (`--functional`, `--performance`, `--accessibility`, `--shop` or `--aeo`), so reports of different types don't share an HTML name. A report saved before kosh's checks changed is refused; add `--skip-validation` to render it anyway. Its screenshots are embedded from `reports/screenshots/` as it is now, so a later run may have replaced them.
+- **The browser's own files**, the page snapshots and console logs Playwright saves as it goes, are kept outside your project, in a `playwright-mcp` folder under `~/.claude/plugins/data/`. They hold the text of the pages tested, so the oldest are deleted once the folder passes 20 MB; delete it yourself if you need them gone sooner.
 - **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.
-- **Restart Claude Code after updating kosh.** A session keeps the browser setup it started with, so after a `git pull` an open session still runs the old one. If a test stops because `__kosh` isn't defined, that's why: exit and start again from the `kosh` folder.
+- **Restart Claude Code after updating kosh.** A session keeps the browser setup it started with, so after a `git pull` an open session still runs the old one. If a test stops because `__kosh` isn't defined, that's why: exit and start Claude Code again.
 - **Run shop tests in their own Claude Code session.** A second run in the same session inherits the first one's cart, and can miss prices that change once something is in it. The performance test closes the browser before it starts so its timings are cold, which means a gated site you logged into earlier in the session asks for the login again.

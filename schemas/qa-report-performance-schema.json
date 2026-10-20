@@ -54,7 +54,7 @@
         "playwrightMcp": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "The Playwright MCP arguments (the pinned version and its flags) in kosh's .mcp.json when the report was rendered. A session started before .mcp.json changed ran with the older ones. Added by scripts/run-qa-report.sh — do not write this field."
+          "description": "The Playwright MCP arguments (the pinned version and its flags) in kosh's plugin.json when the report was rendered. A session started before plugin.json changed ran with the older ones. Added by scripts/run-qa-report.sh — do not write this field."
         },
         "captureSha256": {
           "type": "string",

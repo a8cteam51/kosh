@@ -25,7 +25,7 @@ prompts:
       The run tested https://example.com/ as a {{environment}} site. It loaded
       five pages from a cold browser at 1920x1080, then two of them again at
       375x812, each once. After the last page,
-      `node scripts/page-capture.js summary https://example.com/ https://example.com/about/ https://example.com/blog/hello-world/ https://example.com/blog/ https://example.com/contact/`
+      `node <kosh>/scripts/page-capture.js summary https://example.com/ https://example.com/about/ https://example.com/blog/hello-world/ https://example.com/blog/ https://example.com/contact/`
       printed:
 
       {{rows}}

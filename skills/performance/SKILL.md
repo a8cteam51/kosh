@@ -9,6 +9,8 @@ Parse $ARGUMENTS into a URL and an optional environment type before doing anythi
 1. Extract the URL from $ARGUMENTS (the token that starts with `http://` or `https://`). If no URL is found, ask the user to provide one before proceeding. Do not begin testing without a valid URL.
 2. Extract the environment type if present — one of `local`, `development`, `staging`, or `production`. If not provided, infer it from the URL when possible (e.g., `.test`/`.local` domains suggest local, `staging.*` subdomains suggest staging). Default to `production` if unclear.
 
+kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `reports/` goes.
+
 # Performance test
 
 You are a quality engineer measuring how a WordPress site loads for a visitor. The browser records every page load itself (timings, LCP and CLS, console errors, failed requests), so your job is to choose and load the pages, read what was recorded, and judge it. A finding is a problem a visitor would notice, with the pages it was seen on and the measurement behind it.
@@ -35,7 +37,7 @@ Some WordPress sites are gated and not publicly reachable: the browser loads a c
 () => __kosh.gate("<the URL you were asked to test>")
 ```
 
-It returns `{ gate, redirectedTo }`. If `__kosh` is not defined, the browser was started without kosh's init script (`collectors/kosh.js`): stop and tell the user.
+It returns `{ gate, redirectedTo }`. If `__kosh` is not defined, the browser was started without kosh's init script (`<kosh>/collectors/kosh.js`): stop and tell the user.
 
 If both are `null`, proceed with testing normally.
 
@@ -67,7 +69,7 @@ Navigate to each page once per viewport, then give it five seconds (`browser_wai
 Run this after the last page, or any time you want to see what has been recorded so far:
 
 ```bash
-node scripts/page-capture.js summary <homepage URL> <every page URL you loaded>
+node <kosh>/scripts/page-capture.js summary <homepage URL> <every page URL you loaded>
 ```
 
 It prints one row per page and viewport, the same rows the report's page table will show, and names any page you passed that has no recorded load. Load that page before writing the report: the report is refused while `visitedPages` lists a page the browser never loaded. Base every number and finding on these rows. `browser_console_messages` and `browser_network_requests` are for investigating a row, not a second source of numbers.
@@ -113,13 +115,13 @@ A message seen on every page is one site-wide finding listing all its pages, not
 
 ## Report
 
-Write `reports/data/qa-report-performance.json`. Its contract is `schemas/qa-report-performance-schema.json`, and a report that doesn't match is refused with the fields to fix.
+Write `reports/data/qa-report-performance.json`. Its contract is `<kosh>/schemas/qa-report-performance-schema.json`, and a report that doesn't match is refused with the fields to fix.
 
 - The measurements aren't yours to write: `run-qa-report.sh` builds `pages[]` from the browser's record. `issues` holds findings with a cause, each naming its pages and the measurement in `metric`.
 - `visitedPages` lists every page the test covered, at either viewport.
 - `testMethodology` says in a few sentences how the run went: the pages and why, the viewports, and anything that changes how the numbers compare, such as an inferred environment or a page that had to be loaded again.
 - Anything you looked into beyond these checks goes in `explorationPass`, with its outcome.
-- Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `scripts/run-qa-report.sh` adds the plugin version and skill hash.
+- Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `<kosh>/scripts/run-qa-report.sh` adds the plugin version and skill hash.
 - Save each screenshot with `browser_take_screenshot`, passing the full path as `filename`: `reports/screenshots/<name>.png`. A bare filename saves to the project root, and moving the file afterwards is a step that gets skipped. A finding's `screenshots` lists paths relative to `reports/`: `screenshots/<name>.png` for the file at `reports/screenshots/<name>.png`.
 
 An illustrative report, not one to copy:
@@ -157,7 +159,7 @@ An illustrative report, not one to copy:
 Then render it:
 
 ```bash
-scripts/run-qa-report.sh reports/data/qa-report-performance.json
+<kosh>/scripts/run-qa-report.sh reports/data/qa-report-performance.json
 ```
 
 If it says a page has no record of loading, load that page in the browser and run the command again.

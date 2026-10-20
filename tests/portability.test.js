@@ -35,6 +35,15 @@ for (const file of [...SHARED, ...SKILLS]) {
   });
 }
 
+// A skill runs from the user's project, so kosh's own files are reached through <kosh>, which the preamble defines.
+test('every path to kosh\'s own files starts at <kosh>', () => {
+  for (const file of [...SHARED, ...SKILLS]) {
+    const lines = fs.readFileSync(path.join(ROOT, file), 'utf8').split('\n');
+    const bare = lines.flatMap((line, i) => (/(?:(?<![\w/<>.-])|\.\.?\/)(?:scripts|schemas|collectors|skills|references)\/[\w.-]/.test(line) ? [i + 1] : []));
+    assert.deepStrictEqual(bare, [], `${file}: write these as <kosh>/…`);
+  }
+});
+
 test('ALLOWED names only real files and rules', () => {
   for (const [file, counts] of Object.entries(ALLOWED)) {
     assert.ok(SHARED.includes(file) || SKILLS.includes(file), `no ${file}`);

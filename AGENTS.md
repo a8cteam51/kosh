@@ -34,15 +34,16 @@ Things that catch contributors out:
 - The merge keeps only the visits from the last browser that loaded the report's host, since a performance run starts with `browser_close`. A skill that closes the browser mid-run drops what it measured before.
 - `reports/` is the project's, not kosh's: `$CLAUDE_PROJECT_DIR/reports`, which Claude Code sets for the capture and the hooks. Bash commands don't get it, so the scripts use the nearest `reports/data` at or above the cwd, looking no higher than the git root, else `reports/` in the cwd. A `reports/` kosh creates gets a `.gitignore` of `*`, since reports hold client URLs and console text. Schemas, skills and `plugin.json` still resolve from kosh's own folder. `KOSH_REPORTS_DIR` moves where the scripts and the capture look (the tests use it), not where the skills write.
 
-## Playwright MCP (`.mcp.json`)
+## Playwright MCP (`plugin.json`)
 
-`.mcp.json` can't hold comments, so its reasons live here. `plugin.json` points at it, and `tests/mcp-config.test.js` pins all of it.
+`.claude-plugin/plugin.json` declares the server, and JSON can't hold comments, so its reasons live here. `tests/mcp-config.test.js` pins all of it. There's no `.mcp.json`: in a clone, a project one starts a second browser beside the plugin's.
 
 - The version is pinned: `@latest` would make it an unrecorded input to every run, so a bump is its own PR. A bump must check that `browser_evaluate` still passes its code to ``eval(`(${expr})`)``, which is how `capture.js` recognizes the model's requests; if it doesn't, they quietly read as the site's.
 - `--isolated` keeps the browser profile in memory, so no cache, cookies or logins carry over from an earlier session.
 - `--no-webmcp` stops a tested page from registering tools the model could call.
-- `--init-script collectors/kosh.js` defines a frozen `window.__kosh` in every page; `--init-page collectors/capture.js` runs the capture in Node for every tab. Both paths are relative to the folder Claude Code starts in, so launch from the kosh folder: from anywhere else the server fails to start and no skill has a browser. `capture.js` must never throw, since an init-page error breaks every browser tool, and an edit to it needs a server restart.
-- Every `browser_*` tool a skill names must be in `.claude/settings.json`'s allowlist, or it prompts mid-run.
+- `--init-script` loads `collectors/kosh.js`, a frozen `window.__kosh` in every page; `--init-page` runs `collectors/capture.js` in Node for every tab. Both are `${CLAUDE_PLUGIN_ROOT}` paths: a relative one resolves against the folder Claude Code starts in, and Playwright won't start if the file isn't there. `capture.js` must never throw, since an init-page error breaks every browser tool, and an edit to it needs a server restart.
+- `--output-dir ${CLAUDE_PLUGIN_DATA}/playwright-mcp` keeps the files Playwright names itself (page snapshots, console logs) out of the user's project, where `git add` would pick up client pages. A file given a name, like a screenshot, still resolves against the project. That folder survives plugin updates and holds every project's page text, so `--output-max-size` has Playwright delete the oldest files past 20 MB.
+- Every `browser_*` tool a skill names must be in `.claude/settings.json`'s allowlist as `mcp__plugin_kosh_playwright__<tool>`, or it prompts mid-run.
 
 ## How it works
 
@@ -59,9 +60,8 @@ evals/           → promptfoo regression checks for skill decision rules (evals
 tests/           → `node --test` checks for the scripts, the collectors, the capture and its guard, skill-embedded snippets, shared-block copies, Claude Code-only constructs in skills, tracked JSON files, the Playwright MCP flags and allowlist, the promptfoo eval wiring, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
 docs/            → user-facing guides (getting-started.md)
 .github/         → the CI workflow (runs tests/ on every PR)
-.mcp.json        → Playwright MCP server configuration (see above)
 .claude/         → project settings and Playwright tool permissions
-.claude-plugin/  → plugin manifest (plugin.json)
+.claude-plugin/  → plugin manifest (plugin.json), which declares the Playwright MCP server (see above)
 ```
 
 ### How skills and schemas relate
@@ -88,6 +88,7 @@ A skill is a prompt the model reads once and follows for the whole run. `skills/
 - Leaves measuring to code. Numbers come from the collectors and the page capture, and the model reads them (the performance skill through `scripts/page-capture.js summary`) rather than transcribing them: a number the model copies is a number it can get wrong. The model's report holds its judgment: findings with a cause, `testMethodology`, and `explorationPass` for anything beyond the checks.
 - Points at its schema as the contract and shows one labelled illustrative example, with placeholders where a copied value would do harm (the timestamp, the model ID). `tests/schema-drift.test.js` validates the example.
 - Carries the blocks in `shared/` as verbatim copies, because skills can't include files and a skill folder must hold everything it runs: every skill carries the preamble, the gate check and the `provenance.model` line, and the skills in `CARRIERS` in `tests/shared-blocks.test.js` carry the others (the screenshot rule, performance only so far). Edit the `shared/` file and every copy together; the test fails otherwise.
+- Write a path to kosh's own files (`scripts/`, `schemas/`, `collectors/`, a skill's references) as `<kosh>/…`. The shared preamble defines `<kosh>` as the folder two above the skill's, because a skill runs from the user's project, where `reports/` goes, not from kosh's folder. `tests/portability.test.js` fails on a bare one.
 - Don't add Claude Code-only constructs (host tool names like `PushNotification`, `/kosh:` references, `mcp__` tool names, `CLAUDE_…` variables, `$ARGUMENTS`, "Claude prompt"): other hosts load skill text verbatim. `tests/portability.test.js` holds today's count per file, counting each `shared/` block once in `shared/` rather than in every copy; lower a count when a rewrite removes one, never raise it.
 - Put page-side code in `collectors/kosh.js` and call it from the skill in one line (`() => __kosh.<name>(…)`), not as a multi-line `javascript` block. `tests/skill-snippets.test.js` holds today's count of multi-line blocks per file; lower it when a block moves out, never raise it.
 - Test your changes by running the skill against a real site and reviewing the report. For `functional-design` and `performance`, also run the promptfoo evals — see `evals/README.md`.

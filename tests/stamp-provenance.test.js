@@ -50,7 +50,8 @@ test('a fresh run is stamped with version, model, skill hash and seal', () => {
   assert.match(report.provenance.pluginVersion, /^\d+\.\d+\.\d+$/);
   assert.match(report.provenance.skills['functional-design'], HASH);
   assert.equal(report.provenance.collectors, hashSkill(path.join(ROOT, 'collectors')));
-  assert.deepEqual(report.provenance.playwrightMcp, require('../.mcp.json').mcpServers.playwright.args);
+  assert.deepEqual(report.provenance.playwrightMcp, require('../.claude-plugin/plugin.json').mcpServers.playwright.args);
+  assert.ok(!report.provenance.playwrightMcp.some((arg) => path.isAbsolute(arg)), 'reports go to clients, and an absolute path names the user\'s home folder');
   assert.match(report.provenance.seal, HASH);
 });
 

@@ -160,14 +160,14 @@ test('the renderer validates an aeo report from its mode when called without a f
   const { status, output } = run(t, 'report.json', { ...plainReport, mode: 'aeo' }, { generatorFlags: [] });
 
   assert.notEqual(status, 0, output);
-  assert.match(output, /does not match schemas\/qa-report-aeo-schema\.json/);
+  assert.match(output, /does not match \/\S*\/schemas\/qa-report-aeo-schema\.json/, 'name the schema by its absolute path: the model works in the user\'s project, not kosh\'s folder');
 });
 
 test('a report that matches its schema is rendered', (t) => {
   const { status, output, reportsDir } = run(t, 'qa-report-shop.json', shopReport());
 
   assert.equal(status, 0, output);
-  assert.match(output, /✓ Schema: valid against schemas\/qa-report-shop-schema\.json/);
+  assert.match(output, /✓ Schema: valid against \S*\/schemas\/qa-report-shop-schema\.json/);
   assert.ok(fs.readdirSync(reportsDir).some((file) => file.endsWith('.html')));
 });
 
@@ -179,7 +179,7 @@ test('a real performance report is validated from its filename and rendered', (t
   const { status, output } = run(t, 'qa-report-performance.json', fixture(PAGES));
 
   assert.equal(status, 0, output);
-  assert.match(output, /✓ Schema: valid against schemas\/qa-report-performance-schema\.json/);
+  assert.match(output, /✓ Schema: valid against \S*\/schemas\/qa-report-performance-schema\.json/);
 });
 
 // Loading the page is the fix; editing pages[] isn't, since the wrapper rebuilds it from the capture.
@@ -207,7 +207,7 @@ test('a valid performance report with no flag is validated and titled from its c
   const { status, output, reportsDir } = run(t, 'report.json', fixture(PAGES), { generatorFlags: [] });
 
   assert.equal(status, 0, output);
-  assert.match(output, /✓ Schema: valid against schemas\/qa-report-performance-schema\.json/);
+  assert.match(output, /✓ Schema: valid against \S*\/schemas\/qa-report-performance-schema\.json/);
   const [html] = fs.readdirSync(reportsDir).filter((file) => file.endsWith('.html'));
   assert.match(fs.readFileSync(path.join(reportsDir, html), 'utf8'), /<title>kosh performance QA report/);
 });
@@ -226,7 +226,7 @@ test('an aeo report is validated from its mode when neither a flag nor the filen
   const { status, output, reportsDir } = run(t, 'report.json', { ...plainReport, mode: 'aeo' });
 
   assert.notEqual(status, 0, output);
-  assert.match(output, /does not match schemas\/qa-report-aeo-schema\.json/);
+  assert.match(output, /does not match \S*\/schemas\/qa-report-aeo-schema\.json/);
   assert.match(output, /\/ must have required property 'criteria'/);
   assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
 });
@@ -265,7 +265,7 @@ test('without ajv installed, a validated type is refused with an install hint, n
   const { status, output, reportsDir } = run(t, 'qa-report-shop.json', shopReport(), { prepare: () => {} });
 
   assert.notEqual(status, 0, output);
-  assert.match(output, /ajv is not installed: run `npm ci`/);
+  assert.match(output, /ajv is not installed: run `npm ci --prefix "\/.+"`, then re-run\./);
   assert.doesNotMatch(output, /Fix these fields/);
   assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
 });
@@ -283,7 +283,7 @@ test('a schema that will not compile is reported as a kosh problem, not a report
   const { status, output } = run(t, 'qa-report-shop.json', shopReport(), { prepare: breakShopSchema });
 
   assert.notEqual(status, 0, output);
-  assert.match(output, /Could not validate against schemas\/qa-report-shop-schema\.json/);
+  assert.match(output, /Could not validate against \S*\/schemas\/qa-report-shop-schema\.json/);
   assert.match(output, /problem with kosh, not with the report/);
   assert.doesNotMatch(output, /Fix these fields/);
 });
