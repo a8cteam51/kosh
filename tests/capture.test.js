@@ -738,6 +738,17 @@ test('without either variable, reports/ is the nearest one above the cwd that ha
   assert.strictEqual(capture.reportsDir({}, project), path.join(project, 'reports'));
 });
 
+test('the look up stops at the git root, so a project inside a folder kosh ran in keeps its own reports/', (t) => {
+  const ran = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-reports-git-')));
+  t.after(() => fs.rmSync(ran, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(ran, 'reports/data'), { recursive: true });
+  fs.mkdirSync(path.join(ran, 'site/.git'), { recursive: true });
+  fs.mkdirSync(path.join(ran, 'site/src'));
+  assert.strictEqual(capture.reportsDir({}, path.join(ran, 'site/src')), path.join(ran, 'site/src/reports'));
+  fs.mkdirSync(path.join(ran, 'site/reports/data'), { recursive: true });
+  assert.strictEqual(capture.reportsDir({}, path.join(ran, 'site/src')), path.join(ran, 'site/reports'));
+});
+
 test('a reports/ kosh creates ignores itself in git, and one that exists is left as it is', (t) => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-reports-new-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

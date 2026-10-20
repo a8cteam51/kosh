@@ -32,7 +32,7 @@ Things that catch contributors out:
 
 - `hooks/guard-capture.js` refuses edits to `capture*.jsonl` files and anything naming this session's capture. For commands that can reach a `reports/` kosh has run in (one holding a capture: anywhere in the session's project, or a run folder or a path in its `reports/` named by absolute path), it also refuses `*.jsonl` globs and any `rm` or `mv` of `reports/`, `reports/data`, the archive, or a glob of their contents, so clearing them is done by hand.
 - The merge keeps only the visits from the last browser that loaded the report's host, since a performance run starts with `browser_close`. A skill that closes the browser mid-run drops what it measured before.
-- `reports/` is the project's, not kosh's: `$CLAUDE_PROJECT_DIR/reports`, which Claude Code sets for the capture and the hooks. Bash commands don't get it, so the scripts use the nearest `reports/data` at or above the cwd, else `reports/` in the cwd. A `reports/` kosh creates gets a `.gitignore` of `*`, since reports hold client URLs and console text. Schemas, skills and `plugin.json` still resolve from kosh's own folder. `KOSH_REPORTS_DIR` moves where the scripts and the capture look (the tests use it), not where the skills write.
+- `reports/` is the project's, not kosh's: `$CLAUDE_PROJECT_DIR/reports`, which Claude Code sets for the capture and the hooks. Bash commands don't get it, so the scripts use the nearest `reports/data` at or above the cwd, looking no higher than the git root, else `reports/` in the cwd. A `reports/` kosh creates gets a `.gitignore` of `*`, since reports hold client URLs and console text. Schemas, skills and `plugin.json` still resolve from kosh's own folder. `KOSH_REPORTS_DIR` moves where the scripts and the capture look (the tests use it), not where the skills write.
 
 ## Playwright MCP (`.mcp.json`)
 
@@ -54,7 +54,7 @@ schemas/         → JSON schemas that define report structure
 shared/          → canonical blocks every skill carries a verbatim copy of (never read at runtime)
 collectors/      → code Playwright MCP loads: `kosh.js` into every page as `window.__kosh` (tested with jsdom), `capture.js` in Node for every tab (tested with a stub page)
 scripts/         → report generation, validation, provenance, the page-capture merge, summary and archive, and the run comparison
-hooks/           → session hooks (create reports/data/ on startup) and the PreToolUse capture guard
+hooks/           → the SessionStart update check and the PreToolUse capture guard
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
 tests/           → `node --test` checks for the scripts, the collectors, the capture and its guard, skill-embedded snippets, shared-block copies, Claude Code-only constructs in skills, tracked JSON files, the Playwright MCP flags and allowlist, the promptfoo eval wiring, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
 docs/            → user-facing guides (getting-started.md)
