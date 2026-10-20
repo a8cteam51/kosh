@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { captureFile, redactUrl } = require('../collectors/capture.js');
+const { CAPTURE_NAME, captureFile, redactUrl } = require('../collectors/capture.js');
 
 const host = (url) => {
   try { return new URL(url).host.replace(/^www\./, ''); } catch { return null; }
@@ -121,7 +121,7 @@ const uncovered = (urls, pages) => urls.filter((url) => !pages.some((page) => co
 // Restarting Claude Code starts a new session id, which would strand a capture another session left.
 const missingCapture = (live) => {
   let others = [];
-  try { others = fs.readdirSync(path.dirname(live)).filter((name) => /^capture.*\.jsonl(\.taken)?$/.test(name)); } catch {}
+  try { others = fs.readdirSync(path.dirname(live)).filter((name) => CAPTURE_NAME.test(name)); } catch {}
   return others.length
     ? `Warning: no page capture at ${live} (left alone: ${others.join(', ')}). If this run's pages are in one of those, re-run from the Claude Code session that loaded them.`
     : `Warning: no page capture at ${live}. A browser started before kosh added the capture records none: restart Claude Code.`;

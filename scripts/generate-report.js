@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { TYPE_FLAGS, describeProvenance } = require('./stamp-provenance.js');
 const { checkReport, looksLikePerformance, typesFor } = require('./validate-report.js');
+const { makeReportsDir, reportsDir: findReportsDir } = require('../collectors/capture.js');
 
 const inputFile = process.argv[2];
 const args = process.argv.slice(3);
@@ -51,8 +52,7 @@ const report = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
 
 // ===== Shared helpers (used by both QA renderer and renderAeoReport) =====
 
-// KOSH_REPORTS_DIR lets tests render into a temp directory instead of the real reports/.
-const reportsDir = path.resolve(process.env.KOSH_REPORTS_DIR || path.join(__dirname, '../reports'));
+const reportsDir = findReportsDir();
 
 const escHtml = (val) =>
   String(val ?? '')
@@ -885,9 +885,7 @@ const outputFilename = testTypeLabel
   ? `${safeName}_${testTypeLabel}_QA_REPORT_${timestamp}.html`
   : `${safeName}_QA_REPORT_${timestamp}.html`;
 
-if (!fs.existsSync(reportsDir)) {
-  fs.mkdirSync(reportsDir, { recursive: true });
-}
+makeReportsDir(reportsDir);
 
 const outputPath = path.join(reportsDir, outputFilename);
 fs.writeFileSync(outputPath, html);
@@ -1531,7 +1529,7 @@ function renderAeoReport(aeoReport, aeoInputFile, cliTestTypeLabel) {
   }
   const filenameTag = cliTestTypeLabel || 'AEO';
   const aeoOutputFilename = `${safeName}_${filenameTag}_QA_REPORT_${aeoTimestamp}.html`;
-  if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+  makeReportsDir(reportsDir);
 
   const aeoOutputPath = path.join(reportsDir, aeoOutputFilename);
   fs.writeFileSync(aeoOutputPath, html);

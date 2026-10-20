@@ -30,9 +30,9 @@ node scripts/compare-runs.js reports/data/archive/<name>.json…       # one blo
 
 Things that catch contributors out:
 
-- `hooks/guard-capture.js` refuses edits to `capture*.jsonl` files and, for commands that can reach kosh's `reports/`, also `*.jsonl` globs and any `rm` or `mv` of `reports/`, `reports/data` or the archive, so clearing them is done by hand.
+- `hooks/guard-capture.js` refuses edits to `capture*.jsonl` files and anything naming this session's capture. For commands that can reach a `reports/` kosh has run in (one holding a capture, in the session's project or a folder the command names), it also refuses `*.jsonl` globs and any `rm` or `mv` of `reports/`, `reports/data`, the archive or their contents, so clearing them is done by hand.
 - The merge keeps only the visits from the last browser that loaded the report's host, since a performance run starts with `browser_close`. A skill that closes the browser mid-run drops what it measured before.
-- The scripts resolve `reports/` from their own location. `KOSH_REPORTS_DIR` moves where the scripts look (the tests use it), not where the skills write.
+- `reports/` is the project's, not kosh's: `$CLAUDE_PROJECT_DIR/reports`, which Claude Code sets for the capture and the hooks. Bash commands don't get it, so the scripts use the nearest `reports/data` at or above the cwd, else `reports/` in the cwd. A `reports/` kosh creates gets a `.gitignore` of `*`, since reports hold client URLs and console text. Schemas, skills and `plugin.json` still resolve from kosh's own folder. `KOSH_REPORTS_DIR` moves where the scripts and the capture look (the tests use it), not where the skills write.
 
 ## Playwright MCP (`.mcp.json`)
 

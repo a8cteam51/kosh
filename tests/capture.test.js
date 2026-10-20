@@ -92,6 +92,15 @@ test('a navigation is one visit with its load', async (t) => {
   assert.deepStrictEqual({ ...vitals, at: undefined }, { at: undefined, type: 'vitals', visit: visit.visit, lcp: 900, cls: 0.02, settled: true });
 });
 
+test('the first capture in a project creates its reports/, ignored in git', async (t) => {
+  const box = sandbox(t);
+  process.env.KOSH_REPORTS_DIR = path.join(box.reportsDir, 'project/reports');
+  await navigate(await start(fakePage()), 'https://example.com/');
+
+  assert.strictEqual(fs.readFileSync(path.join(box.reportsDir, 'project/reports/.gitignore'), 'utf8'), '*\n');
+  assert.ok(fs.existsSync(path.join(box.reportsDir, 'project/reports/data/capture-test-session.jsonl')));
+});
+
 test('the vitals are read until the visit ends, with a line for each change and none from the next document', async (t) => {
   const box = sandbox(t);
   const read = (lcp, cls, quietFor, timeOrigin = 1) => ({ timeOrigin, lcp, cls, quietFor, sinceLoad: 100 });
@@ -710,7 +719,42 @@ test('the capture file is per session, and a strange session id stays in reports
   for (const session of [undefined, '', '../../etc/x', 'a/b', 'a b']) {
     assert.strictEqual(capture.captureFile({ ...env, CLAUDE_CODE_SESSION_ID: session }), '/tmp/kosh-reports/data/capture.jsonl');
   }
-  assert.strictEqual(capture.captureFile({}), path.join(__dirname, '../reports/data/capture.jsonl'));
+  assert.strictEqual(capture.captureFile({}, '/projects/site'), '/projects/site/reports/data/capture.jsonl');
+});
+
+test('reports/ is KOSH_REPORTS_DIR, else the project root Claude Code gives, else the cwd', () => {
+  assert.strictEqual(capture.reportsDir({ KOSH_REPORTS_DIR: '/tmp/kosh-reports', CLAUDE_PROJECT_DIR: '/projects/site' }, '/projects/site/src'), '/tmp/kosh-reports');
+  assert.strictEqual(capture.reportsDir({ KOSH_REPORTS_DIR: 'out/reports' }, '/projects/site'), '/projects/site/out/reports');
+  assert.strictEqual(capture.reportsDir({ CLAUDE_PROJECT_DIR: '/projects/site' }, '/projects/site/src'), '/projects/site/reports');
+  assert.strictEqual(capture.reportsDir({}, '/projects/site/src'), '/projects/site/src/reports');
+});
+
+test('without either variable, reports/ is the nearest one above the cwd that has a data/ folder', (t) => {
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-reports-up-')));
+  t.after(() => fs.rmSync(project, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(project, 'reports/data'), { recursive: true });
+  fs.mkdirSync(path.join(project, 'src/deep'), { recursive: true });
+  assert.strictEqual(capture.reportsDir({}, path.join(project, 'src/deep')), path.join(project, 'reports'));
+  assert.strictEqual(capture.reportsDir({}, project), path.join(project, 'reports'));
+});
+
+test('a reports/ kosh creates ignores itself in git, and one that exists is left as it is', (t) => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-reports-new-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  capture.makeReportsDir(path.join(root, 'project/reports'));
+  assert.strictEqual(fs.readFileSync(path.join(root, 'project/reports/.gitignore'), 'utf8'), '*\n');
+  fs.mkdirSync(path.join(root, 'kept/reports'), { recursive: true });
+  capture.makeReportsDir(path.join(root, 'kept/reports'));
+  assert.deepStrictEqual(fs.readdirSync(path.join(root, 'kept/reports')), []);
+});
+
+test('a capture name is the live file, its .taken or .<pid> copy, or an archived one, and nothing else', () => {
+  for (const name of ['capture.jsonl', 'capture-0b3f6c2e-5d1a.jsonl', 'capture-0b3f.jsonl.taken', 'capture-0b3f.jsonl.4242', 'EXAMPLE_SITE_PERFORMANCE_QA_REPORT_2026-10-13.capture.jsonl']) {
+    assert.ok(capture.CAPTURE_NAME.test(name), name);
+  }
+  for (const name of ['screen-capture-log.jsonl', 'my-capture.jsonl', 'capture-notes.txt', 'capture.json']) {
+    assert.ok(!capture.CAPTURE_NAME.test(name), name);
+  }
 });
 
 test('the capture exposes no function a page can call', () => {
