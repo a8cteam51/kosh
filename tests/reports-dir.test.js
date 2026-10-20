@@ -101,7 +101,7 @@ test('from a subfolder of the project, the scripts find the project\'s reports/'
   const json = path.join(box.reportsDir, 'data', 'qa-report-functional.json');
   fs.writeFileSync(json, report('Reports Dir Fixture'));
 
-  run(path.join(SCRIPTS, 'run-qa-report.sh'), [json], { ...box, cwd: box.cwd }, installed());
+  run(path.join(SCRIPTS, 'run-qa-report.sh'), [json], box, installed());
 
   assert.deepEqual(fs.readdirSync(path.join(box.reportsDir, 'data', 'archive')), ['REPORTS_DIR_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json']);
 });

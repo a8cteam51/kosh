@@ -86,6 +86,10 @@ for (const [name, input, options] of [
   ['emptying the archive by glob', call('Bash', { command: 'rm -rf reports/data/archive/*' })],
   ['deleting archived reports by glob', call('Bash', { command: 'rm reports/data/archive/*.json' })],
   ['emptying reports/ by glob', call('Bash', { command: 'rm -rf reports/*' })],
+  ["deleting one archived report's files by a trailing glob", call('Bash', { command: 'rm reports/data/archive/EXAMPLE_SITE_PERFORMANCE_QA_REPORT_2026-10-13.*' })],
+  ['deleting archived reports by a name prefix', call('Bash', { command: 'rm reports/data/archive/EXAMPLE*' })],
+  ['deleting archived reports by brace expansion', call('Bash', { command: 'rm reports/data/archive/{a,b}.json' })],
+  ['deleting archived reports by a single-character glob', call('Bash', { command: 'rm reports/data/archive/report-?.json' })],
 ]) {
   test(`the guard blocks ${name}`, () => {
     const { status, stderr } = guard(input, options);
@@ -128,6 +132,7 @@ for (const [name, input, options] of [
   ["a log that only looks like a capture in another project's reports/data", call('Bash', { command: 'cat logs/*.jsonl' }, OTHER), { reports: null, project: OTHER }],
   ["another session's capture name, before the first run", { ...call('Bash', { command: 'cat capture-1111.jsonl' }, FRESH), session_id: SESSION }, { reports: null, project: FRESH }],
   ['emptying the screenshots folder by glob', call('Bash', { command: 'rm -rf reports/screenshots/*' })],
+  ['deleting one named archived report', call('Bash', { command: 'rm reports/data/archive/EXAMPLE_SITE_PERFORMANCE_QA_REPORT_2026-10-13.json' })],
 ]) {
   test(`the guard allows ${name}`, () => {
     const { status, stderr } = guard(input, options);

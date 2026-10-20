@@ -11,7 +11,7 @@ const IN_KOSH = [
   /capture[^\s]*\.jsonl/i,
   /capture[\w-]*\*/i,
   /[*?][^\s]*\.jsonl/i,
-  /\b(?:rm|mv)\b[^|;&]*[\s/'"]reports(?:\/data(?:\/archive)?)?(?:\/\*[^\s;|&)'"]*)?\/?(?=[\s;|&)'"]|$)/i,
+  /\b(?:rm|mv)\b[^|;&]*[\s/'"]reports(?:\/data(?:\/archive)?)?(?:\/[^\s;|&)'"\/]*[*?{][^\s;|&)'"\/]*)?\/?(?=[\s;|&)'"]|$)/i,
 ];
 
 // This session's capture, by the variable or by its id: the file the merge reads, a name no other project uses, so it's refused everywhere.
