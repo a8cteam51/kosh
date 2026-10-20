@@ -61,14 +61,14 @@ function checkReport(report, reportPath, types) {
   let ok = true;
 
   for (const type of types) {
-    const schemaPath = `schemas/qa-report-${type}-schema.json`;
+    const schemaPath = path.join(SCHEMAS, `qa-report-${type}-schema.json`);
     let errors;
     try {
       errors = validate(report, type);
     } catch (error) {
       ok = false;
       console.error(error.code === 'MODULE_NOT_FOUND'
-        ? '✗ ajv is not installed: run `npm ci` in the kosh folder, then re-run.'
+        ? `✗ ajv is not installed: run \`npm ci --prefix "${path.dirname(SCHEMAS)}"\`, then re-run.`
         : `✗ Could not validate against ${schemaPath}: ${error.message}\nThis is a problem with kosh, not with the report: leave the JSON as it is and tell the user.`);
       continue;
     }
@@ -81,7 +81,7 @@ function checkReport(report, reportPath, types) {
       // The merge writes captureSha256 with every pages[] it builds, so rows without one came from the model.
       if (type === 'performance' && report.pages.length && !report.provenance?.captureSha256) {
         ok = false;
-        console.error(`✗ pages[] has rows the page capture didn't write. scripts/run-qa-report.sh builds them from the browser's record, and only for ${path.join(path.dirname(captureFile()), 'qa-report-performance.json')}: save the report there without pages[], and re-run.`);
+        console.error(`✗ pages[] has rows the page capture didn't write. ${path.join(__dirname, 'run-qa-report.sh')} builds them from the browser's record, and only for ${path.join(path.dirname(captureFile()), 'qa-report-performance.json')}: save the report there without pages[], and re-run.`);
       } else if (missing.length) {
         ok = false;
         console.error(`✗ visitedPages lists pages the browser has no record of loading:\n${missing.map((url) => `  ${url}`).join('\n')}\nLoad each in the browser and re-run, or take it out of visitedPages if this run didn't test it.`);

@@ -6,5 +6,10 @@
     "name": "katodea"
   },
   "repository": "https://github.com/a8cteam51/kosh",
-  "mcpServers": "./.mcp.json"
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@0.0.82", "--isolated", "--no-webmcp", "--init-script", "${CLAUDE_PLUGIN_ROOT}/collectors/kosh.js", "--init-page", "${CLAUDE_PLUGIN_ROOT}/collectors/capture.js", "--output-dir", "${CLAUDE_PLUGIN_DATA}/playwright-mcp", "--output-max-size", "20000000"]
+    }
+  }
 }

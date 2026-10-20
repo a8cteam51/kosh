@@ -6,7 +6,7 @@ Some WordPress sites are gated and not publicly reachable: the browser loads a c
 () => __kosh.gate("<the URL you were asked to test>")
 ```
 
-It returns `{ gate, redirectedTo }`. If `__kosh` is not defined, the browser was started without kosh's init script (`collectors/kosh.js`): stop and tell the user.
+It returns `{ gate, redirectedTo }`. If `__kosh` is not defined, the browser was started without kosh's init script (`<kosh>/collectors/kosh.js`): stop and tell the user.
 
 If both are `null`, proceed with testing normally.
 

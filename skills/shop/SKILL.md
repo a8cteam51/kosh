@@ -9,6 +9,8 @@ Parse $ARGUMENTS into a URL and an optional environment type before doing anythi
 1. Extract the URL from $ARGUMENTS (the token that starts with `http://` or `https://`). If no URL is found, ask the user to provide one before proceeding. Do not begin testing without a valid URL.
 2. Extract the environment type if present — one of `local`, `development`, `staging`, or `production`. If not provided, infer it from the URL when possible (e.g., `.test`/`.local` domains suggest local, `staging.*` subdomains suggest staging). Default to `production` if unclear.
 
+kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `reports/` goes.
+
 Navigate to the extracted URL and conduct a guest shopping-journey QA test of the site's store — catalog through checkout, never submitting an order — by following the full procedure below, using the determined environment type to guide how findings are reported.
 
 # Playwright Shop QA Testing: The Guest Purchase Path
@@ -107,7 +109,7 @@ Some WordPress sites are gated and not publicly reachable: the browser loads a c
 () => __kosh.gate("<the URL you were asked to test>")
 ```
 
-It returns `{ gate, redirectedTo }`. If `__kosh` is not defined, the browser was started without kosh's init script (`collectors/kosh.js`): stop and tell the user.
+It returns `{ gate, redirectedTo }`. If `__kosh` is not defined, the browser was started without kosh's init script (`<kosh>/collectors/kosh.js`): stop and tell the user.
 
 If both are `null`, proceed with testing normally.
 
@@ -651,7 +653,7 @@ Remember: commerce-flow findings only. Console and network errors belong inside 
 
 Structure your data into `reports/data/qa-report-shop.json`:
 
-- Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `scripts/run-qa-report.sh` adds the plugin version and skill hash.
+- Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `<kosh>/scripts/run-qa-report.sh` adds the plugin version and skill hash.
 
 ```json
 {
@@ -730,12 +732,12 @@ Use the real values you observed. `timestamp` must be an actual ISO 8601 timesta
 
 `explorationPass` holds the exploration pass, one entry per thread — including the ones that found nothing. Its value is precisely that it records work that produced no finding, so a reader can tell the difference between "this store is clean here" and "nobody looked". Keep `issues` for defects and `explorationPass` for what was examined; a thread that became a finding appears in both.
 
-The structure is defined in `schemas/qa-report-shop-schema.json`.
+The structure is defined in `<kosh>/schemas/qa-report-shop-schema.json`.
 
 ### 5.3 Generate the HTML Report
 
 ```bash
-scripts/run-qa-report.sh reports/data/qa-report-shop.json
+<kosh>/scripts/run-qa-report.sh reports/data/qa-report-shop.json
 ```
 
 The script auto-detects the shop type from the filename and applies `--shop`, producing `reports/<SITE>_SHOP_QA_REPORT_<date>.html`.

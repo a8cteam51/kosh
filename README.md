@@ -53,8 +53,8 @@ hooks/           A session hook that checks for kosh updates, and a guard that k
 evals/           Promptfoo regression checks for skill decision rules
 tests/           node --test checks for the scripts, the collectors, the capture and its guard, skill snippets, shared-block copies, portability, JSON files, the Playwright MCP flags and allowlist, skill ↔ schema drift, report validation and redacted report fixtures — run by .github/workflows/ci.yml on every PR
 reports/data/archive/  Past runs' JSON and page captures, named to match the HTML they produced
-.mcp.json        Playwright MCP server configuration (pinned, --isolated, --no-webmcp, --init-script, --init-page)
 .claude/         Project settings and Playwright tool permissions
+.claude-plugin/  Plugin manifest, with the Playwright MCP server (pinned, --isolated, --no-webmcp, --init-script, --init-page, --output-dir, --output-max-size)
 .github/         CI workflow — runs tests/ on every PR and push to trunk
 ```
 

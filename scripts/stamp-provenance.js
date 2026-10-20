@@ -83,8 +83,7 @@ function stamp(report, flags, env = process.env) {
   }
 
   const plugin = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude-plugin/plugin.json'), 'utf8'));
-  // collectors/ and .mcp.json are read as they are now, so a session started before a pull ran older ones.
-  const mcp = JSON.parse(fs.readFileSync(path.join(ROOT, '.mcp.json'), 'utf8'));
+  // collectors/ and plugin.json's server are read as they are now, so a session started before a pull ran older ones.
   const facts = sessionFacts(env);
   const stamped = {
     model: facts.model || String(existing.model || 'unknown'),
@@ -93,7 +92,7 @@ function stamp(report, flags, env = process.env) {
     pluginVersion: plugin.version,
     skills,
     collectors: hashSkill(path.join(ROOT, 'collectors')),
-    playwrightMcp: mcp.mcpServers.playwright.args,
+    playwrightMcp: plugin.mcpServers.playwright.args,
     // Hashed from the capture before the stamp runs; the stamp can't recompute it.
     ...(existing.captureSha256 !== undefined && { captureSha256: existing.captureSha256 }),
   };

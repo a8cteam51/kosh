@@ -9,6 +9,8 @@ Parse $ARGUMENTS into a URL and an optional environment type before doing anythi
 1. Extract the URL from $ARGUMENTS (the token that starts with `http://` or `https://`). If no URL is found, ask the user to provide one before proceeding. Do not begin testing without a valid URL.
 2. Extract the environment type if present — one of `local`, `development`, `staging`, or `production`. If not provided, infer it from the URL when possible (e.g., `.test`/`.local` domains suggest local, `staging.*` subdomains suggest staging). Default to `production` if unclear.
 
+kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `reports/` goes.
+
 Navigate to the extracted URL and conduct an Answer Engine Optimization (AEO) / AI Mode QA test, evaluating how the site will be discovered, parsed, understood, and cited by AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews. Follow the full procedure below, using the determined environment type to guide how findings are reported.
 
 # Playwright AEO QA Testing (AI Mode)
@@ -57,7 +59,7 @@ Every signal in this skill is assigned one of four status values. There are **no
 | `fail` | Signal meets the bottom tier — absent, broken, fundamentally wrong, or contradicting the goal. |
 | `na` | Signal does not apply to this site. Used sparingly — see per-signal N/A guidance. Record rationale in `notes`. |
 
-Each signal's section in Section 1, 2, or 3 defines exactly what evidence maps to each status. The `references/evaluation-rubric.md` reference file is the quick-lookup index.
+Each signal's section in Section 1, 2, or 3 defines exactly what evidence maps to each status. The `<kosh>/skills/aeo/references/evaluation-rubric.md` reference file is the quick-lookup index.
 
 After Phase 4 evaluation, every signal at status `fail` or `partial` produces:
 - An entry in the appropriate severity bucket of `issues` (see "Issue severity guide" in Phase 5)
@@ -65,10 +67,10 @@ After Phase 4 evaluation, every signal at status `fail` or `partial` produces:
 
 The top-level `summary` block carries the counts: `{ totalSignals: 49, pass, partial, fail, na }`. The full rubric and signal definitions live in:
 
-- `skills/aeo/references/evaluation-rubric.md` — per-criterion signal list with pass/partial/fail tier definitions
-- `skills/aeo/references/signal-keys.md` — canonical signal keys for the JSON report
-- `skills/aeo/references/faq-detection.md` — the canonical `koshFaqProbe()` and the single definition of every FAQ determination (relevance, schema tier, cross-page aggregation, status mapping). Four signals depend on it; never inline or re-derive its logic in this file
-- `skills/aeo/references/wp-seo-capabilities.md` — what WordPress core and Jetpack emit natively per signal; drives native-first fix recommendations and carries the `lastVerified` date for the staleness check
+- `<kosh>/skills/aeo/references/evaluation-rubric.md` — per-criterion signal list with pass/partial/fail tier definitions
+- `<kosh>/skills/aeo/references/signal-keys.md` — canonical signal keys for the JSON report
+- `<kosh>/skills/aeo/references/faq-detection.md` — the canonical `koshFaqProbe()` and the single definition of every FAQ determination (relevance, schema tier, cross-page aggregation, status mapping). Four signals depend on it; never inline or re-derive its logic in this file
+- `<kosh>/skills/aeo/references/wp-seo-capabilities.md` — what WordPress core and Jetpack emit natively per signal; drives native-first fix recommendations and carries the `lastVerified` date for the staleness check
 
 Underlying frameworks the rubric draws on:
 
@@ -117,7 +119,7 @@ Some WordPress sites are gated and not publicly reachable: the browser loads a c
 () => __kosh.gate("<the URL you were asked to test>")
 ```
 
-It returns `{ gate, redirectedTo }`. If `__kosh` is not defined, the browser was started without kosh's init script (`collectors/kosh.js`): stop and tell the user.
+It returns `{ gate, redirectedTo }`. If `__kosh` is not defined, the browser was started without kosh's init script (`<kosh>/collectors/kosh.js`): stop and tell the user.
 
 If both are `null`, proceed with testing normally.
 
@@ -159,7 +161,7 @@ If `redirectedTo` is set, **do NOT generate a report** either: the site now live
 14. Map every finding to the rubric; assign each signal a status (pass / partial / fail / na); count totals into the summary block
 
 ### Phase 5: Reporting
-15. Generate `reports/data/qa-report-aeo.json` matching `schemas/qa-report-aeo-schema.json`
+15. Generate `reports/data/qa-report-aeo.json` matching `<kosh>/schemas/qa-report-aeo-schema.json`
 16. Run the report generation script
 
 ---
@@ -314,7 +316,7 @@ const hasMultipleEvents = (text.match(/\bregister|tickets|join\s+us\s+on/gi) || 
 const eventRelevance = (hasEventDatePattern && hasMultipleEvents) ? 'high' : hasEventCopy ? 'medium' : 'absent';
 
 // FAQ — relevance comes from the canonical FAQ probe, the single source of truth for
-// every FAQ determination in this skill (see references/faq-detection.md). Inject
+// every FAQ determination in this skill (see <kosh>/skills/aeo/references/faq-detection.md). Inject
 // koshFaqProbe alongside this scan and read its faqRelevance: 'high' for a genuine FAQ
 // marker (container / "frequently asked" heading / 2+ <details> accordion), 'medium' for
 // a de facto FAQ (3+ question-framed headings EACH followed by answer text), 'absent'
@@ -375,7 +377,7 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 
 > Note: `Organization` is always `high`, but it's evaluated under its own standalone signal (`organizationSchema`) — not double-counted in `primaryEntitySchema` or `relevantSchemasApplied`. Similarly, `FAQPage` and `Review` have their own standalone signals and aren't double-counted.
 
-> **FAQ detection is defined once, in `references/faq-detection.md`.** That file holds the canonical `koshFaqProbe()` — visible-FAQ evidence *and* FAQ-schema tier in a single per-page call — plus the cross-page aggregation rules, the `faqSchema` / `faqSchemaApplied` status mapping, and the per-branch `notes`/remedy strings. Inject and run it on **every** page where FAQ evidence is collected (homepage in Section 1.3, a dedicated `/faq` page per Section 1.4 and the Phase 2 optional visit, and the Section 2.1 functional page), then aggregate the strongest observation on each axis independently: `faqRelevance` (`high` > `medium` > `absent`) and `faqSchemaTier` (`valid` > `weak` > `none`).
+> **FAQ detection is defined once, in `<kosh>/skills/aeo/references/faq-detection.md`.** That file holds the canonical `koshFaqProbe()` — visible-FAQ evidence *and* FAQ-schema tier in a single per-page call — plus the cross-page aggregation rules, the `faqSchema` / `faqSchemaApplied` status mapping, and the per-branch `notes`/remedy strings. Inject and run it on **every** page where FAQ evidence is collected (homepage in Section 1.3, a dedicated `/faq` page per Section 1.4 and the Phase 2 optional visit, and the Section 2.1 functional page), then aggregate the strongest observation on each axis independently: `faqRelevance` (`high` > `medium` > `absent`) and `faqSchemaTier` (`valid` > `weak` > `none`).
 >
 > Both axes must travel together, which is why the probe returns them from one call. Raising relevance from an inner page without probing that page's schema is what produced reports where `faqSectionPresent: partial` ("there's an unmarked FAQ") sat next to `faqSchema: na` ("this site has no FAQ") for the same site. And because the probe is defined in exactly one place, the three sections that consume it can no longer drift apart — the failure mode that repeatedly reopened false `critical` findings when each copy was patched separately.
 >
@@ -672,13 +674,13 @@ return { inScopeCount: inScope.length, matchedCount: matched.length, coveragePer
 JSON-LD `@type: "FAQPage"` with `mainEntity` containing Q&A pairs, microdata, or RDFa. Run the canonical probe on the homepage and read `faqSchemaTier`:
 
 ```javascript
-// Canonical FAQ probe — defined in references/faq-detection.md as a single
+// Canonical FAQ probe — defined in <kosh>/skills/aeo/references/faq-detection.md as a single
 // self-contained block. Inject it verbatim; do not re-derive or inline any part of it
 // here, and do not split helpers out of it.
 return koshFaqProbe();   // → { faqRelevance, visibleFaq, faqSchemaTier, faqSchemaFormats, ... }
 ```
 
-`faqSchemaTier` is `valid` only for JSON-LD `FAQPage` carrying 2+ `mainEntity` `Question` nodes with non-empty `acceptedAnswer` text; `weak` covers malformed JSON-LD, an empty/thin `mainEntity`, and microdata- or RDFa-only markup (both syntaxes accept `FAQPage` *and* `Question`, so the same FAQ scores the same tier whichever expresses it); `none` means no FAQ markup in any format. Carry the strongest tier observed across all pages probed (`valid` > `weak` > `none`) — see the aggregation rules in `references/faq-detection.md`.
+`faqSchemaTier` is `valid` only for JSON-LD `FAQPage` carrying 2+ `mainEntity` `Question` nodes with non-empty `acceptedAnswer` text; `weak` covers malformed JSON-LD, an empty/thin `mainEntity`, and microdata- or RDFa-only markup (both syntaxes accept `FAQPage` *and* `Question`, so the same FAQ scores the same tier whichever expresses it); `none` means no FAQ markup in any format. Carry the strongest tier observed across all pages probed (`valid` > `weak` > `none`) — see the aggregation rules in `<kosh>/skills/aeo/references/faq-detection.md`.
 
 **Evaluation:**
 
@@ -757,7 +759,7 @@ return { microdataReview: !!microdataReview };
 #### FAQ section present
 
 ```javascript
-// Same canonical probe as Sections 1.3 and 2.1 — references/faq-detection.md.
+// Same canonical probe as Sections 1.3 and 2.1 — <kosh>/skills/aeo/references/faq-detection.md.
 // Inject koshFaqProbe verbatim alongside this snippet: each snippet runs as its own
 // browser_evaluate and definitions do not persist between evaluations.
 // Its faqSectionFound / dlPairs / detailsElements / answeredQuestionHeadingCount outputs
@@ -766,7 +768,7 @@ return { microdataReview: !!microdataReview };
 return koshFaqProbe();
 ```
 
-If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit during Phase 2) — re-run the probe on whichever page you land on, so a dedicated FAQ page gets the same visible-FAQ *and* schema-tier evidence as the homepage, and both aggregate per `references/faq-detection.md`.
+If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit during Phase 2) — re-run the probe on whichever page you land on, so a dedicated FAQ page gets the same visible-FAQ *and* schema-tier evidence as the homepage, and both aggregate per `<kosh>/skills/aeo/references/faq-detection.md`.
 
 **Evaluation:**
 - `pass` — FAQ section found (homepage or dedicated FAQ page) with 2+ Q&A pairs.
@@ -775,7 +777,7 @@ If no FAQ on the homepage, check `/faq` and `/faqs` as inner pages (also visit d
 
 #### FAQ schema applied to visible FAQ content — `faqSchemaApplied`
 
-Cross-reference the two aggregated axes from the canonical probe — visible FAQ evidence and `faqSchemaTier` — on whichever page carries each. The full status table for both `faqSchema` and `faqSchemaApplied`, including the per-branch `notes` strings, lives in `references/faq-detection.md`. Note the two signals carry **different severities**: `faqSchema` is Structured Data (`fail` → `critical`, or `high` when consolidated), `faqSchemaApplied` is AEO Readiness (`partial` → `medium`, effort `low`).
+Cross-reference the two aggregated axes from the canonical probe — visible FAQ evidence and `faqSchemaTier` — on whichever page carries each. The full status table for both `faqSchema` and `faqSchemaApplied`, including the per-branch `notes` strings, lives in `<kosh>/skills/aeo/references/faq-detection.md`. Note the two signals carry **different severities**: `faqSchema` is Structured Data (`fail` → `critical`, or `high` when consolidated), `faqSchemaApplied` is AEO Readiness (`partial` → `medium`, effort `low`).
 
 **Evaluation:**
 - `na` — Neither visible FAQ content nor FAQ schema present AND `faqRelevance` is `absent`. The site has no FAQ, so there is nothing to align. Record in `notes` as `"N/A — no FAQ content on the site."` Do **not** generate an issue.
@@ -1203,7 +1205,7 @@ Always start with the **homepage** (already visited in Phase 0/1). Then pick inn
 | `nonprofit` | A program / cause / how-we-help page | A recent campaign / impact-report / news page | `/donate` or `/give` (FAQ schema check) |
 | `community` | A "what is this" / rules / wiki page | A recently-active discussion / featured contribution | `/join`, `/membership`, or `/become-a-member` (FAQ schema check) |
 
-**Optional 4th visit:** if a dedicated FAQ page exists at `/faq`, `/faqs`, `/help`, or `/support`, visit it and re-run the canonical FAQ probe (`references/faq-detection.md`) on that page — one call covers both the visible-FAQ check and the schema tier — this is what feeds `faqSectionPresent`, `faqSchema`, and `faqSchemaApplied`, and can raise `faqRelevance`.
+**Optional 4th visit:** if a dedicated FAQ page exists at `/faq`, `/faqs`, `/help`, or `/support`, visit it and re-run the canonical FAQ probe (`<kosh>/skills/aeo/references/faq-detection.md`) on that page — one call covers both the visible-FAQ check and the schema tier — this is what feeds `faqSectionPresent`, `faqSchema`, and `faqSchemaApplied`, and can raise `faqRelevance`.
 
 **Mediablog-specific 5th visit — archive page quality check.** For mediaBlog sites, visit at least one category or tag archive page (`/category/<slug>/`, `/tag/<slug>/`, `/topics/<slug>/`, or whatever the routing convention is). Run the `archivePageQuality` check from Section 2.1.
 
@@ -1218,7 +1220,7 @@ These checks feed into existing evaluated signals rather than introducing new on
 Visit the type-specific functional page and re-run the FAQ check:
 
 ```javascript
-// Same canonical probe as Sections 1.3 and 1.4 — references/faq-detection.md.
+// Same canonical probe as Sections 1.3 and 1.4 — <kosh>/skills/aeo/references/faq-detection.md.
 // Inject koshFaqProbe verbatim alongside this snippet: each snippet runs as its own
 // browser_evaluate and definitions do not persist between evaluations.
 // Returns both the visible-FAQ evidence (visibleFaq / hasFaqMarkers /
@@ -1377,7 +1379,7 @@ Record the result in `technicalNotes.cmsDetected` (e.g. `"WordPress + Yoast"`, `
 
 ### Native-first capability check + matrix staleness (run once, after CMS detection)
 
-Read `skills/aeo/references/wp-seo-capabilities.md`. It maps each plugin-dependent AEO signal to what WordPress core and Jetpack can emit natively, versus the schema signals that genuinely need a third-party plugin or custom JSON-LD.
+Read `<kosh>/skills/aeo/references/wp-seo-capabilities.md`. It maps each plugin-dependent AEO signal to what WordPress core and Jetpack can emit natively, versus the schema signals that genuinely need a third-party plugin or custom JSON-LD.
 
 Use it two ways:
 
@@ -1745,7 +1747,7 @@ If llms.txt was found in 1.8, evaluate the recorded content:
 
 ## SECTION 4: Evaluation & Verification
 
-1. Map all findings from Sections 1–3 to the rubric in `references/evaluation-rubric.md`.
+1. Map all findings from Sections 1–3 to the rubric in `<kosh>/skills/aeo/references/evaluation-rubric.md`.
 2. Assign each signal a status (`pass` / `partial` / `fail` / `na`).
 3. Verify each criterion's `signals` block contains every signal from the canonical signal-keys list. No signal may be omitted; use `na` with rationale when the signal genuinely does not apply.
 4. Count totals into the `summary` block: `{ totalSignals: 49, pass, partial, fail, na }`. Confirm `pass + partial + fail + na === 49`.
@@ -1770,7 +1772,7 @@ Complete all items before generating the JSON report.
 - [ ] Per-page `contentUpdateRecency` check run on at least one editorial / reference page (or N/A exemption applied per site type)
 - [ ] Per-page `authorBylines` check run on at least one article / post page (or N/A exemption applied per site type)
 - [ ] CMS detection completed and recorded in `technicalNotes.cmsDetected` (including Jetpack presence)
-- [ ] Native-first capability check run against `references/wp-seo-capabilities.md`; `capabilityMatrixLastVerified` recorded in `technicalNotes` and the staleness notice surfaced if over threshold
+- [ ] Native-first capability check run against `<kosh>/skills/aeo/references/wp-seo-capabilities.md`; `capabilityMatrixLastVerified` recorded in `technicalNotes` and the staleness notice surfaced if over threshold
 - [ ] All Section 1 programmatic checks completed
 - [ ] All Section 2 inner-page checks completed
 - [ ] All Section 3 content checks completed
@@ -1792,13 +1794,13 @@ Save the report to `reports/data/qa-report-aeo.json`. This is the fixed filename
 
 ### Top-level structure
 
-The full structure is defined in `schemas/qa-report-aeo-schema.json`. Use canonical signal keys from `references/signal-keys.md` — do not invent variants (`robotsAndCrawlerAccess`, not `robotsTxt`; `noNoindex`, not `noindex`).
+The full structure is defined in `<kosh>/schemas/qa-report-aeo-schema.json`. Use canonical signal keys from `<kosh>/skills/aeo/references/signal-keys.md` — do not invent variants (`robotsAndCrawlerAccess`, not `robotsTxt`; `noNoindex`, not `noindex`).
 
 Each criterion follows `{signals: {key: {status, notes}, ...}}` where `status` is one of `pass` / `partial` / `fail` / `na`.
 
 Minimal top-level shape:
 
-- Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `scripts/run-qa-report.sh` adds the plugin version and skill hash.
+- Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `<kosh>/scripts/run-qa-report.sh` adds the plugin version and skill hash.
 
 ```json
 {
@@ -1833,7 +1835,7 @@ Minimal top-level shape:
         /* ...remaining technicalHealth signals per schema... */
       }
     }
-    /* ...7 more criterion blocks, 49 signals total per references/signal-keys.md... */
+    /* ...7 more criterion blocks, 49 signals total per <kosh>/skills/aeo/references/signal-keys.md... */
   },
   "issues": {
     "critical": [
@@ -1904,7 +1906,7 @@ The FAQ story spans three signals with deliberately different treatment: `faqSec
 
 The objective, machine-level criteria — **Technical Health**, **Structured Data**, and **llms.txt** — keep their normal critical / high / medium severity. They are cheap, unambiguous, and not subject to editorial judgment, so they are not capped.
 
-> Impact and priority are different axes. A content signal can be high-*impact* for AEO — `answerCapsules`, for instance, is cited as a strong 2026 citation signal in `references/signal-keys.md` — yet still `low`-*priority* for a given partner because acting on it is discretionary editorial work. The cap reflects TAM priority, not a claim that the signal doesn't matter for AEO.
+> Impact and priority are different axes. A content signal can be high-*impact* for AEO — `answerCapsules`, for instance, is cited as a strong 2026 citation signal in `<kosh>/skills/aeo/references/signal-keys.md` — yet still `low`-*priority* for a given partner because acting on it is discretionary editorial work. The cap reflects TAM priority, not a claim that the signal doesn't matter for AEO.
 
 ### Issue effort guide
 
@@ -1919,7 +1921,7 @@ Every issue must include an `effort` field. Use this two-step process:
 | `high` | Requires design or development work, refactoring, or substantial new content. Days or more. | Fix JS-only rendering, build a blog or news section from scratch, create case studies with named outcomes |
 | `unknown` | Stack context insufficient to assess. Use sparingly. | |
 
-**Step 2 — adjust based on observed CMS context (native-first — consult `references/wp-seo-capabilities.md`):**
+**Step 2 — adjust based on observed CMS context (native-first — consult `<kosh>/skills/aeo/references/wp-seo-capabilities.md`):**
 
 Recommend what the site already runs before anything it would have to install: a detected SEO plugin (Yoast / RankMath / SEOPress / AIOSEO) first, then the **core / Jetpack** path, and a new third-party plugin only for a genuine gap. The capability matrix determines which fixes are native and which genuinely need a plugin:
 
@@ -1964,7 +1966,7 @@ The `prompt` field conventions:
 - **State language only when not English.**
 - **No filler.** Skip "Help me", "Can you", "Please".
 - **`llms.txt` is always lowercase**, even at sentence start.
-- **Native-first.** For signals the capability matrix (`references/wp-seo-capabilities.md`) marks as natively covered — Open Graph, sitemap lastmod, canonical, robots/noindex, editable title + meta description — the prompt's recommended fix is the SEO plugin the site already runs if one was detected, otherwise the core / Jetpack path (naming the free vs. paid Jetpack tier) — never a plugin the site would have to install. Recommend Yoast / RankMath / AIOSEO or custom JSON-LD as the primary fix only for the schema signals the matrix lists as a genuine gap.
+- **Native-first.** For signals the capability matrix (`<kosh>/skills/aeo/references/wp-seo-capabilities.md`) marks as natively covered — Open Graph, sitemap lastmod, canonical, robots/noindex, editable title + meta description — the prompt's recommended fix is the SEO plugin the site already runs if one was detected, otherwise the core / Jetpack path (naming the free vs. paid Jetpack tier) — never a plugin the site would have to install. Recommend Yoast / RankMath / AIOSEO or custom JSON-LD as the primary fix only for the schema signals the matrix lists as a genuine gap.
 
 Example — ❌ "I'm Maple Creative, a Toronto branding agency. My homepage has no Organization schema. Write me one."
 
@@ -1975,7 +1977,7 @@ Example — ✅ "Write a complete JSON-LD Organization schema block for a Toront
 Once `reports/data/qa-report-aeo.json` is saved, run:
 
 ```bash
-scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo
+<kosh>/scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo
 ```
 
 `--aeo` forces the generator's AEO branch, which is otherwise auto-detected from `report.mode === "aeo"`. The script writes a self-contained HTML report to `reports/` (color-coded status pills, per-criterion signal tables, schema-relevance section, collapsible severity blocks, paste-ready Claude prompts), prints the output path, and moves the source JSON to `reports/data/archive/` under the same basename.
@@ -2005,7 +2007,7 @@ Full report saved to:
 
 When you detect WordPress (look for `/wp-content/`, `/wp-json/`, `meta[name="generator"]` with WordPress, or admin bar markup), these patterns are common:
 
-- **Jetpack** — an Automattic-native option. Jetpack emits **Open Graph tags** (free, Social/Sharing) and **XML sitemaps with lastmod** (free), and its **SEO Tools** (free) provide editable SEO titles, meta descriptions, and archive canonicals. **Jetpack emits no schema.org JSON-LD** — Organization, Article, FAQ, Product, Event, Review, and breadcrumb schema all require a dedicated SEO plugin or custom code even with Jetpack active. When no dedicated SEO plugin is installed, prefer the native Jetpack/core path for OG, sitemap, canonical, robots, and title/meta fixes (see `references/wp-seo-capabilities.md`); a detected Yoast / RankMath / SEOPress / AIOSEO already covers those and its panel is the fix. Treat schema as the genuine gap. When Jetpack is present but there's no schema plugin, flag missing schema as a candidate to raise with the Jetpack team rather than blanket-recommending a third-party plugin.
+- **Jetpack** — an Automattic-native option. Jetpack emits **Open Graph tags** (free, Social/Sharing) and **XML sitemaps with lastmod** (free), and its **SEO Tools** (free) provide editable SEO titles, meta descriptions, and archive canonicals. **Jetpack emits no schema.org JSON-LD** — Organization, Article, FAQ, Product, Event, Review, and breadcrumb schema all require a dedicated SEO plugin or custom code even with Jetpack active. When no dedicated SEO plugin is installed, prefer the native Jetpack/core path for OG, sitemap, canonical, robots, and title/meta fixes (see `<kosh>/skills/aeo/references/wp-seo-capabilities.md`); a detected Yoast / RankMath / SEOPress / AIOSEO already covers those and its panel is the fix. Treat schema as the genuine gap. When Jetpack is present but there's no schema plugin, flag missing schema as a candidate to raise with the Jetpack team rather than blanket-recommending a third-party plugin.
 - **Yoast SEO** — emits `@graph`-wrapped JSON-LD with Organization, WebSite, WebPage, and BreadcrumbList by default. Check whether Organization fields (logo, sameAs) are populated in the Yoast settings — empty fields are a common failure mode.
 - **RankMath** — similar coverage to Yoast, with FAQ block schema available in the editor. Check whether FAQ blocks were used on FAQ pages.
 - **SEOPress** — narrower default schema coverage; Organization usually present, FAQ usually not.
