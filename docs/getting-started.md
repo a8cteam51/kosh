@@ -184,5 +184,5 @@ A couple of notes:
 - **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.
 - **Restart Claude Code after updating kosh.** A session keeps the browser setup it started with, so after a `git pull` an open session still runs the old one. If a test stops because `__kosh` isn't defined, that's why: exit and start Claude Code again.
-- **Reports from before `kosh-reports/`** are in `reports/`. Run `mv reports kosh-reports` in the kosh folder before your next test, or leave it: its HTML reports already embed their screenshots.
+- **Reports from before `kosh-reports/`** are in `reports/`. If the kosh folder has no `kosh-reports/` yet, run `mv reports kosh-reports` there; if it has one, leave `reports/` as it is: its HTML reports already embed their screenshots.
 - **Run shop tests in their own Claude Code session.** A second run in the same session inherits the first one's cart, and can miss prices that change once something is in it. The performance test closes the browser before it starts so its timings are cold, which means a gated site you logged into earlier in the session asks for the login again.
