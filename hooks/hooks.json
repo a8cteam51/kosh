@@ -9,6 +9,15 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-capture.js\""
           }
         ]
+      },
+      {
+        "matcher": "mcp__plugin_kosh_playwright__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-browser.js\""
+          }
+        ]
       }
     ]
   }

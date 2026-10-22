@@ -498,18 +498,7 @@ Parse for valid XML, presence of `<lastmod>` entries, and whether any are within
 
 #### Core content accessible without JavaScript
 
-Open a new browser context with JavaScript disabled, navigate to the homepage, and check whether the H1 and substantial body copy are visible in the static HTML.
-
-```javascript
-const h1 = document.querySelector('h1');
-return {
-  h1Present: !!h1,
-  h1Text: h1 ? h1.innerText.trim() : null,
-  bodyTextLength: document.body.innerText.trim().length
-};
-```
-
-Save a screenshot by passing `filename: "kosh-reports/screenshots/homepage-no-js.png"` to `browser_take_screenshot` (a bare filename saves to the project root — pass the full path, don't move the file afterward). Close the no-JS context and resume the normal session.
+Check whether the H1 and substantial body copy are in the homepage's static HTML, which is what a crawler that doesn't run JavaScript reads. From whatever page the browser is on, call `() => __kosh.staticHtml('[baseURL]/')` with `browser_evaluate`, passing the homepage URL. It fetches that URL's HTML and parses it without running any of it, and returns the `url` it read (after any redirect), the response `status`, `h1Present`, `h1Text` and `bodyTextLength`. The live page in the browser has already run its JavaScript, so don't read the H1 or body text from it for this check. If the call returns `error` instead (the fetch failed, or the server answered with an error status), the HTML couldn't be read: rate the signal `na` and put the error and the `url` in its `notes`.
 
 **Evaluation:**
 - `pass` — H1 and 500+ chars of body copy visible without JS.
