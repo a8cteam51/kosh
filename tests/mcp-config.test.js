@@ -50,3 +50,13 @@ test('every browser tool a skill names is allowlisted', () => {
   assert.ok(named.length > 0, 'no browser tools found in shared/ or skills/');
   assert.deepStrictEqual([...new Set(named)].filter((tool) => !allowed.includes(`mcp__plugin_kosh_playwright__${tool}`)), [], 'a tool missing from .claude/settings.json prompts mid-run');
 });
+
+// .claude/settings.json only applies in a clone; a marketplace install gets the browser tools through each skill's allowed-tools.
+test('every skill pre-approves exactly the allowlisted browser tools', () => {
+  const allowed = require(path.join(ROOT, '.claude/settings.json')).permissions.allow.filter((rule) => rule.startsWith('mcp__plugin_kosh_playwright__'));
+  for (const { name: skill } of fs.readdirSync(path.join(ROOT, 'skills'), { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
+    const front = fs.readFileSync(path.join(ROOT, 'skills', skill, 'SKILL.md'), 'utf8').match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? '';
+    const listed = front.match(/^allowed-tools:\n((?: {2}- .*(?:\n|$))+)/m)?.[1].match(/(?<=- )\S+/g) ?? [];
+    assert.deepStrictEqual(listed, allowed, `skills/${skill}: allowed-tools must match .claude/settings.json, or a marketplace install prompts for each tool`);
+  }
+});

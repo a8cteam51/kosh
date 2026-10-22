@@ -4,7 +4,7 @@ kosh is a Claude Code plugin that runs functional, performance, accessibility, s
 
 ## Commands
 
-Installing and running kosh is in `docs/getting-started.md`; these are for changing it.
+Installing and running kosh is in `docs/getting-started.md`; these are for changing it. Work from a clone and start Claude Code there with `claude --plugin-dir .`: for that session the clone replaces an installed kosh, and `.claude/settings.json` pre-approves the browser tools.
 
 No build step — the scripts are plain `node` and `bash`. The root `package.json` has one dependency, `ajv`, for report validation, and one devDependency, `jsdom`, for the collector tests; `evals/` has its own `package.json` for promptfoo. Install with `npm ci`: `npm install` rewrites the committed lockfile, which blocks the next `git pull`, so it's only for adding a dependency.
 
@@ -43,7 +43,7 @@ Things that catch contributors out:
 - `--no-webmcp` stops a tested page from registering tools the model could call.
 - `--init-script` loads `collectors/kosh.js`, a frozen `window.__kosh` in every page; `--init-page` runs `collectors/capture.js` in Node for every tab. Both are `${CLAUDE_PLUGIN_ROOT}` paths: a relative one resolves against the folder Claude Code starts in, and Playwright won't start if the file isn't there. `capture.js` must never throw, since an init-page error breaks every browser tool, and an edit to it needs a server restart.
 - `--output-dir ${CLAUDE_PLUGIN_DATA}/playwright-mcp` keeps the files Playwright names itself (page snapshots, console logs) out of the user's project, where `git add` would pick up client pages. A file given a name, like a screenshot, still resolves against the project. That folder survives plugin updates and holds every project's page text, so `--output-max-size` has Playwright delete the oldest files past 20 MB.
-- Every `browser_*` tool a skill names must be in `.claude/settings.json`'s allowlist as `mcp__plugin_kosh_playwright__<tool>`, or it prompts mid-run.
+- Every `browser_*` tool a skill names must be in `.claude/settings.json`'s allowlist as `mcp__plugin_kosh_playwright__<tool>`, or it prompts mid-run. That file only applies in a clone, so each skill's `allowed-tools` repeats the list for marketplace installs. Its grant lasts one turn, so the turn after a gate pause asks again.
 
 ## How it works
 
@@ -55,13 +55,13 @@ schemas/         → JSON schemas that define report structure
 shared/          → canonical blocks every skill carries a verbatim copy of (never read at runtime)
 collectors/      → code Playwright MCP loads: `kosh.js` into every page as `window.__kosh` (tested with jsdom), `capture.js` in Node for every tab (tested with a stub page)
 scripts/         → report generation, validation, provenance, the page-capture merge, summary and archive, and the run comparison
-hooks/           → the SessionStart update check and the PreToolUse capture guard
+hooks/           → the PreToolUse capture guard
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
 tests/           → `node --test` checks for the scripts, the collectors, the capture and its guard, skill-embedded snippets, shared-block copies, Claude Code-only constructs in skills, tracked JSON files, the Playwright MCP flags and allowlist, the promptfoo eval wiring, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
 docs/            → user-facing guides (getting-started.md)
 .github/         → the CI workflow (runs tests/ on every PR)
 .claude/         → project settings and Playwright tool permissions
-.claude-plugin/  → plugin manifest (plugin.json), which declares the Playwright MCP server (see above)
+.claude-plugin/  → plugin manifest (plugin.json), which declares the Playwright MCP server (see above), and the marketplace that lists it (marketplace.json)
 ```
 
 ### How skills and schemas relate
@@ -89,7 +89,7 @@ A skill is a prompt the model reads once and follows for the whole run. `skills/
 - Points at its schema as the contract and shows one labelled illustrative example, with placeholders where a copied value would do harm (the timestamp, the model ID). `tests/schema-drift.test.js` validates the example.
 - Carries the blocks in `shared/` as verbatim copies, because skills can't include files and a skill folder must hold everything it runs: every skill carries the preamble, the gate check and the `provenance.model` line, and the skills in `CARRIERS` in `tests/shared-blocks.test.js` carry the others (the screenshot rule, performance only so far). Edit the `shared/` file and every copy together; the test fails otherwise.
 - Write a path to kosh's own files (`scripts/`, `schemas/`, `collectors/`, a skill's references) as `<kosh>/…`. The shared preamble defines `<kosh>` as the folder two above the skill's, because a skill runs from the user's project, where `kosh-reports/` goes, not from kosh's folder. `tests/portability.test.js` fails on a bare one.
-- Don't add Claude Code-only constructs (host tool names like `PushNotification`, `/kosh:` references, `mcp__` tool names, `CLAUDE_…` variables, `$ARGUMENTS`, "Claude prompt"): other hosts load skill text verbatim. `tests/portability.test.js` holds today's count per file, counting each `shared/` block once in `shared/` rather than in every copy; lower a count when a rewrite removes one, never raise it.
+- Don't add Claude Code-only constructs (host tool names like `PushNotification`, `/kosh:` references, `mcp__` tool names, `CLAUDE_…` variables, `$ARGUMENTS`, "Claude prompt"): other hosts load skill text verbatim. `tests/portability.test.js` holds today's count per file, counting each `shared/` block once in `shared/` rather than in every copy; lower a count when a rewrite removes one, never raise it. The frontmatter's `allowed-tools` isn't counted: hosts read it as metadata, and `tests/mcp-config.test.js` pins it.
 - Put page-side code in `collectors/kosh.js` and call it from the skill in one line (`() => __kosh.<name>(…)`), not as a multi-line `javascript` block. `tests/skill-snippets.test.js` holds today's count of multi-line blocks per file; lower it when a block moves out, never raise it.
 - Test your changes by running the skill against a real site and reviewing the report. For `functional-design` and `performance`, also run the promptfoo evals — see `evals/README.md`.
 
@@ -108,3 +108,4 @@ In the performance schema, URLs kosh navigated to (`url`, `visitedPages`, `pages
 - **Commit style:** conventional commits — `feat:`, `fix:`, `docs:`, `test:`, `chore:`, etc.
 - **Merge strategy:** squash merge preferred for feature branches
 - **PR requirements:** clear title, description of what changed and why
+- **Releases:** a marketplace install updates when `plugin.json`'s `version` changes, not on every commit, so a merged change reaches users with the next version bump

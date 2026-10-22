@@ -2,6 +2,27 @@
 name: shop
 description: Guest shopping journey QA for WooCommerce stores — catalog to checkout, never placing an order
 argument-hint: <url> [local|development|staging|production]
+allowed-tools:
+  - mcp__plugin_kosh_playwright__browser_take_screenshot
+  - mcp__plugin_kosh_playwright__browser_console_messages
+  - mcp__plugin_kosh_playwright__browser_network_request
+  - mcp__plugin_kosh_playwright__browser_network_requests
+  - mcp__plugin_kosh_playwright__browser_resize
+  - mcp__plugin_kosh_playwright__browser_click
+  - mcp__plugin_kosh_playwright__browser_snapshot
+  - mcp__plugin_kosh_playwright__browser_tabs
+  - mcp__plugin_kosh_playwright__browser_navigate
+  - mcp__plugin_kosh_playwright__browser_fill_form
+  - mcp__plugin_kosh_playwright__browser_evaluate
+  - mcp__plugin_kosh_playwright__browser_wait_for
+  - mcp__plugin_kosh_playwright__browser_press_key
+  - mcp__plugin_kosh_playwright__browser_close
+  - mcp__plugin_kosh_playwright__browser_drag
+  - mcp__plugin_kosh_playwright__browser_handle_dialog
+  - mcp__plugin_kosh_playwright__browser_hover
+  - mcp__plugin_kosh_playwright__browser_navigate_back
+  - mcp__plugin_kosh_playwright__browser_select_option
+  - mcp__plugin_kosh_playwright__browser_type
 ---
 
 Parse $ARGUMENTS into a URL and an optional environment type before doing anything else:

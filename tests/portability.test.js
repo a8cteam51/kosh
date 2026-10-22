@@ -25,6 +25,8 @@ for (const file of [...SHARED, ...SKILLS]) {
     let source = fs.readFileSync(path.join(ROOT, file), 'utf8');
     // Shared blocks are counted once, in shared/; blanking keeps the copy's line numbers.
     if (file.startsWith('skills/')) for (const block of BLOCKS) source = source.replace(block, () => block.replace(/[^\n]/g, ''));
+    // allowed-tools is host metadata, not text the model follows; tests/mcp-config.test.js pins it.
+    source = source.replace(/^(---\n[\s\S]*?)(allowed-tools:\n(?: {2}- .*\n)+)/, (_, head, list) => head + list.replace(/[^\n]/g, ''));
     const lines = source.toLowerCase().split('\n');
     for (const rule of RULES) {
       const hits = lines.flatMap((line, i) => Array(line.split(rule.toLowerCase()).length - 1).fill(i + 1));

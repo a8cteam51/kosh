@@ -1,0 +1,13 @@
+{
+  "name": "kosh",
+  "description": "kosh, a QA plugin that tests live WordPress sites through Playwright MCP",
+  "owner": {
+    "name": "katodea"
+  },
+  "plugins": [
+    {
+      "name": "kosh",
+      "source": "./"
+    }
+  ]
+}
