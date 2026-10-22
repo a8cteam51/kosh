@@ -60,13 +60,14 @@ test('gate: a requested url that is not a url throws', () => {
 
 // The browser on the sitemap, as the AEO skill leaves it, with fetch answering `html` from `landed` (the url after any redirect).
 const HOME = 'https://example.com/';
-const staticHtml = async (html, { url = HOME, landed = HOME, status = 200, fails = false } = {}) => {
+const staticHtml = async (html, { url = HOME, landed = HOME, status = 200, type = 'text/html; charset=utf-8', fails = false } = {}) => {
   const window = page('https://example.com/sitemap.xml');
   const fetched = [];
   window.fetch = async (requested) => {
     fetched.push(String(requested));
     if (fails) throw new TypeError('Failed to fetch');
-    return { ok: status >= 200 && status < 300, status, url: landed, text: async () => html };
+    const headers = { get: (name) => (name.toLowerCase() === 'content-type' ? type : null) };
+    return { ok: status >= 200 && status < 300, status, url: landed, headers, text: async () => html };
   };
   return { result: { ...(await window.__kosh.staticHtml(url)) }, fetched };
 };
@@ -102,6 +103,16 @@ test('staticHtml: style and template text is not body copy', async () => {
 test('staticHtml: an error page is an error, not the homepage', async () => {
   const { result } = await staticHtml('<!doctype html><body><h1>Access denied</h1></body>', { status: 403 });
   assert.deepStrictEqual(result, { url: HOME, status: 403, error: 'HTTP 403' });
+});
+
+test('staticHtml: a page that is not HTML is an error, not a homepage with no H1', async () => {
+  const { result } = await staticHtml('<?xml version="1.0"?><urlset></urlset>', { url: 'https://example.com/sitemap.xml', landed: 'https://example.com/sitemap.xml', type: 'application/xml' });
+  assert.deepStrictEqual(result, { url: 'https://example.com/sitemap.xml', status: 200, error: 'not HTML: application/xml' });
+});
+
+test('staticHtml: a response with no content type is not read as HTML', async () => {
+  const { result } = await staticHtml('<h1>Example Site</h1>', { type: null });
+  assert.strictEqual(result.error, 'not HTML: no content type');
 });
 
 test('staticHtml: a fetch that fails returns the error, not a result', async () => {

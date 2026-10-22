@@ -77,6 +77,7 @@ for (const [name, tool, toolInput, reason] of [
   ['a screenshot saved over a capture', 'browser_take_screenshot', { filename: 'kosh-reports/data/capture-abc.jsonl' }, /kosh-reports\/screenshots\//],
   ['a screenshot that climbs out of the screenshots folder', 'browser_take_screenshot', { filename: 'kosh-reports/screenshots/../data/qa-report-performance.json' }, /kosh-reports\/screenshots\//],
   ['a screenshot saved to the project root', 'browser_take_screenshot', { filename: 'hero.png' }, /kosh-reports\/screenshots\//],
+  ['a screenshot that climbs out with backslashes, as Windows reads them', 'browser_take_screenshot', { filename: 'kosh-reports/screenshots/..\\..\\.claude\\settings.local.json' }, /kosh-reports\/screenshots\//],
   ['an upload of a project file', 'browser_file_upload', { paths: ['/project/.env'] }, /files/],
   ['a file dropped onto the page', 'browser_drop', { target: 'e12', paths: ['/project/.env'] }, /files/],
 ]) {

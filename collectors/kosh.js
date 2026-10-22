@@ -20,6 +20,9 @@
       // fetch is called before any await, while the model's evaluate is still on the stack, so the capture can tell the request is the model's.
       const response = await fetch(new URL(url));
       if (!response.ok) return { url: response.url, status: response.status, error: `HTTP ${response.status}` };
+      // A sitemap, robots.txt or llms.txt means the browser wasn't on the homepage; an error says so where a parse would score it.
+      const type = response.headers.get('content-type') ?? '';
+      if (!/html/i.test(type)) return { url: response.url, status: response.status, error: `not HTML: ${type || 'no content type'}` };
       const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
       doc.querySelectorAll('script, style, template').forEach((element) => element.remove());
       const text = (element) => element?.textContent.replace(/\s+/g, ' ').trim() ?? null;

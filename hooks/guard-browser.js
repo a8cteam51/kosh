@@ -15,7 +15,8 @@ const refusal = (call) => {
   if (args.paths?.length) return PATHS;
   if (!args.filename) return null;
   if (!name.endsWith('__browser_take_screenshot')) return FILENAME;
-  return path.posix.normalize(String(args.filename)).startsWith(SCREENSHOTS) ? null : SCREENSHOT;
+  // Backslashes as slashes: on Windows Playwright treats them as separators, so ..\ climbs out too.
+  return path.posix.normalize(String(args.filename).replace(/\\/g, '/')).startsWith(SCREENSHOTS) ? null : SCREENSHOT;
 };
 
 let input = '';
