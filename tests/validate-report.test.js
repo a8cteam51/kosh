@@ -58,7 +58,7 @@ const run =(t, filename, report, { space = 2, prepare, generatorFlags } = {}) =>
     for (const dir of ['scripts', 'schemas', 'collectors']) fs.cpSync(path.join(ROOT, dir), path.join(root, dir), { recursive: true });
     prepare(root);
   }
-  const reportsDir = path.join(root, 'reports');
+  const reportsDir = path.join(root, 'kosh-reports');
   const json = path.join(root, filename);
   const written = JSON.stringify(report, null, space);
   fs.writeFileSync(json, written);
@@ -117,7 +117,7 @@ test('a report that fails its schema is refused: nothing rendered or archived', 
   assert.match(output, /\/shop\/cartOperations must have required property 'totalsVerified'/);
   assert.match(output, /Fix these fields in .*qa-report-shop\.json, then re-run\./);
   assert.match(output, /Nothing was rendered\./);
-  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under kosh-reports/');
 });
 
 test('the renderer refuses a report that fails its schema when called directly', (t) => {
@@ -125,7 +125,7 @@ test('the renderer refuses a report that fails its schema when called directly',
 
   assert.notEqual(status, 0, output);
   assert.match(output, /\/ must have required property 'shop'/);
-  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under kosh-reports/');
 });
 
 for (const flags of [[], ['--functional']]) {
@@ -134,7 +134,7 @@ for (const flags of [[], ['--functional']]) {
 
     assert.notEqual(status, 0, output);
     assert.match(output, /\/shop must have required property 'checkoutStop'/);
-    assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+    assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under kosh-reports/');
   });
 }
 
@@ -192,7 +192,7 @@ test('a performance report listing a page the browser never loaded is refused', 
   assert.notEqual(status, 0, output);
   assert.match(output, /no record of loading:\n  https:\/\/example\.com\/never-loaded\/\nLoad each in the browser/);
   assert.match(output, /Nothing was rendered\./);
-  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under kosh-reports/');
 });
 
 test('a performance report with an invented top-level key is refused', (t) => {
@@ -200,7 +200,7 @@ test('a performance report with an invented top-level key is refused', (t) => {
 
   assert.notEqual(status, 0, output);
   assert.match(output, /\/ must NOT have additional properties: summary/);
-  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under kosh-reports/');
 });
 
 test('a valid performance report with no flag is validated and titled from its content', (t) => {
@@ -218,7 +218,7 @@ for (const flags of [[], ['--functional']]) {
 
     assert.notEqual(status, 0, output);
     assert.match(output, /\/ must NOT have additional properties: summary/);
-    assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+    assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under kosh-reports/');
   });
 }
 
@@ -228,7 +228,7 @@ test('an aeo report is validated from its mode when neither a flag nor the filen
   assert.notEqual(status, 0, output);
   assert.match(output, /does not match \S*\/schemas\/qa-report-aeo-schema\.json/);
   assert.match(output, /\/ must have required property 'criteria'/);
-  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under kosh-reports/');
 });
 
 test('a report with no detectable type renders with a note that it was not validated', (t) => {
@@ -267,7 +267,7 @@ test('without ajv installed, a validated type is refused with an install hint, n
   assert.notEqual(status, 0, output);
   assert.match(output, /ajv is not installed: run `npm ci --prefix "\/.+"`, then re-run\./);
   assert.doesNotMatch(output, /Fix these fields/);
-  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under reports/');
+  assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under kosh-reports/');
 });
 
 test('a schema that will not compile is reported as a kosh problem, not a report problem', (t) => {

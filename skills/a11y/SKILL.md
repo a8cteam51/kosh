@@ -9,7 +9,7 @@ Parse $ARGUMENTS into a URL and an optional environment type before doing anythi
 1. Extract the URL from $ARGUMENTS (the token that starts with `http://` or `https://`). If no URL is found, ask the user to provide one before proceeding. Do not begin testing without a valid URL.
 2. Extract the environment type if present — one of `local`, `development`, `staging`, or `production`. If not provided, infer it from the URL when possible (e.g., `.test`/`.local` domains suggest local, `staging.*` subdomains suggest staging). Default to `production` if unclear.
 
-kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `reports/` goes.
+kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `kosh-reports/` goes.
 
 Navigate to the extracted URL and conduct an accessibility-focused QA test by following the full procedure below, using the determined environment type to guide how findings are reported.
 
@@ -113,7 +113,7 @@ If `redirectedTo` is set, **do NOT generate a report** either: the site now live
 10. Confirm consistency of navigation and focus across all pages
 
 ### Phase 5: Data Collection & Reporting
-11. Compile into `reports/data/qa-report-accessibility.json`
+11. Compile into `kosh-reports/data/qa-report-accessibility.json`
 12. Run report generation script if available
 
 ---
@@ -636,7 +636,7 @@ After testing all pages, confirm:
 
 ## SECTION 5: Data Collection
 
-Populate `reports/data/qa-report-accessibility.json`:
+Populate `kosh-reports/data/qa-report-accessibility.json`:
 
 - Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `<kosh>/scripts/run-qa-report.sh` adds the plugin version and skill hash.
 
@@ -698,7 +698,7 @@ Populate `reports/data/qa-report-accessibility.json`:
 ```
 
 **`screenshots` field (optional but strongly encouraged for visual a11y findings):**
-Attach screenshots for findings where a visual is helpful — low-contrast text examples, missing focus indicators, touch targets that look too small, broken keyboard-only navigation flows. Save each screenshot by passing its full path as the `filename` argument to `browser_take_screenshot`: `reports/screenshots/<name>.png` (e.g. `filename: "reports/screenshots/contact-form-focus-state.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. The `screenshots` field itself takes a path relative to the `reports/` directory — i.e. `screenshots/<name>.png` for the file saved at `reports/screenshots/<name>.png`. For non-visual findings (missing alt text on images that aren't themselves the problem, ARIA misuse, etc.), skip the field.
+Attach screenshots for findings where a visual is helpful — low-contrast text examples, missing focus indicators, touch targets that look too small, broken keyboard-only navigation flows. Save each screenshot by passing its full path as the `filename` argument to `browser_take_screenshot`: `kosh-reports/screenshots/<name>.png` (e.g. `filename: "kosh-reports/screenshots/contact-form-focus-state.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. The `screenshots` field itself takes a path relative to the `kosh-reports/` directory — i.e. `screenshots/<name>.png` for the file saved at `kosh-reports/screenshots/<name>.png`. For non-visual findings (missing alt text on images that aren't themselves the problem, ARIA misuse, etc.), skip the field.
 
 ### A11y Issue Types
 
@@ -765,10 +765,10 @@ A finding's `wcag_criterion` is determined by its `type` — look it up in this 
 
 ## SECTION 6: Report Generation
 
-Once `reports/data/qa-report-accessibility.json` is populated:
+Once `kosh-reports/data/qa-report-accessibility.json` is populated:
 
 ```bash
-<kosh>/scripts/run-qa-report.sh reports/data/qa-report-accessibility.json
+<kosh>/scripts/run-qa-report.sh kosh-reports/data/qa-report-accessibility.json
 ```
 
 ---

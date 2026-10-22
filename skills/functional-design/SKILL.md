@@ -9,7 +9,7 @@ Parse $ARGUMENTS into a URL and an optional environment type before doing anythi
 1. Extract the URL from $ARGUMENTS (the token that starts with `http://` or `https://`). If no URL is found, ask the user to provide one before proceeding. Do not begin testing without a valid URL.
 2. Extract the environment type if present — one of `local`, `development`, `staging`, or `production`. If not provided, infer it from the URL when possible (e.g., `.test`/`.local` domains suggest local, `staging.*` subdomains suggest staging). Default to `production` if unclear.
 
-kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `reports/` goes.
+kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `kosh-reports/` goes.
 
 Navigate to the extracted URL and conduct a functional and design-focused QA test by following the full procedure below, using the determined environment type to guide how findings are reported.
 
@@ -21,7 +21,7 @@ You are a design-focused Quality Engineer using the Playwright MCP to perform **
 - You MUST launch real browser instances (not static analysis)
 - You MUST navigate between pages by clicking real links (simulate real user behavior)
 - You MUST take actual screenshots at different viewports and scroll positions
-- You MUST save every screenshot by passing its full path as the `filename` argument to `browser_take_screenshot`: `reports/screenshots/<name>.png` (e.g. `filename: "reports/screenshots/homepage-desktop.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. (Note: a finding's `screenshots` field uses a path relative to `reports/`, i.e. `screenshots/<name>.png` — see §4.1.)
+- You MUST save every screenshot by passing its full path as the `filename` argument to `browser_take_screenshot`: `kosh-reports/screenshots/<name>.png` (e.g. `filename: "kosh-reports/screenshots/homepage-desktop.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. (Note: a finding's `screenshots` field uses a path relative to `kosh-reports/`, i.e. `screenshots/<name>.png` — see §4.1.)
 - You MUST perform real user interactions (scrolling, clicking, form submission)
 - You MUST test actual link functionality by clicking and verifying destinations
 - You MUST validate design consistency, and functional requirements simultaneously
@@ -898,7 +898,7 @@ As you perform testing in Sections 1-3, collect the following data:
 ```
 
 **`screenshots` field (optional but strongly encouraged):**
-When a finding is visual — broken layout, low-contrast text, design inconsistency, broken UI element, mis-rendered image — attach the relevant screenshot(s) so the HTML report can embed them inline next to the finding. The path should be relative to the `reports/` directory (e.g., `screenshots/homepage-desktop-atf.png` for a file saved at `reports/screenshots/homepage-desktop-atf.png`). You can attach multiple screenshots per finding (e.g., desktop + mobile views of the same issue, or before/after pairs). Skip the field for findings where a screenshot wouldn't add information (e.g., missing meta tags, broken hrefs that aren't visually distinct).
+When a finding is visual — broken layout, low-contrast text, design inconsistency, broken UI element, mis-rendered image — attach the relevant screenshot(s) so the HTML report can embed them inline next to the finding. The path should be relative to the `kosh-reports/` directory (e.g., `screenshots/homepage-desktop-atf.png` for a file saved at `kosh-reports/screenshots/homepage-desktop-atf.png`). You can attach multiple screenshots per finding (e.g., desktop + mobile views of the same issue, or before/after pairs). Skip the field for findings where a screenshot wouldn't add information (e.g., missing meta tags, broken hrefs that aren't visually distinct).
 
 **Issue categories for this test:**
 - Design (layout, spacing, typography, visual consistency)
@@ -919,7 +919,7 @@ When a finding is visual — broken layout, low-contrast text, design inconsiste
 
 ### 4.2 Populate qa-report-functional.json
 
-After testing, structure your data into `reports/data/qa-report-functional.json` using this format:
+After testing, structure your data into `kosh-reports/data/qa-report-functional.json` using this format:
 
 - Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `<kosh>/scripts/run-qa-report.sh` adds the plugin version and skill hash.
 
@@ -989,7 +989,7 @@ After testing, structure your data into `reports/data/qa-report-functional.json`
 ### 4.3 Generate Report
 
 ```bash
-<kosh>/scripts/run-qa-report.sh reports/data/qa-report-functional.json
+<kosh>/scripts/run-qa-report.sh kosh-reports/data/qa-report-functional.json
 ```
 
 ---

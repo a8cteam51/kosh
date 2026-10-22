@@ -15,7 +15,7 @@ tests:
         2. The Section 1.5 contrast script flagged footer body text
            (16px, weight 400) at a ratio of 3.2 against a threshold of 4.5.
            You saved a screenshot of the footer at
-           reports/screenshots/about-footer-desktop.png.
+           kosh-reports/screenshots/about-footer-desktop.png.
 
         Write both findings as they would appear in the report, following the
         skill's rules about WCAG citations and recommendations.

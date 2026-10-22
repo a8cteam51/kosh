@@ -15,7 +15,7 @@ const answer = (fn, timing, vitals = VITALS) => {
   return String(fn).includes('layout-shift') ? vitals : timing;
 };
 
-// Points the capture at a temp reports/ and returns a reader for what it wrote.
+// Points the capture at a temp kosh-reports/ and returns a reader for what it wrote.
 const sandbox = (t, session = 'test-session') => {
   const reportsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-capture-'));
   const saved = { KOSH_REPORTS_DIR: process.env.KOSH_REPORTS_DIR, CLAUDE_CODE_SESSION_ID: process.env.CLAUDE_CODE_SESSION_ID };
@@ -92,13 +92,13 @@ test('a navigation is one visit with its load', async (t) => {
   assert.deepStrictEqual({ ...vitals, at: undefined }, { at: undefined, type: 'vitals', visit: visit.visit, lcp: 900, cls: 0.02, settled: true });
 });
 
-test('the first capture in a project creates its reports/, ignored in git', async (t) => {
+test('the first capture in a project creates its kosh-reports/, ignored in git', async (t) => {
   const box = sandbox(t);
-  process.env.KOSH_REPORTS_DIR = path.join(box.reportsDir, 'project/reports');
+  process.env.KOSH_REPORTS_DIR = path.join(box.reportsDir, 'project/kosh-reports');
   await navigate(await start(fakePage()), 'https://example.com/');
 
-  assert.strictEqual(fs.readFileSync(path.join(box.reportsDir, 'project/reports/.gitignore'), 'utf8'), '*\n');
-  assert.ok(fs.existsSync(path.join(box.reportsDir, 'project/reports/data/capture-test-session.jsonl')));
+  assert.strictEqual(fs.readFileSync(path.join(box.reportsDir, 'project/kosh-reports/.gitignore'), 'utf8'), '*\n');
+  assert.ok(fs.existsSync(path.join(box.reportsDir, 'project/kosh-reports/data/capture-test-session.jsonl')));
 });
 
 test('the vitals are read until the visit ends, with a line for each change and none from the next document', async (t) => {
@@ -612,7 +612,7 @@ test('site text cannot add lines or change where the capture writes', async (t) 
   page.emit('response', response(request('https://example.com/../../x\n{"type":"visit"}', { frame: page.main }), 404));
 
   assert.deepStrictEqual(ofType(box.entries(), 'visit').map((visit) => visit.url), ['https://example.com/']);
-  assert.deepStrictEqual(fs.readdirSync(box.reportsDir, { recursive: true }).sort(), ['data', path.join('data', 'capture-test-session.jsonl')]);
+  assert.deepStrictEqual(fs.readdirSync(box.reportsDir, { recursive: true }).sort(), ['.gitignore', 'data', path.join('data', 'capture-test-session.jsonl')]);
 });
 
 test('a broken page or an unwritable folder never throws out of the capture', async (t) => {
@@ -713,50 +713,54 @@ test('a page with no candidate or shift has no LCP, a CLS of 0, and is quiet sin
   assert.deepStrictEqual(vitalsInPage({}), { timeOrigin: 42, lcp: null, cls: 0, quietFor: 2000, sinceLoad: 2000 });
 });
 
-test('the capture file is per session, and a strange session id stays in reports/data', () => {
+test('the capture file is per session, and a strange session id stays in kosh-reports/data', () => {
   const env = { KOSH_REPORTS_DIR: '/tmp/kosh-reports' };
   assert.strictEqual(capture.captureFile({ ...env, CLAUDE_CODE_SESSION_ID: '0b3f6c2e-5d1a-4e7b' }), '/tmp/kosh-reports/data/capture-0b3f6c2e-5d1a-4e7b.jsonl');
   for (const session of [undefined, '', '../../etc/x', 'a/b', 'a b']) {
     assert.strictEqual(capture.captureFile({ ...env, CLAUDE_CODE_SESSION_ID: session }), '/tmp/kosh-reports/data/capture.jsonl');
   }
-  assert.strictEqual(capture.captureFile({}, '/projects/site'), '/projects/site/reports/data/capture.jsonl');
+  assert.strictEqual(capture.captureFile({}, '/projects/site'), '/projects/site/kosh-reports/data/capture.jsonl');
 });
 
-test('reports/ is KOSH_REPORTS_DIR, else the project root Claude Code gives, else the cwd', () => {
+test('kosh-reports/ is KOSH_REPORTS_DIR, else the project root Claude Code gives, else the cwd', () => {
   assert.strictEqual(capture.reportsDir({ KOSH_REPORTS_DIR: '/tmp/kosh-reports', CLAUDE_PROJECT_DIR: '/projects/site' }, '/projects/site/src'), '/tmp/kosh-reports');
-  assert.strictEqual(capture.reportsDir({ KOSH_REPORTS_DIR: 'out/reports' }, '/projects/site'), '/projects/site/out/reports');
-  assert.strictEqual(capture.reportsDir({ CLAUDE_PROJECT_DIR: '/projects/site' }, '/projects/site/src'), '/projects/site/reports');
-  assert.strictEqual(capture.reportsDir({}, '/projects/site/src'), '/projects/site/src/reports');
+  assert.strictEqual(capture.reportsDir({ KOSH_REPORTS_DIR: 'out/kosh-reports' }, '/projects/site'), '/projects/site/out/kosh-reports');
+  assert.strictEqual(capture.reportsDir({ CLAUDE_PROJECT_DIR: '/projects/site' }, '/projects/site/src'), '/projects/site/kosh-reports');
+  assert.strictEqual(capture.reportsDir({}, '/projects/site/src'), '/projects/site/src/kosh-reports');
 });
 
-test('without either variable, reports/ is the nearest one above the cwd that has a data/ folder', (t) => {
+test('without either variable, kosh-reports/ is the nearest one above the cwd that has a data/ folder', (t) => {
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-reports-up-')));
   t.after(() => fs.rmSync(project, { recursive: true, force: true }));
-  fs.mkdirSync(path.join(project, 'reports/data'), { recursive: true });
+  fs.mkdirSync(path.join(project, 'kosh-reports/data'), { recursive: true });
   fs.mkdirSync(path.join(project, 'src/deep'), { recursive: true });
-  assert.strictEqual(capture.reportsDir({}, path.join(project, 'src/deep')), path.join(project, 'reports'));
-  assert.strictEqual(capture.reportsDir({}, project), path.join(project, 'reports'));
+  assert.strictEqual(capture.reportsDir({}, path.join(project, 'src/deep')), path.join(project, 'kosh-reports'));
+  assert.strictEqual(capture.reportsDir({}, project), path.join(project, 'kosh-reports'));
 });
 
-test('the look up stops at the git root, so a project inside a folder kosh ran in keeps its own reports/', (t) => {
+test('the look up stops at the git root, so a project inside a folder kosh ran in keeps its own kosh-reports/', (t) => {
   const ran = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-reports-git-')));
   t.after(() => fs.rmSync(ran, { recursive: true, force: true }));
-  fs.mkdirSync(path.join(ran, 'reports/data'), { recursive: true });
+  fs.mkdirSync(path.join(ran, 'kosh-reports/data'), { recursive: true });
   fs.mkdirSync(path.join(ran, 'site/.git'), { recursive: true });
   fs.mkdirSync(path.join(ran, 'site/src'));
-  assert.strictEqual(capture.reportsDir({}, path.join(ran, 'site/src')), path.join(ran, 'site/src/reports'));
-  fs.mkdirSync(path.join(ran, 'site/reports/data'), { recursive: true });
-  assert.strictEqual(capture.reportsDir({}, path.join(ran, 'site/src')), path.join(ran, 'site/reports'));
+  assert.strictEqual(capture.reportsDir({}, path.join(ran, 'site/src')), path.join(ran, 'site/src/kosh-reports'));
+  fs.mkdirSync(path.join(ran, 'site/kosh-reports/data'), { recursive: true });
+  assert.strictEqual(capture.reportsDir({}, path.join(ran, 'site/src')), path.join(ran, 'site/kosh-reports'));
 });
 
-test('a reports/ kosh creates ignores itself in git, and one that exists is left as it is', (t) => {
+test('kosh-reports/ ignores itself in git even when Playwright made it first, and keeps a .gitignore it has', (t) => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-reports-new-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  capture.makeReportsDir(path.join(root, 'project/reports'));
-  assert.strictEqual(fs.readFileSync(path.join(root, 'project/reports/.gitignore'), 'utf8'), '*\n');
-  fs.mkdirSync(path.join(root, 'kept/reports'), { recursive: true });
-  capture.makeReportsDir(path.join(root, 'kept/reports'));
-  assert.deepStrictEqual(fs.readdirSync(path.join(root, 'kept/reports')), []);
+  capture.makeReportsDir(path.join(root, 'project/kosh-reports'));
+  assert.strictEqual(fs.readFileSync(path.join(root, 'project/kosh-reports/.gitignore'), 'utf8'), '*\n');
+  fs.mkdirSync(path.join(root, 'screenshot-first/kosh-reports/screenshots'), { recursive: true });
+  capture.makeReportsDir(path.join(root, 'screenshot-first/kosh-reports'));
+  assert.strictEqual(fs.readFileSync(path.join(root, 'screenshot-first/kosh-reports/.gitignore'), 'utf8'), '*\n');
+  fs.mkdirSync(path.join(root, 'kept/kosh-reports'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'kept/kosh-reports/.gitignore'), '*\n!notes.md\n');
+  capture.makeReportsDir(path.join(root, 'kept/kosh-reports'));
+  assert.strictEqual(fs.readFileSync(path.join(root, 'kept/kosh-reports/.gitignore'), 'utf8'), '*\n!notes.md\n');
 });
 
 test('a capture name is the live file, its .taken or .<pid> copy, or an archived one, and nothing else', () => {

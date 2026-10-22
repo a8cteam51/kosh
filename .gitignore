@@ -2,6 +2,7 @@
 node_modules/
 
 # Test output — reports and raw data are client-specific, not committed
+kosh-reports/
 reports/
 
 # Local Claude settings

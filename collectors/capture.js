@@ -12,21 +12,22 @@ const VITALS_QUIET_MS = 1000;
 const VITALS_POLL_MS = 500;
 const EVALUATE_URL = 'kosh-evaluate';
 
-// A capture in reports/data (with the merge's .taken or a failed archive's .<pid>), or an archived one.
+// A capture in kosh-reports/data (with the merge's .taken or a failed archive's .<pid>), or an archived one.
 const CAPTURE_NAME = /^capture(?:-[A-Za-z0-9-]+)?\.jsonl(?:\.\w+)?$|\.capture\.jsonl$/;
 
-// Claude Code gives MCP servers and hooks the project root; Bash commands get none, so from a subfolder the scripts look up, no further than the git root, for the reports/ the capture made.
+// Claude Code gives MCP servers and hooks the project root; Bash commands get none, so from a subfolder the scripts look up, no further than the git root, for the kosh-reports/ the capture made.
 const reportsDir = (env = process.env, cwd = process.cwd()) => {
-  if (env.KOSH_REPORTS_DIR || env.CLAUDE_PROJECT_DIR) return path.resolve(cwd, env.KOSH_REPORTS_DIR || path.join(env.CLAUDE_PROJECT_DIR, 'reports'));
+  if (env.KOSH_REPORTS_DIR || env.CLAUDE_PROJECT_DIR) return path.resolve(cwd, env.KOSH_REPORTS_DIR || path.join(env.CLAUDE_PROJECT_DIR, 'kosh-reports'));
   for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, 'reports', 'data'))) return path.join(dir, 'reports');
-    if (fs.existsSync(path.join(dir, '.git')) || path.dirname(dir) === dir) return path.resolve(cwd, 'reports');
+    if (fs.existsSync(path.join(dir, 'kosh-reports', 'data'))) return path.join(dir, 'kosh-reports');
+    if (fs.existsSync(path.join(dir, '.git')) || path.dirname(dir) === dir) return path.resolve(cwd, 'kosh-reports');
   }
 };
 
-// Reports hold client URLs and console text, so a reports/ kosh creates keeps itself out of the project's git.
+// Reports hold client URLs and console text, so kosh-reports/ keeps itself out of the project's git, even when Playwright made the folder first.
 const makeReportsDir = (dir) => {
-  if (fs.mkdirSync(dir, { recursive: true }) !== undefined) fs.writeFileSync(path.join(dir, '.gitignore'), '*\n');
+  fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(path.join(dir, '.gitignore'))) fs.writeFileSync(path.join(dir, '.gitignore'), '*\n');
 };
 
 const captureFile = (env = process.env, cwd = process.cwd()) => {

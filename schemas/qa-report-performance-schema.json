@@ -236,7 +236,7 @@
             "type": "string",
             "pattern": "^screenshots/"
           },
-          "description": "Paths relative to the reports/ directory, e.g. 'screenshots/homepage-network-tab.png' for a file saved at reports/screenshots/homepage-network-tab.png."
+          "description": "Paths relative to the kosh-reports/ directory, e.g. 'screenshots/homepage-network-tab.png' for a file saved at kosh-reports/screenshots/homepage-network-tab.png."
         }
       }
     }

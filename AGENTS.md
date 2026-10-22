@@ -13,26 +13,26 @@ npm ci                                                     # once after cloning,
 node --test "tests/*.test.js"                              # every test; CI runs the same line
 node scripts/generate-report.js tests/fixtures/performance-opus-5-5-2026-10-14.json --performance  # renderer only: validates, skips the stamp and the archive
 node scripts/page-capture.js summary https://example.com/ [<page>…]  # the rows a performance report's pages[] would get now
-node scripts/compare-runs.js reports/data/archive/<name>.json…       # one block of rows per archived performance run
+node scripts/compare-runs.js kosh-reports/data/archive/<name>.json…  # one block of rows per archived performance run
 ```
 
 `.github/workflows/ci.yml` runs `npm ci` and the tests on every PR and on pushes to `trunk`, with no API calls. The promptfoo evals stay manual because they cost money.
 
 ## How a report is produced
 
-1. A skill drives the browser through Playwright MCP and writes `reports/data/qa-report-<type>.json`. Meanwhile `collectors/capture.js` records every page the browser loads (timings, LCP and CLS, console errors, failed requests, tagging `byModel` those the model's own `browser_evaluate` made, from Chrome's initiator stack) into `reports/data/capture-<session id>.jsonl`.
+1. A skill drives the browser through Playwright MCP and writes `kosh-reports/data/qa-report-<type>.json`. Meanwhile `collectors/capture.js` records every page the browser loads (timings, LCP and CLS, console errors, failed requests, tagging `byModel` those the model's own `browser_evaluate` made, from Chrome's initiator stack) into `kosh-reports/data/capture-<session id>.jsonl`.
 2. `scripts/run-qa-report.sh` then, for that skill's own output:
    - merges the capture (`scripts/page-capture.js merge`), and for performance rebuilds `pages[]` from it, replacing anything the model wrote;
    - stamps `provenance` (`scripts/stamp-provenance.js`): plugin version, skill and `collectors/` hashes, the Playwright MCP args, the model and effort from the session's transcript, and a seal;
    - renders (`scripts/generate-report.js`), which validates against the schema first (`scripts/validate-report.js`) and refuses a mismatch, naming each field;
-   - archives the JSON and the capture in `reports/data/archive/` under the HTML's name, then deletes the source so the next run writes a new file.
+   - archives the JSON and the capture in `kosh-reports/data/archive/` under the HTML's name, then deletes the source so the next run writes a new file.
 3. Any other report is stamped without the session's facts, rendered and copied to the archive, but never deleted, and nothing is merged.
 
 Things that catch contributors out:
 
-- `hooks/guard-capture.js` refuses edits to `capture*.jsonl` files and anything naming this session's capture. For commands that can reach a `reports/` kosh has run in (one holding a capture: anywhere in the session's project, or a run folder or a path in its `reports/` named by absolute path), it also refuses `*.jsonl` globs and any `rm` or `mv` of `reports/`, `reports/data`, the archive, or a glob of their contents, so clearing them is done by hand.
+- `hooks/guard-capture.js` refuses edits to `capture*.jsonl` files and anything naming this session's capture. For commands that can reach a `kosh-reports/` kosh has run in (one holding a capture: anywhere in the session's project, or a run folder or a path in its `kosh-reports/` named by absolute path), it also refuses `*.jsonl` globs and any `rm` or `mv` of `kosh-reports/`, `kosh-reports/data`, the archive, or a glob of their contents, so clearing them is done by hand.
 - The merge keeps only the visits from the last browser that loaded the report's host, since a performance run starts with `browser_close`. A skill that closes the browser mid-run drops what it measured before.
-- `reports/` is the project's, not kosh's: `$CLAUDE_PROJECT_DIR/reports`, which Claude Code sets for the capture and the hooks. Bash commands don't get it, so the scripts use the nearest `reports/data` at or above the cwd, looking no higher than the git root, else `reports/` in the cwd. A `reports/` kosh creates gets a `.gitignore` of `*`, since reports hold client URLs and console text. Schemas, skills and `plugin.json` still resolve from kosh's own folder. `KOSH_REPORTS_DIR` moves where the scripts and the capture look (the tests use it), not where the skills write.
+- `kosh-reports/` is the project's, not kosh's: `$CLAUDE_PROJECT_DIR/kosh-reports`, which Claude Code sets for the capture and the hooks. Bash commands don't get it, so the scripts use the nearest `kosh-reports/data` at or above the cwd, looking no higher than the git root, else `kosh-reports/` in the cwd. The name is kosh's own so a project's `reports/` never gets client data mixed in. If `kosh-reports/.gitignore` is missing, the capture adds one (`*`) when it creates `data/`, and so does every successful render, even when Playwright made the folder first, since reports hold client URLs and console text. Schemas, skills and `plugin.json` still resolve from kosh's own folder. `KOSH_REPORTS_DIR` moves where the scripts and the capture look (the tests use it), not where the skills write.
 
 ## Playwright MCP (`plugin.json`)
 
@@ -88,7 +88,7 @@ A skill is a prompt the model reads once and follows for the whole run. `skills/
 - Leaves measuring to code. Numbers come from the collectors and the page capture, and the model reads them (the performance skill through `scripts/page-capture.js summary`) rather than transcribing them: a number the model copies is a number it can get wrong. The model's report holds its judgment: findings with a cause, `testMethodology`, and `explorationPass` for anything beyond the checks.
 - Points at its schema as the contract and shows one labelled illustrative example, with placeholders where a copied value would do harm (the timestamp, the model ID). `tests/schema-drift.test.js` validates the example.
 - Carries the blocks in `shared/` as verbatim copies, because skills can't include files and a skill folder must hold everything it runs: every skill carries the preamble, the gate check and the `provenance.model` line, and the skills in `CARRIERS` in `tests/shared-blocks.test.js` carry the others (the screenshot rule, performance only so far). Edit the `shared/` file and every copy together; the test fails otherwise.
-- Write a path to kosh's own files (`scripts/`, `schemas/`, `collectors/`, a skill's references) as `<kosh>/…`. The shared preamble defines `<kosh>` as the folder two above the skill's, because a skill runs from the user's project, where `reports/` goes, not from kosh's folder. `tests/portability.test.js` fails on a bare one.
+- Write a path to kosh's own files (`scripts/`, `schemas/`, `collectors/`, a skill's references) as `<kosh>/…`. The shared preamble defines `<kosh>` as the folder two above the skill's, because a skill runs from the user's project, where `kosh-reports/` goes, not from kosh's folder. `tests/portability.test.js` fails on a bare one.
 - Don't add Claude Code-only constructs (host tool names like `PushNotification`, `/kosh:` references, `mcp__` tool names, `CLAUDE_…` variables, `$ARGUMENTS`, "Claude prompt"): other hosts load skill text verbatim. `tests/portability.test.js` holds today's count per file, counting each `shared/` block once in `shared/` rather than in every copy; lower a count when a rewrite removes one, never raise it.
 - Put page-side code in `collectors/kosh.js` and call it from the skill in one line (`() => __kosh.<name>(…)`), not as a multi-line `javascript` block. `tests/skill-snippets.test.js` holds today's count of multi-line blocks per file; lower it when a block moves out, never raise it.
 - Test your changes by running the skill against a real site and reviewing the report. For `functional-design` and `performance`, also run the promptfoo evals — see `evals/README.md`.

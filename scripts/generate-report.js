@@ -191,7 +191,7 @@ const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/
 const LOCAL_RELATIVE_PATH = /^(?!\/)[\w\-. /]+$/;
 let inlinedCount = 0;
 
-// Paths come from the report JSON: this blocks `../` and absolute paths, not symlinks planted inside reports/.
+// Paths come from the report JSON: this blocks `../` and absolute paths, not symlinks planted inside kosh-reports/.
 const inlineScreenshot = (relPath) => {
   const file = path.resolve(reportsDir, String(relPath));
   const mime = IMAGE_MIME[path.extname(file).toLowerCase()];
@@ -200,7 +200,7 @@ const inlineScreenshot = (relPath) => {
   return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
 };
 
-// Inlined because every run shares reports/screenshots/, so a later run can overwrite the files an older report names.
+// Inlined because every run shares kosh-reports/screenshots/, so a later run can overwrite the files an older report names.
 const renderScreenshots = (screenshots) => {
   if (!Array.isArray(screenshots) || screenshots.length === 0) return '';
   const figures = screenshots
@@ -208,10 +208,10 @@ const renderScreenshots = (screenshots) => {
       const filename = String(relPath).split('/').pop();
       const dataUri = inlineScreenshot(relPath);
       if (!dataUri) {
-        // A remote or scheme-carrying src would load the moment the report opens, so the fallback only keeps plain paths inside reports/.
+        // A remote or scheme-carrying src would load the moment the report opens, so the fallback only keeps plain paths inside kosh-reports/.
         const ref = String(relPath);
         const keep = LOCAL_RELATIVE_PATH.test(ref) && !ref.split('/').includes('..');
-        console.warn(`Warning: screenshot not inlined, ${keep ? 'left as an external reference' : 'dropped (not a path inside reports/)'}: ${relPath}`);
+        console.warn(`Warning: screenshot not inlined, ${keep ? 'left as an external reference' : 'dropped (not a path inside kosh-reports/)'}: ${relPath}`);
         if (!keep) return '';
       }
       const imgTag = `<img src="${escAttr(dataUri || relPath)}" alt="${escAttr(filename)}" loading="lazy">`;

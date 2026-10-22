@@ -14,7 +14,7 @@ const PNG = Buffer.from(
 const sandbox = (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-render-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const reportsDir = path.join(root, 'reports');
+  const reportsDir = path.join(root, 'kosh-reports');
   fs.mkdirSync(path.join(reportsDir, 'screenshots'), { recursive: true });
   return { root, reportsDir };
 };
@@ -68,7 +68,7 @@ test('a missing screenshot keeps its external reference and warns', (t) => {
   assert.ok(!stdout.includes('Screenshots inlined'));
 });
 
-test('a path that climbs out of reports/ is neither inlined nor referenced', (t) => {
+test('a path that climbs out of kosh-reports/ is neither inlined nor referenced', (t) => {
   const box = sandbox(t);
   fs.writeFileSync(path.join(box.root, 'outside.png'), PNG);
 
@@ -78,7 +78,7 @@ test('a path that climbs out of reports/ is neither inlined nor referenced', (t)
 
   assert.ok(!html.includes('src="data:'));
   assert.ok(!html.includes('outside.png'));
-  assert.equal(stderr.match(/dropped \(not a path inside reports\/\)/g).length, climbing.length);
+  assert.equal(stderr.match(/dropped \(not a path inside kosh-reports\/\)/g).length, climbing.length);
 });
 
 test('an absolute path is neither inlined nor referenced', (t) => {
@@ -90,10 +90,10 @@ test('an absolute path is neither inlined nor referenced', (t) => {
 
   assert.ok(!html.includes('src="data:'));
   assert.ok(!html.includes(outside));
-  assert.match(stderr, /dropped \(not a path inside reports\/\)/);
+  assert.match(stderr, /dropped \(not a path inside kosh-reports\/\)/);
 });
 
-test('a non-image file inside reports/ is not inlined', (t) => {
+test('a non-image file inside kosh-reports/ is not inlined', (t) => {
   const box = sandbox(t);
   fs.writeFileSync(path.join(box.reportsDir, 'screenshots', 'notes.txt'), 'not an image');
 
@@ -110,7 +110,7 @@ test('a remote or scheme-carrying screenshot never reaches the HTML', (t) => {
   assert.ok(!html.includes('tracker.example'));
   assert.ok(!html.includes('alert(1)'));
   assert.ok(!html.includes('<figure class="screenshot">'));
-  assert.equal(stderr.match(/dropped \(not a path inside reports\/\)/g).length, urls.length);
+  assert.equal(stderr.match(/dropped \(not a path inside kosh-reports\/\)/g).length, urls.length);
 });
 
 test('a javascript: href hidden behind control characters is never linked', (t) => {

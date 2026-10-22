@@ -86,7 +86,7 @@ else
   echo -e "${YELLOW}  Test type: $TEST_TYPE_FLAGS${NC}"
 fi
 
-# Only a skill's own output, qa-report-<type>.json directly in the project's reports/data, belongs to the run in progress.
+# Only a skill's own output, qa-report-<type>.json directly in the project's kosh-reports/data, belongs to the run in progress.
 DATA_DIR=$(node -p "require('path').dirname(require(require('path').resolve(process.argv[1])).captureFile())" "$(dirname "$0")/../collectors/capture.js")
 SKILL_OUTPUT=false
 if [ "$(dirname "$QA_REPORT_JSON")" -ef "$DATA_DIR" ] && [[ "$(basename "$QA_REPORT_JSON")" =~ ^qa-report-[a-z]+\.json$ ]]; then

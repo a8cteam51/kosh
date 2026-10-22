@@ -25,11 +25,11 @@ const report = (edit = () => {}) => {
   return r;
 };
 
-// The prefix lets a test put characters like ' into every path the scripts see, reports/ included.
+// The prefix lets a test put characters like ' into every path the scripts see, kosh-reports/ included.
 const sandbox = (t, prefix = 'kosh-run-') => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  return { root, reportsDir: path.join(root, 'reports') };
+  return { root, reportsDir: path.join(root, 'kosh-reports') };
 };
 
 const write = (box, name, value) => {
@@ -49,7 +49,7 @@ const run = (box, command, args, env = {}) => {
 
 const archived = (box) => fs.readdirSync(path.join(box.reportsDir, 'data', 'archive')).sort();
 const archiveCopy = (box) => path.join(box.reportsDir, 'data', 'archive', 'WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json');
-const SKILL_OUTPUT = 'reports/data/qa-report-functional.json';
+const SKILL_OUTPUT = 'kosh-reports/data/qa-report-functional.json';
 
 test('a report missing a severity list is counted as empty and still archived', (t) => {
   const box = sandbox(t);
@@ -63,7 +63,7 @@ test('a report missing a severity list is counted as empty and still archived', 
 });
 
 // The rerun moves the first archived copy aside, which reads that copy by its path.
-test("a ' in the report and reports/ paths is read as part of the path", (t) => {
+test("a ' in the report and kosh-reports/ paths is read as part of the path", (t) => {
   const box = sandbox(t, "kosh-run-it's-");
   const json = write(box, "site's-report.json", report());
 
@@ -118,7 +118,7 @@ for (const flags of [['--functional', '--performance'], ['--functional --perform
 
     assert.notEqual(status, 0, output);
     assert.equal(fs.readFileSync(json, 'utf8'), before, 'the report was stamped');
-    assert.ok(!fs.existsSync(box.reportsDir), 'something was written under reports/');
+    assert.ok(!fs.existsSync(box.reportsDir), 'something was written under kosh-reports/');
   });
 }
 
@@ -304,9 +304,9 @@ test('a report with no url drops the capture with a warning', (t) => {
 });
 
 for (const [where, name] of [
-  ['named as a keeper', 'reports/data/qa-report-functional.2026-09-23.original.json'],
-  ['in a subfolder of reports/data', 'reports/data/old/qa-report-functional.json'],
-  ['outside reports/data', 'qa-report-functional.json'],
+  ['named as a keeper', 'kosh-reports/data/qa-report-functional.2026-09-23.original.json'],
+  ['in a subfolder of kosh-reports/data', 'kosh-reports/data/old/qa-report-functional.json'],
+  ['outside kosh-reports/data', 'qa-report-functional.json'],
 ]) {
   test(`a rendered report ${where} is archived and kept`, (t) => {
     const box = sandbox(t);
@@ -335,7 +335,7 @@ test('a report that could not be archived is kept', (t) => {
 // A shop name gets the report validated, and the bare fixture has no shop block, so it's refused like a real bad report.
 test('a refused report a skill wrote is kept so it can be fixed', (t) => {
   const box = sandbox(t);
-  const json = write(box, 'reports/data/qa-report-shop.json', report());
+  const json = write(box, 'kosh-reports/data/qa-report-shop.json', report());
 
   const { status, output } = run(box, WRAPPER, [json]);
 
@@ -370,11 +370,11 @@ for (const [flags, message] of [
 
     assert.notEqual(status, 0, output);
     assert.match(output, message);
-    assert.ok(!fs.existsSync(box.reportsDir), 'something was written under reports/');
+    assert.ok(!fs.existsSync(box.reportsDir), 'something was written under kosh-reports/');
   });
 }
 
-const PERFORMANCE_OUTPUT = 'reports/data/qa-report-performance.json';
+const PERFORMANCE_OUTPUT = 'kosh-reports/data/qa-report-performance.json';
 const archivedPerformance = (box, ext = 'json') => path.join(box.reportsDir, 'data', 'archive', `WRAPPER_FIXTURE_PERFORMANCE_QA_REPORT_2026-01-01.${ext}`);
 const performanceReport = (edit = () => {}) => report((r) => {
   Object.assign(r, { environment: 'production', visitedPages: ['https://example.com/'], provenance: { model: 'claude-test-1' } });
@@ -451,7 +451,7 @@ test("a skill's own output with its own flag renders", (t) => {
 test("a performance report with rows the merge didn't write is refused, pointing at the skill's own path", (t) => {
   const box = sandbox(t);
 
-  const { status, output } = run(box, WRAPPER, [write(box, 'reports/data/qa-report-performance-example.json', performanceReport(INVENTED))]);
+  const { status, output } = run(box, WRAPPER, [write(box, 'kosh-reports/data/qa-report-performance-example.json', performanceReport(INVENTED))]);
 
   assert.notEqual(status, 0, output);
   assert.match(output, /pages\[\] has rows the page capture didn't write/);

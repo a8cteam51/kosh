@@ -270,7 +270,7 @@
             "type": "string",
             "pattern": "^screenshots/"
           },
-          "description": "Paths relative to the reports/ directory, e.g. 'screenshots/cart-totals-desktop.png' for a file saved at reports/screenshots/cart-totals-desktop.png. Strongly encouraged for visual findings so the HTML report can embed them inline."
+          "description": "Paths relative to the kosh-reports/ directory, e.g. 'screenshots/cart-totals-desktop.png' for a file saved at kosh-reports/screenshots/cart-totals-desktop.png. Strongly encouraged for visual findings so the HTML report can embed them inline."
         }
       }
     }
