@@ -10,7 +10,7 @@ const FILES = fs.readdirSync(SKILLS, { recursive: true }).filter((name) => name.
 // Exact counts of blocks longer than one line: code belongs in collectors/, so an entry can only shrink.
 const MULTI_LINE = {
   'a11y/SKILL.md': 8,
-  'aeo/SKILL.md': 34,
+  'aeo/SKILL.md': 33,
   'aeo/references/faq-detection.md': 1,
   'functional-design/SKILL.md': 2,
   'shop/SKILL.md': 3,

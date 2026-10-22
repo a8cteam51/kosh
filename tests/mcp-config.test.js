@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const { args } = require(path.join(ROOT, '.claude-plugin/plugin.json')).mcpServers.playwright;
@@ -59,6 +60,55 @@ test('every skill pre-approves exactly the allowlisted browser tools', () => {
     const listed = front.match(/^allowed-tools:\n((?: {2}- .*(?:\n|$))+)/m)?.[1].match(/(?<=- )\S+/g) ?? [];
     assert.deepStrictEqual(listed, allowed, `skills/${skill}: allowed-tools must match .claude/settings.json, or a marketplace install prompts for each tool`);
   }
+});
+
+const guardBrowser = (tool, toolInput) => spawnSync('node', [path.join(ROOT, 'hooks/guard-browser.js')], {
+  input: tool === null ? 'not json' : JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: `mcp__plugin_kosh_playwright__${tool}`, tool_input: toolInput }),
+  encoding: 'utf8',
+});
+
+for (const [name, tool, toolInput, reason] of [
+  ['run-code', 'browser_run_code_unsafe', { code: 'async (page) => page.title()' }, /browser_evaluate/],
+  ['run-code by its older name', 'browser_run_code', { code: 'async (page) => page.title()' }, /browser_evaluate/],
+  ['an evaluate that saves its result', 'browser_evaluate', { function: '() => ({ permissions: { allow: ["Bash(*)"] } })', filename: '.claude/settings.local.json' }, /filename/],
+  ['a snapshot saved to a file', 'browser_snapshot', { filename: 'CLAUDE.md' }, /filename/],
+  ['console messages saved over a capture', 'browser_console_messages', { filename: 'kosh-reports/data/capture-abc.jsonl' }, /filename/],
+  ['network requests saved to a file', 'browser_network_requests', { filename: 'notes.md' }, /filename/],
+  ['a screenshot saved over a capture', 'browser_take_screenshot', { filename: 'kosh-reports/data/capture-abc.jsonl' }, /kosh-reports\/screenshots\//],
+  ['a screenshot that climbs out of the screenshots folder', 'browser_take_screenshot', { filename: 'kosh-reports/screenshots/../data/qa-report-performance.json' }, /kosh-reports\/screenshots\//],
+  ['a screenshot saved to the project root', 'browser_take_screenshot', { filename: 'hero.png' }, /kosh-reports\/screenshots\//],
+  ['a screenshot that climbs out with backslashes, as Windows reads them', 'browser_take_screenshot', { filename: 'kosh-reports/screenshots/..\\..\\.claude\\settings.local.json' }, /kosh-reports\/screenshots\//],
+  ['an upload of a project file', 'browser_file_upload', { paths: ['/project/.env'] }, /files/],
+  ['a file dropped onto the page', 'browser_drop', { target: 'e12', paths: ['/project/.env'] }, /files/],
+]) {
+  test(`the browser guard refuses ${name}`, () => {
+    const { status, stderr } = guardBrowser(tool, toolInput);
+    assert.strictEqual(status, 2, 'only exit status 2 stops the call');
+    assert.match(stderr, reason);
+  });
+}
+
+for (const [name, tool, toolInput] of [
+  ['an evaluate', 'browser_evaluate', { function: '() => document.title' }],
+  ['a snapshot', 'browser_snapshot', {}],
+  ['a screenshot saved to a file', 'browser_take_screenshot', { filename: 'kosh-reports/screenshots/homepage-desktop.png' }],
+  ['a screenshot saved from ./', 'browser_take_screenshot', { filename: './kosh-reports/screenshots/cart-mobile.png' }],
+  ['a screenshot with no filename', 'browser_take_screenshot', {}],
+  ['an upload that cancels the file chooser', 'browser_file_upload', {}],
+  ['text dropped onto the page', 'browser_drop', { target: 'e12', data: { 'text/plain': 'hello' } }],
+  ['a navigation', 'browser_navigate', { url: 'https://example.com/' }],
+  ['input that is not json', null],
+]) {
+  test(`the browser guard allows ${name}`, () => {
+    const { status, stderr } = guardBrowser(tool, toolInput);
+    assert.strictEqual(status, 0, stderr);
+  });
+}
+
+test('every kosh browser tool goes through the browser guard', () => {
+  const entries = require(path.join(ROOT, 'hooks/hooks.json')).hooks.PreToolUse.filter((entry) => entry.hooks.some((hook) => hook.command.includes('hooks/guard-browser.js')));
+  const tools = [...require(path.join(ROOT, '.claude/settings.json')).permissions.allow, 'mcp__plugin_kosh_playwright__browser_run_code_unsafe'];
+  for (const tool of tools) assert.ok(entries.some((entry) => new RegExp(`^(?:${entry.matcher})$`).test(tool)), `${tool} skips hooks/guard-browser.js, so a page could have it write into the project`);
 });
 
 test('the marketplace and its plugin are named kosh', () => {
