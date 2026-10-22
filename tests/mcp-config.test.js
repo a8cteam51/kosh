@@ -60,3 +60,9 @@ test('every skill pre-approves exactly the allowlisted browser tools', () => {
     assert.deepStrictEqual(listed, allowed, `skills/${skill}: allowed-tools must match .claude/settings.json, or a marketplace install prompts for each tool`);
   }
 });
+
+test('the marketplace and its plugin are named kosh', () => {
+  const market = require(path.join(ROOT, '.claude-plugin/marketplace.json'));
+  const plugin = require(path.join(ROOT, '.claude-plugin/plugin.json'));
+  assert.deepStrictEqual([market.name, plugin.name, ...market.plugins.map((entry) => entry.name)], ['kosh', 'kosh', 'kosh'], 'the mcp__plugin_kosh_playwright__ rules, kosh@kosh and the cache path in the docs all assume these names');
+});
