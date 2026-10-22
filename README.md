@@ -18,16 +18,13 @@ Each test visits 4–6+ pages, simulates real user behavior, and outputs a struc
 
 ## Quick start
 
-```bash
-git clone https://github.com/a8cteam51/kosh.git
-cd kosh
-npm ci
-claude --plugin-dir .
+In Claude Code 2.1.275 or later, install kosh once:
+
+```
+/plugin install kosh --marketplace a8cteam51/kosh
 ```
 
-On first run, Claude Code will ask you to trust this project's settings — **accept the prompt**. This pre-approves the Playwright browser tools so you don't get prompted for each one during a test.
-
-Then run a test:
+Confirm the marketplace, then choose **Install for you**. Start Claude Code in the folder where you want the reports (they go in its `kosh-reports/`), then run a test:
 
 ```
 /kosh:functional-design https://example.com
@@ -39,7 +36,7 @@ Then run a test:
 
 Testing a site that's in coming-soon mode, password-protected, or private? kosh detects the gate and pauses so you can log in — see [Testing a site that isn't publicly reachable](docs/getting-started.md#testing-a-site-that-isnt-publicly-reachable).
 
-For detailed setup instructions (including troubleshooting), see the [Getting Started guide](docs/getting-started.md).
+For detailed setup instructions (including updates and troubleshooting), see the [Getting Started guide](docs/getting-started.md). Working on kosh itself? See [AGENTS.md](AGENTS.md).
 
 ## Project structure
 
@@ -49,12 +46,11 @@ schemas/         JSON schemas for report validation
 shared/          Canonical blocks each skill carries a verbatim copy of
 collectors/      Code Playwright MCP loads: into every page (window.__kosh), and in Node for every tab (the page capture)
 scripts/         Report generation, validation, provenance, the page-capture merge and summary, and run comparison
-hooks/           A session hook that checks for kosh updates, and a guard that keeps page captures read-only
+hooks/           A guard that keeps page captures read-only
 evals/           Promptfoo regression checks for skill decision rules
 tests/           node --test checks for the scripts, the collectors, the capture and its guard, skill snippets, shared-block copies, portability, JSON files, the Playwright MCP flags and allowlist, skill ↔ schema drift, report validation and redacted report fixtures — run by .github/workflows/ci.yml on every PR
-kosh-reports/data/archive/  Past runs' JSON and page captures, named to match the HTML they produced
-.claude/         Project settings and Playwright tool permissions
-.claude-plugin/  Plugin manifest, with the Playwright MCP server (pinned, --isolated, --no-webmcp, --init-script, --init-page, --output-dir, --output-max-size)
+.claude/         Playwright tool permissions for working in a clone
+.claude-plugin/  Plugin manifest, with the Playwright MCP server (pinned, --isolated, --no-webmcp, --init-script, --init-page, --output-dir, --output-max-size), and the marketplace that lists it
 .github/         CI workflow — runs tests/ on every PR and push to trunk
 ```
 

@@ -6,59 +6,44 @@ A step-by-step guide to installing and running your first test with kosh.
 
 Before you start, make sure you have the following installed:
 
-1. **Claude Code:** Anthropic's CLI tool. If you don't have it yet, head to [claude.ai/code](https://claude.ai/code) and follow the install instructions for your platform. You'll need version 2.1.163 or later.
+1. **Claude Code:** Anthropic's CLI tool. If you don't have it yet, head to [claude.ai/code](https://claude.ai/code) and follow the install instructions for your platform. You'll need version 2.1.275 or later: check with `claude --version`, and update with `claude update`.
 
-2. **Node.js:** Used for generating reports. Download it from [nodejs.org](https://nodejs.org) if you don't already have it. The LTS version is fine.
+2. **Node.js:** Runs the browser kosh drives and generates the reports, and Claude Code uses its `npm` to install the one library kosh needs. Download it from [nodejs.org](https://nodejs.org) if you don't already have it. The LTS version is fine.
 
-3. **Git:** Used to download the kosh code. Most Macs have it pre-installed. To check, open Terminal and type `git --version`. If you see a version number, you're good.
+3. **Git:** Claude Code uses it to download kosh. Most Macs have it pre-installed. To check, open Terminal and type `git --version`. If you see a version number, you're good.
 
-## Step 1: Clone the repository
+## Step 1: Install kosh
 
-Open your Terminal and run:
+Start Claude Code (`claude` in your Terminal) in any folder, and run:
 
-```bash
-git clone https://github.com/a8cteam51/kosh.git
-cd kosh
+```
+/plugin install kosh --marketplace a8cteam51/kosh
 ```
 
-This downloads kosh to a folder called `kosh` in whatever directory your Terminal is currently in (usually your home folder), then moves into it.
+Claude Code shows the marketplace it found, `a8cteam51/kosh`, and asks you to confirm adding it. Then it opens kosh's details: choose **Install for you**, so kosh is there whichever folder you start Claude Code in. Claude Code also installs the one library kosh uses to check each report's JSON before turning it into HTML, so there's nothing else to install.
 
-### Alternative: Using the GitHub CLI
+Type `/kosh:` to check: the five tests should be listed. If they aren't, restart Claude Code.
 
-If you have the [GitHub CLI](https://cli.github.com/) installed, you can use it instead:
+### Keep kosh up to date
 
-```bash
-gh repo clone a8cteam51/kosh
-cd kosh
-```
+Claude Code doesn't update kosh by itself until you turn that on: run `/plugin`, open the **Marketplaces** tab, select **kosh**, then **Enable auto-update**. To update by hand instead, open kosh on the **Installed** tab in `/plugin` and select **Update now**, or run `claude plugin update kosh@kosh` in your Terminal. Either way, restart Claude Code afterwards: a session keeps the version it started with.
 
-If you don't have it yet, you can install it with `brew install gh` and then run `gh auth login` to sign in.
+## Step 2: Start Claude Code in your project
 
-### Install the report tools
-
-Still inside the `kosh` folder, run:
+kosh saves its reports in a `kosh-reports/` folder inside the folder you start Claude Code in, so start it where you want them: the site's own code, or a folder you keep for test results.
 
 ```bash
-npm ci
+cd ~/path/to/your-project
+claude
 ```
 
-This installs the one library kosh uses to check each report's JSON before turning it into HTML. Run it again whenever you pull an update.
+`kosh-reports/` gets its own `.gitignore`, so reports, which hold client URLs and console output, don't get committed by accident. If kosh's browser tools are missing, check that `/mcp` lists `plugin:kosh:playwright` as connected.
 
-## Step 2: Start Claude Code with the plugin
+### Browser permissions
 
-From inside the `kosh` folder, run:
+Each test pre-approves the browser tools it uses (navigating to pages, taking screenshots, clicking links, etc.) for that run, so they don't stop to ask. They do ask, at every step, when you carry on after kosh pauses for a login (see [Testing a site that isn't publicly reachable](#testing-a-site-that-isnt-publicly-reachable)) and in follow-up questions after a test, and Claude Code doesn't offer to remember the answer. To stop that, add the rules from kosh's [`.claude/settings.json`](https://github.com/a8cteam51/kosh/blob/trunk/.claude/settings.json) to the `permissions.allow` list in your own `~/.claude/settings.json`, which allows kosh's browser tools in every folder.
 
-```bash
-claude --plugin-dir .
-```
-
-This starts Claude Code with kosh loaded as a plugin. Stay inside the `kosh` folder for the whole session: the tests save their results in the folder you started in, and the browser tools are only pre-approved there (next step). If kosh's browser tools are missing, check that `/mcp` lists `plugin:kosh:playwright` as connected.
-
-### Trust the project settings
-
-The first time you run this, Claude Code will ask you to trust the project's settings. **Type "yes" or press Enter to accept.** This pre-approves the browser tools that kosh needs (navigating to pages, taking screenshots, clicking links, etc.) so you won't have to approve each one individually during a test.
-
-If you accidentally skip this step, you'll get a permission prompt for every browser action during testing. If that happens, exit (`/exit`) and start again.
+kosh also asks before it saves a report and runs its own scripts. For `run-qa-report.sh`, **Yes, and don't ask again** lasts until the next kosh update, since the rule it saves names kosh's version. For `page-capture.js`, it offers to allow every `node` command in that project instead, which covers more than kosh needs.
 
 ## Step 3: Run a test
 
@@ -179,10 +164,10 @@ A couple of notes:
 
 - **Every run's JSON is kept** in `kosh-reports/data/archive/`, named to match its HTML report. A same-day rerun of the same site keeps the earlier copy with its timestamp appended.
 - **Beside it, a `.capture.jsonl` file** holds what the browser itself recorded on that site's pages during the run: load timings, LCP and CLS, console errors and warnings, and failed requests. Requests Claude made itself, like fetching the sitemap, are marked in it and left out of the page table. A performance report's page table is built from it, and Claude can read it but isn't allowed to change it, so it stays a record of what happened.
-- **To re-render an archived report**, run `node scripts/generate-report.js kosh-reports/data/archive/<name>.json --<type>` with the type in its name (`--functional`, `--performance`, `--accessibility`, `--shop` or `--aeo`), so reports of different types don't share an HTML name. A report saved before kosh's checks changed is refused; add `--skip-validation` to render it anyway. Its screenshots are embedded from `kosh-reports/screenshots/` as it is now, so a later run may have replaced them.
+- **To re-render an archived report**, run `node ~/.claude/plugins/cache/kosh/kosh/<version>/scripts/generate-report.js kosh-reports/data/archive/<name>.json --<type>` from your project folder, with the version `claude plugin list` shows for kosh, and the type in its name (`--functional`, `--performance`, `--accessibility`, `--shop` or `--aeo`), so reports of different types don't share an HTML name. A report saved before kosh's checks changed is refused; add `--skip-validation` to render it anyway. Its screenshots are embedded from `kosh-reports/screenshots/` as it is now, so a later run may have replaced them.
 - **The browser's own files**, the page snapshots and console logs Playwright saves as it goes, are kept outside your project, in a `playwright-mcp` folder under `~/.claude/plugins/data/`. They hold the text of the pages tested, so the oldest are deleted once the folder passes 20 MB; delete it yourself if you need them gone sooner.
 - **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.
-- **Restart Claude Code after updating kosh.** A session keeps the browser setup it started with, so after a `git pull` an open session still runs the old one. If a test stops because `__kosh` isn't defined, that's why: exit and start Claude Code again.
-- **Reports from before `kosh-reports/`** are in `reports/`. If the kosh folder has no `kosh-reports/` yet, run `mv reports kosh-reports` there; if it has one, leave `reports/` as it is: its HTML reports already embed their screenshots.
+- **Restart Claude Code after updating kosh.** A session keeps the browser setup it started with, so after an update an open session still runs the old one. If a test stops because `__kosh` isn't defined, that's why: exit and start Claude Code again.
+- **Used kosh from a clone before?** Its reports stay in that clone, in `kosh-reports/` (or `reports/`, from before 1.4.0). The HTML reports embed their screenshots, so they open fine wherever you move them. Once you've kept what you need, the clone can go: you no longer start Claude Code in it or pass `--plugin-dir`.
 - **Run shop tests in their own Claude Code session.** A second run in the same session inherits the first one's cart, and can miss prices that change once something is in it. The performance test closes the browser before it starts so its timings are cold, which means a gated site you logged into earlier in the session asks for the login again.
