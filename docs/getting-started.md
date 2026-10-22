@@ -41,7 +41,7 @@ claude
 
 ### Browser permissions
 
-Each test pre-approves the browser tools it uses (navigating to pages, taking screenshots, clicking links, etc.) for that run, so they don't stop to ask. They do ask, once per tool, when you carry on after kosh pauses for a login (see [Testing a site that isn't publicly reachable](#testing-a-site-that-isnt-publicly-reachable)) and in follow-up questions after a test. Choose **Yes, and don't ask again** to stop the asking in that project. To allow kosh's browser tools in every folder, add the rules from kosh's [`.claude/settings.json`](https://github.com/a8cteam51/kosh/blob/trunk/.claude/settings.json) to the `permissions.allow` list in your own `~/.claude/settings.json`.
+Each test pre-approves the browser tools it uses (navigating to pages, taking screenshots, clicking links, etc.) for that run, so they don't stop to ask. They do ask, at every step, when you carry on after kosh pauses for a login (see [Testing a site that isn't publicly reachable](#testing-a-site-that-isnt-publicly-reachable)) and in follow-up questions after a test, and Claude Code doesn't offer to remember the answer. To stop that, add the rules from kosh's [`.claude/settings.json`](https://github.com/a8cteam51/kosh/blob/trunk/.claude/settings.json) to the `permissions.allow` list in your own `~/.claude/settings.json`, which allows kosh's browser tools in every folder.
 
 kosh also asks before it saves a report and runs its own scripts. For `run-qa-report.sh`, **Yes, and don't ask again** lasts until the next kosh update, since the rule it saves names kosh's version. For `page-capture.js`, it offers to allow every `node` command in that project instead, which covers more than kosh needs.
 
