@@ -4,14 +4,14 @@ const path = require('path');
 const { CAPTURE_NAME, reportsDir } = require('../collectors/capture.js');
 
 // kosh's own layout, so it holds from any folder and in any checkout.
-const IN_REPORTS = /reports\/data\/[^\s]*capture[^\s]*\.jsonl/i;
+const IN_REPORTS = /kosh-reports\/data\/[^\s]*capture[^\s]*\.jsonl/i;
 
-// Broader patterns only for commands that can reach a reports/ kosh has run in, since plugin hooks run in every project.
+// Broader patterns only for commands that can reach a kosh-reports/ kosh has run in, since plugin hooks run in every project.
 const IN_KOSH = [
   /capture[^\s]*\.jsonl/i,
   /capture[\w-]*\*/i,
   /[*?][^\s]*\.jsonl/i,
-  /\b(?:rm|mv)\b[^|;&]*[\s/'"]reports(?:\/data(?:\/archive)?)?(?:\/[^\s;|&)'"\/]*[*?{][^\s;|&)'"\/]*)?\/?(?=[\s;|&)'"]|$)/i,
+  /\b(?:rm|mv)\b[^|;&]*[\s/'"]kosh-reports(?:\/data(?:\/archive)?)?(?:\/[^\s;|&)'"\/]*[*?{][^\s;|&)'"\/]*)?\/?(?=[\s;|&)'"]|$)/i,
 ];
 
 // This session's capture, by the variable or by its id: the file the merge reads, a name no other project uses, so it's refused everywhere.
@@ -32,15 +32,15 @@ const inside = (dir, file) => {
   return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 };
 
-// A reports/ kosh has run in holds a page capture; one that doesn't is some other project's.
+// A kosh-reports/ kosh has run in holds a page capture; one that doesn't has nothing to guard yet.
 const ranIn = (reports) => ['data', 'data/archive'].some((dir) => {
   try { return fs.readdirSync(path.join(reports, dir)).some((name) => CAPTURE_NAME.test(name)); } catch { return false; }
 });
 
-// The folder whose reports/ a path sits in, or the path itself. Never a parent beyond that: one run from the home folder would cover every project below it.
+// The folder whose kosh-reports/ a path sits in, or the path itself. Never a parent beyond that: one run from the home folder would cover every project below it.
 const ownerOf = (file) => {
   const parts = file.split(path.sep);
-  const at = parts.lastIndexOf('reports');
+  const at = parts.lastIndexOf('kosh-reports');
   return at > 0 ? parts.slice(0, at).join(path.sep) || path.sep : file;
 };
 
@@ -52,7 +52,7 @@ const reaches = (cwd, command) => {
   // Only a root someone set: reportsDir's look up from the cwd would let one run in the home folder cover every project below it.
   const project = (process.env.KOSH_REPORTS_DIR || process.env.CLAUDE_PROJECT_DIR) && reportsDir(process.env, cwd);
   if (project && ranIn(project) && (inside(real(path.dirname(project)), cwd) || names(path.dirname(project), command))) return true;
-  return [cwd, ...namedPaths(command).map(real)].some((file) => ranIn(path.join(ownerOf(file), 'reports')));
+  return [cwd, ...namedPaths(command).map(real)].some((file) => ranIn(path.join(ownerOf(file), 'kosh-reports')));
 };
 
 const blocked = (call) => {
@@ -69,6 +69,6 @@ process.stdin.on('end', () => {
   let call;
   try { call = JSON.parse(input); } catch { return; }
   if (!blocked(call)) return;
-  process.stderr.write("Blocked: page capture files (reports/data/capture-*.jsonl and archive/*.capture.jsonl) are written only by the browser. Don't create, edit, move or delete them. If a page is missing from the capture, load it in the browser again. To look at one, use the Read tool.\n");
+  process.stderr.write("Blocked: page capture files (kosh-reports/data/capture-*.jsonl and archive/*.capture.jsonl) are written only by the browser. Don't create, edit, move or delete them. If a page is missing from the capture, load it in the browser again. To look at one, use the Read tool.\n");
   process.exitCode = 2;
 });

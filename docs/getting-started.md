@@ -91,7 +91,7 @@ kosh has five tests. Each one takes a URL — the site you want to test.
 
 Replace `https://example.com` with the URL of the site you want to test. The test will take a few minutes — kosh opens a real browser, visits 4-6+ pages, and runs checks on each one.
 
-When it's done, you'll find a self-contained HTML report (the formatted view) in the `reports/` folder, and its JSON (the raw data) under the same name in `reports/data/archive/`.
+When it's done, you'll find a self-contained HTML report (the formatted view) in the `kosh-reports/` folder, and its JSON (the raw data) under the same name in `kosh-reports/data/archive/`.
 
 ## Step 4: Read the results
 
@@ -177,11 +177,12 @@ A couple of notes:
 
 ## Tips
 
-- **Every run's JSON is kept** in `reports/data/archive/`, named to match its HTML report. A same-day rerun of the same site keeps the earlier copy with its timestamp appended.
+- **Every run's JSON is kept** in `kosh-reports/data/archive/`, named to match its HTML report. A same-day rerun of the same site keeps the earlier copy with its timestamp appended.
 - **Beside it, a `.capture.jsonl` file** holds what the browser itself recorded on that site's pages during the run: load timings, LCP and CLS, console errors and warnings, and failed requests. Requests Claude made itself, like fetching the sitemap, are marked in it and left out of the page table. A performance report's page table is built from it, and Claude can read it but isn't allowed to change it, so it stays a record of what happened.
-- **To re-render an archived report**, run `node scripts/generate-report.js reports/data/archive/<name>.json --<type>` with the type in its name (`--functional`, `--performance`, `--accessibility`, `--shop` or `--aeo`), so reports of different types don't share an HTML name. A report saved before kosh's checks changed is refused; add `--skip-validation` to render it anyway. Its screenshots are embedded from `reports/screenshots/` as it is now, so a later run may have replaced them.
+- **To re-render an archived report**, run `node scripts/generate-report.js kosh-reports/data/archive/<name>.json --<type>` with the type in its name (`--functional`, `--performance`, `--accessibility`, `--shop` or `--aeo`), so reports of different types don't share an HTML name. A report saved before kosh's checks changed is refused; add `--skip-validation` to render it anyway. Its screenshots are embedded from `kosh-reports/screenshots/` as it is now, so a later run may have replaced them.
 - **The browser's own files**, the page snapshots and console logs Playwright saves as it goes, are kept outside your project, in a `playwright-mcp` folder under `~/.claude/plugins/data/`. They hold the text of the pages tested, so the oldest are deleted once the folder passes 20 MB; delete it yourself if you need them gone sooner.
 - **You can re-run a single test** without re-running the others. Each test is independent.
 - **The browser stays open** after a test finishes, so follow-up questions and focused checks don't need to start from scratch.
 - **Restart Claude Code after updating kosh.** A session keeps the browser setup it started with, so after a `git pull` an open session still runs the old one. If a test stops because `__kosh` isn't defined, that's why: exit and start Claude Code again.
+- **Reports from before `kosh-reports/`** are in `reports/`. Run `mv reports kosh-reports` in the kosh folder before your next test, or leave it: its HTML reports already embed their screenshots.
 - **Run shop tests in their own Claude Code session.** A second run in the same session inherits the first one's cart, and can miss prices that change once something is in it. The performance test closes the browser before it starts so its timings are cold, which means a gated site you logged into earlier in the session asks for the login again.

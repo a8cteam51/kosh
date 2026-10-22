@@ -9,7 +9,7 @@ Parse $ARGUMENTS into a URL and an optional environment type before doing anythi
 1. Extract the URL from $ARGUMENTS (the token that starts with `http://` or `https://`). If no URL is found, ask the user to provide one before proceeding. Do not begin testing without a valid URL.
 2. Extract the environment type if present — one of `local`, `development`, `staging`, or `production`. If not provided, infer it from the URL when possible (e.g., `.test`/`.local` domains suggest local, `staging.*` subdomains suggest staging). Default to `production` if unclear.
 
-kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `reports/` goes.
+kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `kosh-reports/` goes.
 
 Navigate to the extracted URL and conduct a guest shopping-journey QA test of the site's store — catalog through checkout, never submitting an order — by following the full procedure below, using the determined environment type to guide how findings are reported.
 
@@ -24,7 +24,7 @@ This skill is written WooCommerce-first: the selectors, page conventions, and be
 - You MUST navigate by clicking real links and buttons (simulate real customer behavior)
 - You MUST click actual add-to-cart buttons and fill actual form fields
 - You MUST take actual screenshots at key journey steps and at both viewports
-- You MUST save every screenshot by passing its full path as the `filename` argument to `browser_take_screenshot`: `reports/screenshots/<name>.png` (e.g. `filename: "reports/screenshots/cart-desktop.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. (Note: a finding's `screenshots` field uses a path relative to `reports/`, i.e. `screenshots/<name>.png` — see §5.1.)
+- You MUST save every screenshot by passing its full path as the `filename` argument to `browser_take_screenshot`: `kosh-reports/screenshots/<name>.png` (e.g. `filename: "kosh-reports/screenshots/cart-desktop.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. (Note: a finding's `screenshots` field uses a path relative to `kosh-reports/`, i.e. `screenshots/<name>.png` — see §5.1.)
 - You MUST verify state after every interaction rather than assuming it worked
 - If you cannot perform these actions, explicitly state that the Playwright MCP is not available and cannot proceed with testing
 
@@ -182,7 +182,7 @@ Interpret it as follows:
 
 ### Phase 4: Documentation & Reporting
 13. Compile findings, categorized by severity and surface
-14. Populate `reports/data/qa-report-shop.json` and render the HTML report
+14. Populate `kosh-reports/data/qa-report-shop.json` and render the HTML report
 
 ---
 
@@ -192,7 +192,7 @@ Interpret it as follows:
 
 - Launch the browser at **desktop width (1920px)**
 - Document: page title, URL, and the environment you're operating under
-- Take a homepage screenshot: `reports/screenshots/homepage-desktop.png`
+- Take a homepage screenshot: `kosh-reports/screenshots/homepage-desktop.png`
 
 **Dismiss blocking overlays NOW.** Cookie consent banners, newsletter modals, age gates, and promo popups sit on top of the page and will silently intercept your add-to-cart clicks later, producing false "the button doesn't work" findings. Handle them before you touch anything commerce-related:
 
@@ -266,7 +266,7 @@ On the confirmed catalog page:
 - ✅ **Pagination and sorting work** if present — a light check only; deep filter and facet testing is out of scope for this test
 - ✅ **Note the currency symbol and decimal format now** (e.g. `$1,234.56` vs `1.234,56 €`). You will need this to verify cart math numerically, and a comma-decimal locale will produce wrong answers if you assume a period.
 
-Screenshot the catalog: `reports/screenshots/catalog-desktop.png`
+Screenshot the catalog: `kosh-reports/screenshots/catalog-desktop.png`
 
 ---
 
@@ -439,7 +439,7 @@ The classic country field is a **select2 widget**: the visible dropdown is JavaS
 - ✅ **Payment methods are listed** — `ul.wc_payment_methods` (classic) or the blocks payment-methods region. A checkout with no payment method at all is critical: nobody can buy.
 - ✅ **Note any gateway test-mode indicators** and apply the Environment Awareness table
 
-**STOP HERE.** Take the final screenshot showing the filled form with the payment section visible: `reports/screenshots/checkout-payment-step-desktop.png`. Record in `shop.checkoutStop` exactly where you stopped and why (e.g. "Stopped at the payment step: Stripe card iframe present, Place Order not clicked").
+**STOP HERE.** Take the final screenshot showing the filled form with the payment section visible: `kosh-reports/screenshots/checkout-payment-step-desktop.png`. Record in `shop.checkoutStop` exactly where you stopped and why (e.g. "Stopped at the payment step: Stripe card iframe present, Place Order not clicked").
 
 If the payment method renders a card iframe (Stripe Elements, Braintree, etc.), its presence is your stop point. Cross-origin iframes are invisible to `browser_snapshot` anyway, and they are off-limits regardless — do not focus, type into, or attempt to inspect them.
 
@@ -619,7 +619,7 @@ Each finding goes into the `issues` object under its severity:
 ```
 
 **`screenshots` field (optional but strongly encouraged):**
-When a finding is visual — a broken cart layout, an unreadable mobile checkout, a missing button, a mis-rendered total — attach the relevant screenshot(s) so the HTML report can embed them inline next to the finding. The path is relative to the `reports/` directory (e.g. `screenshots/cart-mobile.png` for a file saved at `reports/screenshots/cart-mobile.png`). Multiple screenshots per finding are fine (desktop + mobile of the same issue, or before/after a cart operation). Skip the field where a screenshot adds nothing.
+When a finding is visual — a broken cart layout, an unreadable mobile checkout, a missing button, a mis-rendered total — attach the relevant screenshot(s) so the HTML report can embed them inline next to the finding. The path is relative to the `kosh-reports/` directory (e.g. `screenshots/cart-mobile.png` for a file saved at `kosh-reports/screenshots/cart-mobile.png`). Multiple screenshots per finding are fine (desktop + mobile of the same issue, or before/after a cart operation). Skip the field where a screenshot adds nothing.
 
 **Issue categories for this test:**
 - **Catalog** (product grid, archive pages, card contents, sorting/pagination)
@@ -651,7 +651,7 @@ Remember: commerce-flow findings only. Console and network errors belong inside 
 
 ### 5.2 Populate qa-report-shop.json
 
-Structure your data into `reports/data/qa-report-shop.json`:
+Structure your data into `kosh-reports/data/qa-report-shop.json`:
 
 - Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `<kosh>/scripts/run-qa-report.sh` adds the plugin version and skill hash.
 
@@ -737,10 +737,10 @@ The structure is defined in `<kosh>/schemas/qa-report-shop-schema.json`.
 ### 5.3 Generate the HTML Report
 
 ```bash
-<kosh>/scripts/run-qa-report.sh reports/data/qa-report-shop.json
+<kosh>/scripts/run-qa-report.sh kosh-reports/data/qa-report-shop.json
 ```
 
-The script auto-detects the shop type from the filename and applies `--shop`, producing `reports/<SITE>_SHOP_QA_REPORT_<date>.html`.
+The script auto-detects the shop type from the filename and applies `--shop`, producing `kosh-reports/<SITE>_SHOP_QA_REPORT_<date>.html`.
 
 ---
 

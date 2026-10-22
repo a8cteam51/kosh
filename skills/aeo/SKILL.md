@@ -9,7 +9,7 @@ Parse $ARGUMENTS into a URL and an optional environment type before doing anythi
 1. Extract the URL from $ARGUMENTS (the token that starts with `http://` or `https://`). If no URL is found, ask the user to provide one before proceeding. Do not begin testing without a valid URL.
 2. Extract the environment type if present — one of `local`, `development`, `staging`, or `production`. If not provided, infer it from the URL when possible (e.g., `.test`/`.local` domains suggest local, `staging.*` subdomains suggest staging). Default to `production` if unclear.
 
-kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `reports/` goes.
+kosh's own files are in the folder two levels above this skill's folder: the one that holds `skills/`. Below, `<kosh>` stands for that folder's absolute path. Run every command from the folder you started in, since that's where `kosh-reports/` goes.
 
 Navigate to the extracted URL and conduct an Answer Engine Optimization (AEO) / AI Mode QA test, evaluating how the site will be discovered, parsed, understood, and cited by AI tools like ChatGPT, Perplexity, Claude, and Google AI Overviews. Follow the full procedure below, using the determined environment type to guide how findings are reported.
 
@@ -37,7 +37,7 @@ Include this exact value in the `aeoRubricVersion` field of every report you gen
 - ✅ You MUST evaluate every signal to one of `pass` / `partial` / `fail` / `na`. Do not skip signals or leave status blank
 - ✅ You MUST include an actionable Claude prompt for every signal at status `fail` or `partial`
 - ✅ You MUST include an `effort` field on every issue object. Valid values: `low`, `medium`, `high`, `unknown`. Do not omit it
-- ✅ You MUST save the final report to `reports/data/qa-report-aeo.json`
+- ✅ You MUST save the final report to `kosh-reports/data/qa-report-aeo.json`
 - ✅ You MUST only refer to the site being analyzed by the name found on the site at the provided URL. Never use names from prior analyses in this session. If unsure of the site name, derive it from the homepage `<title>`, `og:site_name`, or the WordPress site title in the header
 
 If you cannot perform these actions, explicitly state that the Playwright MCP is not available and cannot proceed.
@@ -99,7 +99,7 @@ If you detect signs of a non-production environment that wasn't explicitly speci
 - ✅ Visit **at least 4–6 pages**, beginning with the homepage
 - ✅ Fetch `robots.txt`, `sitemap.xml`, `llms.txt`, and `llms-full.txt` as separate top-level navigations
 - ✅ Run `browser_evaluate` for schema / meta / heading inspection on the homepage
-- ✅ Take a desktop screenshot of the homepage saved to `reports/screenshots/homepage-aeo-desktop.png`
+- ✅ Take a desktop screenshot of the homepage saved to `kosh-reports/screenshots/homepage-aeo-desktop.png`
 - ✅ Run a no-JavaScript reachability check on the homepage
 - ✅ Confirm E-E-A-T anchors on About / Team pages where present
 - ✅ Confirm content freshness on blog / news / case study listing pages
@@ -161,7 +161,7 @@ If `redirectedTo` is set, **do NOT generate a report** either: the site now live
 14. Map every finding to the rubric; assign each signal a status (pass / partial / fail / na); count totals into the summary block
 
 ### Phase 5: Reporting
-15. Generate `reports/data/qa-report-aeo.json` matching `<kosh>/schemas/qa-report-aeo-schema.json`
+15. Generate `kosh-reports/data/qa-report-aeo.json` matching `<kosh>/schemas/qa-report-aeo-schema.json`
 16. Run the report generation script
 
 ---
@@ -391,7 +391,7 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 
 - The browser is already at the homepage from Phase 0
 - Confirm desktop viewport (1920×1080) via `browser_resize` if needed
-- `browser_take_screenshot` with `filename: "reports/screenshots/homepage-aeo-desktop.png"` (full page). Pass the full `reports/screenshots/...` path as `filename`; a bare filename saves to the project root, so do NOT pass a bare name and move the file afterward.
+- `browser_take_screenshot` with `filename: "kosh-reports/screenshots/homepage-aeo-desktop.png"` (full page). Pass the full `kosh-reports/screenshots/...` path as `filename`; a bare filename saves to the project root, so do NOT pass a bare name and move the file afterward.
 
 ### 1.2 Technical Health
 
@@ -488,7 +488,7 @@ return {
 };
 ```
 
-Save a screenshot by passing `filename: "reports/screenshots/homepage-no-js.png"` to `browser_take_screenshot` (a bare filename saves to the project root — pass the full path, don't move the file afterward). Close the no-JS context and resume the normal session.
+Save a screenshot by passing `filename: "kosh-reports/screenshots/homepage-no-js.png"` to `browser_take_screenshot` (a bare filename saves to the project root — pass the full path, don't move the file afterward). Close the no-JS context and resume the normal session.
 
 **Evaluation:**
 - `pass` — H1 and 500+ chars of body copy visible without JS.
@@ -1762,7 +1762,7 @@ Complete all items before generating the JSON report.
 - [ ] Phase 0 site type detection completed, `siteType`, `siteTypeConfidence`, `siteTypeRationale` recorded
 - [ ] Phase 0.4 schema relevance scan completed, `applicableSchemas` recorded in `technicalNotes`
 - [ ] Playwright launched and homepage loaded at desktop viewport (1920×1080)
-- [ ] Desktop screenshot saved to `reports/screenshots/homepage-aeo-desktop.png`
+- [ ] Desktop screenshot saved to `kosh-reports/screenshots/homepage-aeo-desktop.png`
 - [ ] robots.txt fetched and analyzed with the training-vs-retrieval split
 - [ ] sitemap.xml fetched and analyzed for lastmod dates
 - [ ] llms.txt and llms-full.txt fetches attempted and results recorded
@@ -1790,7 +1790,7 @@ Complete all items before generating the JSON report.
 
 ### File location
 
-Save the report to `reports/data/qa-report-aeo.json`. This is the fixed filename the kosh report generator expects.
+Save the report to `kosh-reports/data/qa-report-aeo.json`. This is the fixed filename the kosh report generator expects.
 
 ### Top-level structure
 
@@ -1974,13 +1974,13 @@ Example — ✅ "Write a complete JSON-LD Organization schema block for a Toront
 
 ### Generate the HTML report
 
-Once `reports/data/qa-report-aeo.json` is saved, run:
+Once `kosh-reports/data/qa-report-aeo.json` is saved, run:
 
 ```bash
-<kosh>/scripts/run-qa-report.sh reports/data/qa-report-aeo.json --aeo
+<kosh>/scripts/run-qa-report.sh kosh-reports/data/qa-report-aeo.json --aeo
 ```
 
-`--aeo` forces the generator's AEO branch, which is otherwise auto-detected from `report.mode === "aeo"`. The script writes a self-contained HTML report to `reports/` (color-coded status pills, per-criterion signal tables, schema-relevance section, collapsible severity blocks, paste-ready Claude prompts), prints the output path, and moves the source JSON to `reports/data/archive/` under the same basename.
+`--aeo` forces the generator's AEO branch, which is otherwise auto-detected from `report.mode === "aeo"`. The script writes a self-contained HTML report to `kosh-reports/` (color-coded status pills, per-criterion signal tables, schema-relevance section, collapsible severity blocks, paste-ready Claude prompts), prints the output path, and moves the source JSON to `kosh-reports/data/archive/` under the same basename.
 
 ### Terminal summary
 
