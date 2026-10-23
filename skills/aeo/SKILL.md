@@ -23,6 +23,7 @@ allowed-tools:
   - mcp__plugin_kosh_playwright__browser_navigate_back
   - mcp__plugin_kosh_playwright__browser_select_option
   - mcp__plugin_kosh_playwright__browser_type
+  - Bash(${CLAUDE_PLUGIN_ROOT}/scripts/run-qa-report.sh kosh-reports/data/qa-report-aeo.json --aeo)
 ---
 
 Parse $ARGUMENTS into a URL and an optional environment type before doing anything else:
