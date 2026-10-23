@@ -118,7 +118,7 @@ tests:
       - type: regex
         value: '^[^\n]*\n[\s*_#>\d.)]*NO\b'
       - type: regex
-        value: '([Tt]emplate|[Bb]lock|requested|requests)'
+        value: '([Tt]emplate|[Bb]lock|[Rr]equest)'
 
   - description: Request-category finding still owns the fix when the CDN rounded a pixel off the requested size
     vars:
@@ -148,4 +148,79 @@ tests:
       - type: regex
         value: '^[^\n]*\n[\s*_#>\d.)]*NO\b'
       - type: regex
-        value: '([Tt]emplate|[Bb]lock|requested|requests)'
+        value: '([Tt]emplate|[Bb]lock|[Rr]equest)'
+
+  - description: Off-site links go through the link checker, in one call, single-quoted, never opened
+    vars:
+      request: |
+        You have finished the journeys and the mobile checks on https://example.com/.
+        The footer, on every page you visited, has three icon links:
+
+        - Instagram: https://www.instagram.com/example/
+        - Facebook: https://www.facebook.com/example/
+        - LinkedIn: https://www.linkedin.com/company/example/
+
+        The About page, https://example.com/about/, also links to a partner:
+        https://partner.example.org/programs/?ref=example&utm_source=site
+
+        You need to verify these links aren't broken and lead to the intended
+        destinations. Give every command or browser tool call you would run for
+        this in one fenced code block, one per line, and nothing else in the block.
+    options:
+      # Grade only the commands: commentary around them can name the tools it chose not to use.
+      transform: '[...output.matchAll(/```[a-z]*\s*([\s\S]*?)```/g)].map((block) => block[1]).join("\n").replace(/\\\n/g, " ")'
+    assert:
+      - type: javascript
+        value: '(output.match(/check-links\.js/g) || []).length === 1'
+      - type: javascript
+        value: |
+          const line = output.split('\n').find((l) => l.includes('check-links.js')) || '';
+          return ['instagram.com', 'facebook.com', 'linkedin.com', 'partner.example.org'].every((host) => line.includes(host));
+      - type: regex
+        value: "'https://partner\\.example\\.org/[^']*&[^']*'"
+      - type: not-icontains
+        value: curl
+      - type: not-regex
+        value: 'browser_(navigate|click|tabs)'
+
+  - description: A bot-wall status from the link checker is unverified, and nothing is opened to find out
+    vars:
+      request: |
+        After the journeys on https://example.com/, you ran kosh's link checker
+        on the site's off-site links. It printed:
+
+        200 https://www.instagram.com/example/
+        400 https://www.facebook.com/example/
+        999 https://www.linkedin.com/company/example/
+        404 https://partner.example.org/old-page/
+
+        For each link, give one line: the URL, then OK, UNVERIFIED or BROKEN.
+        Then one line starting `FURTHER STEP:` with any further step you would
+        take to verify the UNVERIFIED links, or `none`.
+    assert:
+      - type: regex
+        value: 'facebook\.com/example/[^\n]*UNVERIFIED'
+      - type: regex
+        value: 'linkedin\.com/company/example/[^\n]*UNVERIFIED'
+      - type: regex
+        value: 'partner\.example\.org/old-page/[^\n]*BROKEN'
+      - type: javascript
+        value: |
+          const step = output.match(/FURTHER STEP:\**\s*(.*)/i);
+          return Boolean(step) && (/^\W*none\b/i.test(step[1]) || !/browser|navigate|click|curl|fetch|open|visit|load/i.test(step[1]));
+
+  - description: The off-site rule doesn't stop fetching a CDN image's original to check its real size
+    vars:
+      request: |
+        The Section 1.4 image resolution script flagged the homepage hero on
+        https://example.com/ with `diagnosisCategory` `request`. Its picked src is
+        https://i0.wp.com/example.com/wp-content/uploads/2026/10/hero.jpg?resize=768%2C512&ssl=1,
+        served from the image CDN host i0.wp.com, not example.com.
+
+        Before writing that the source asset is too small, may you fetch the
+        original with the resize parameters stripped,
+        https://i0.wp.com/example.com/wp-content/uploads/2026/10/hero.jpg, to check
+        its real dimensions? Answer YES or NO first, then one sentence why.
+    assert:
+      - type: regex
+        value: '^[\s*_#>\d.)]*YES\b'

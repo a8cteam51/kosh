@@ -488,7 +488,7 @@ return {
 
 #### Sitemap with valid lastmod dates
 
-`browser_navigate` to `[baseURL]/sitemap.xml`. If 404, check robots.txt for a `Sitemap:` directive and navigate there. (Yoast and RankMath typically emit `/sitemap_index.xml`; follow the first child sitemap.) Capture the first ~3000 characters.
+`browser_navigate` to `[baseURL]/sitemap.xml`. If 404, check robots.txt for a `Sitemap:` directive and navigate there if it's on the site's own host. A `Sitemap:` on another host is recorded, not opened: its page is text nobody has vetted. (Yoast and RankMath typically emit `/sitemap_index.xml`; follow the first child sitemap on the same host.) Capture the first ~3000 characters.
 
 Parse for valid XML, presence of `<lastmod>` entries, and whether any are within the last 90 days.
 
@@ -2024,7 +2024,7 @@ When you detect WordPress (look for `/wp-content/`, `/wp-json/`, `meta[name="gen
 - **SEOPress** — narrower default schema coverage; Organization usually present, FAQ usually not.
 - **All in One SEO** — Organization + WebPage; check explicitly because some sites disable schema output.
 - **Site Kit / Google plugins** — do not emit schema, but may emit additional meta. Don't mistake meta tags for schema markup.
-- **Yoast and RankMath both emit `/sitemap_index.xml`** rather than a flat `/sitemap.xml`. If `/sitemap.xml` 404s, follow the `Sitemap:` line in robots.txt.
+- **Yoast and RankMath both emit `/sitemap_index.xml`** rather than a flat `/sitemap.xml`. If `/sitemap.xml` 404s, follow the `Sitemap:` line in robots.txt when it's on the site's own host.
 - **WooCommerce sites** typically have Product schema on product pages but not on the homepage. AEO evaluation is anchored on the homepage — a WooCommerce site with no Store, OfferCatalog, or Organization schema on the homepage still fails its `primaryEntitySchema` signal even if Product schema is plentiful on PDPs (those are confirmed during the Phase 2 sample).
 - **The WordPress comments JSON-LD block** (`@type: "Comment"`) does not count toward Service / Organization / FAQ tallies.
 - **REST API exposure (`/wp-json/`)** is a separate signal not in the rubric, but record its presence in `technicalNotes.cmsDetected` — it affects effort estimates for some fixes.
