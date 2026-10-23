@@ -270,6 +270,10 @@ test('without ajv installed, a validated type is refused with an install hint, n
   assert.ok(!fs.existsSync(reportsDir), 'refused report still wrote under kosh-reports/');
 });
 
+test('the root package.json has no devDependencies, since an installed kosh gets them too', () => {
+  assert.strictEqual(require(path.join(ROOT, 'package.json')).devDependencies, undefined, "Claude Code's npm ci in an installed kosh installs devDependencies: test tooling goes in tests/package.json (npm install -D --prefix tests <pkg>)");
+});
+
 test('a schema that will not compile is reported as a kosh problem, not a report problem', (t) => {
   const breakShopSchema = (root) => {
     fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(root, 'node_modules'), 'dir');

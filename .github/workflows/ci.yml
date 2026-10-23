@@ -17,4 +17,5 @@ jobs:
         with:
           node-version: 24
       - run: npm ci
+      - run: npm ci --prefix tests
       - run: node --test "tests/*.test.js"

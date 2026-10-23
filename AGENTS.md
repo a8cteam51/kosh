@@ -6,17 +6,18 @@ kosh is a Claude Code plugin that runs functional, performance, accessibility, s
 
 Installing and running kosh is in `docs/getting-started.md`; these are for changing it. Work from a clone and start Claude Code there with `claude --plugin-dir .`: for that session the clone replaces an installed kosh, and `.claude/settings.json` pre-approves the browser tools.
 
-No build step — the scripts are plain `node` and `bash`. The root `package.json` has one dependency, `ajv`, for report validation, and one devDependency, `jsdom`, for the collector tests; `evals/` has its own `package.json` for promptfoo. Install with `npm ci`: `npm install` rewrites the committed lockfile, which blocks the next `git pull`, so it's only for adding a dependency.
+No build step — the scripts are plain `node` and `bash`. The root `package.json` has one dependency, `ajv`, for report validation. The collector tests' `jsdom` lives in `tests/package.json`, not the root: Claude Code runs `npm ci` in an installed plugin's root, devDependencies included. `evals/` has its own `package.json` for promptfoo. Install with `npm ci`: `npm install` rewrites the committed lockfile, which blocks the next `git pull`, so it's only for adding a dependency.
 
 ```bash
 npm ci                                                     # once after cloning, and after any pull
+npm ci --prefix tests                                      # the same, for the collector tests' jsdom
 node --test "tests/*.test.js"                              # every test; CI runs the same line
 node scripts/generate-report.js tests/fixtures/performance-opus-5-5-2026-10-14.json --performance  # renderer only: validates, skips the stamp and the archive
 node scripts/page-capture.js summary https://example.com/ [<page>…]  # the rows a performance report's pages[] would get now
 node scripts/compare-runs.js kosh-reports/data/archive/<name>.json…  # one block of rows per archived performance run
 ```
 
-`.github/workflows/ci.yml` runs `npm ci` and the tests on every PR and on pushes to `trunk`, with no API calls. The promptfoo evals stay manual because they cost money.
+`.github/workflows/ci.yml` runs both installs and the tests on every PR and on pushes to `trunk`, with no API calls. The promptfoo evals stay manual because they cost money.
 
 ## How a report is produced
 
