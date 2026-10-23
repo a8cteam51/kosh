@@ -11,5 +11,13 @@
       "command": "npx",
       "args": ["@playwright/mcp@0.0.82", "--isolated", "--no-webmcp", "--init-script", "${CLAUDE_PLUGIN_ROOT}/collectors/kosh.js", "--init-page", "${CLAUDE_PLUGIN_ROOT}/collectors/capture.js", "--output-dir", "${CLAUDE_PLUGIN_DATA}/playwright-mcp", "--output-max-size", "20000000"]
     }
+  },
+  "userConfig": {
+    "approve_browser_tools": {
+      "type": "boolean",
+      "title": "Approve kosh's browser tools without asking",
+      "description": "Off: kosh's browser tools run without asking only in the turn a test starts, and ask at every step after a login pause or in a follow-up question. On: the browser tools kosh's tests use never ask, in any session where kosh is enabled, and background agents and non-interactive runs can use them where they were refused before. Text Claude reads anywhere, from a tested page to a fetched page, a file or an issue, could then steer the browser without you being asked, including to send something from the conversation to another site. Calls kosh refuses stay refused either way.",
+      "default": false
+    }
   }
 }

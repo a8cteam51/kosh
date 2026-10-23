@@ -5,7 +5,10 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const { args } = require(path.join(ROOT, '.claude-plugin/plugin.json')).mcpServers.playwright;
+const manifest = require(path.join(ROOT, '.claude-plugin/plugin.json'));
+const { args } = manifest.mcpServers.playwright;
+const ALLOWED = require(path.join(ROOT, '.claude/settings.json')).permissions.allow;
+const BROWSER_TOOLS = ALLOWED.filter((rule) => rule.startsWith('mcp__plugin_kosh_playwright__'));
 const fromRoot = (arg) => arg.replace(/^\$\{CLAUDE_PLUGIN_ROOT\}\//, '');
 
 test('playwright mcp is pinned to an exact version', () => {
@@ -47,25 +50,32 @@ test('the plugin declares the only playwright server', () => {
 test('every browser tool a skill names is allowlisted', () => {
   const files = ['shared', 'skills'].flatMap((dir) => fs.readdirSync(path.join(ROOT, dir), { recursive: true }).map((name) => path.join(ROOT, dir, name)));
   const named = files.filter((file) => file.endsWith('.md')).flatMap((file) => fs.readFileSync(file, 'utf8').match(/\bbrowser_[a-z_]+/g) || []);
-  const allowed = require(path.join(ROOT, '.claude/settings.json')).permissions.allow;
   assert.ok(named.length > 0, 'no browser tools found in shared/ or skills/');
-  assert.deepStrictEqual([...new Set(named)].filter((tool) => !allowed.includes(`mcp__plugin_kosh_playwright__${tool}`)), [], 'a tool missing from .claude/settings.json prompts mid-run');
+  assert.deepStrictEqual([...new Set(named)].filter((tool) => !ALLOWED.includes(`mcp__plugin_kosh_playwright__${tool}`)), [], 'a tool missing from .claude/settings.json prompts mid-run');
 });
 
-// .claude/settings.json only applies in a clone; a marketplace install gets the browser tools through each skill's allowed-tools.
+// Claude Code applies .claude/settings.json only in a clone; a marketplace install gets the browser tools through each skill's allowed-tools.
 test('every skill pre-approves exactly the allowlisted browser tools', () => {
-  const allowed = require(path.join(ROOT, '.claude/settings.json')).permissions.allow.filter((rule) => rule.startsWith('mcp__plugin_kosh_playwright__'));
   for (const { name: skill } of fs.readdirSync(path.join(ROOT, 'skills'), { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
     const front = fs.readFileSync(path.join(ROOT, 'skills', skill, 'SKILL.md'), 'utf8').match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? '';
     const listed = front.match(/^allowed-tools:\n((?: {2}- .*(?:\n|$))+)/m)?.[1].match(/(?<=- )\S+/g) ?? [];
-    assert.deepStrictEqual(listed, allowed, `skills/${skill}: allowed-tools must match .claude/settings.json, or a marketplace install prompts for each tool`);
+    assert.deepStrictEqual(listed, BROWSER_TOOLS, `skills/${skill}: allowed-tools must match .claude/settings.json, or a marketplace install prompts for each tool`);
   }
 });
 
-const guardBrowser = (tool, toolInput) => spawnSync('node', [path.join(ROOT, 'hooks/guard-browser.js')], {
-  input: tool === null ? 'not json' : JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: `mcp__plugin_kosh_playwright__${tool}`, tool_input: toolInput }),
-  encoding: 'utf8',
-});
+const OPTION = 'approve_browser_tools';
+const OPTION_ENV = `CLAUDE_PLUGIN_OPTION_${OPTION.toUpperCase()}`;
+const SERVER = `plugin:${manifest.name}:${Object.keys(manifest.mcpServers)[0]}`;
+const guardBrowser = (tool, toolInput, { option, server = SERVER, source = 'plugin', event = 'PreToolUse' } = {}) => {
+  const env = { ...process.env };
+  delete env[OPTION_ENV];
+  if (option !== undefined) env[OPTION_ENV] = option;
+  return spawnSync('node', [path.join(ROOT, 'hooks/guard-browser.js')], {
+    input: tool === null ? 'not json' : JSON.stringify({ hook_event_name: event, tool_name: tool.startsWith('mcp__') ? tool : `mcp__plugin_kosh_playwright__${tool}`, tool_input: toolInput, ...(server && { mcp_server: { name: server, source } }) }),
+    encoding: 'utf8',
+    env,
+  });
+};
 
 for (const [name, tool, toolInput, reason] of [
   ['run-code', 'browser_run_code_unsafe', { code: 'async (page) => page.title()' }, /browser_evaluate/],
@@ -105,10 +115,64 @@ for (const [name, tool, toolInput] of [
   });
 }
 
+test(`${OPTION} is a boolean option, off by default`, () => {
+  const option = manifest.userConfig?.[OPTION];
+  assert.strictEqual(option?.type, 'boolean', `the browser guard reads ${OPTION_ENV}, which only this option sets`);
+  assert.strictEqual(option.default, false, 'kosh approving its own browser tools is the user\'s choice, and an unset option reaches the hook as nothing, so a true default would show on in /config while the hook treats it as off');
+});
+
+test(`with ${OPTION} on, the browser guard approves every allowlisted tool when Claude Code is about to ask`, () => {
+  assert.ok(BROWSER_TOOLS.length > 0, 'no kosh browser tools in .claude/settings.json');
+  for (const tool of BROWSER_TOOLS) {
+    const { status, stdout, stderr } = guardBrowser(tool, {}, { option: 'true', event: 'PermissionRequest' });
+    assert.strictEqual(status, 0, stderr);
+    assert.deepStrictEqual(JSON.parse(stdout || 'null'), { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } }, `${tool} still prompts with ${OPTION} on`);
+  }
+});
+
+for (const [name, tool, toolInput, call] of [
+  [`with ${OPTION} unset`, 'browser_navigate', {}, {}],
+  [`with ${OPTION} off`, 'browser_navigate', {}, { option: 'false' }],
+  ['for another server', 'browser_navigate', {}, { option: 'true', server: 'plugin:other:playwright' }],
+  ['for a project server that takes kosh\'s name', 'browser_navigate', {}, { option: 'true', source: 'project' }],
+  ['when Claude Code names no server', 'browser_navigate', {}, { option: 'true', server: null }],
+  ['for a tool missing from the allowlist', 'browser_install', {}, { option: 'true' }],
+  ['for a call it refuses', 'browser_evaluate', { function: '() => ({})', filename: '.claude/settings.local.json' }, { option: 'true' }],
+]) {
+  test(`the browser guard leaves the permission prompt ${name}`, () => {
+    const { status, stdout, stderr } = guardBrowser(tool, toolInput, { ...call, event: 'PermissionRequest' });
+    assert.strictEqual(status, 0, stderr);
+    assert.strictEqual(stdout, '', 'an approval here skips the prompt the user would have answered');
+  });
+}
+
+test(`with ${OPTION} on, the browser guard approves nothing before the permission check`, () => {
+  const { status, stdout, stderr } = guardBrowser('browser_navigate', { url: 'https://example.com/' }, { option: 'true' });
+  assert.strictEqual(status, 0, stderr);
+  assert.strictEqual(stdout, '', 'a PreToolUse approval covers calls Claude Code wouldn\'t have asked about, and may skip auto mode\'s classifier');
+});
+
+for (const [name, tool, toolInput] of [
+  ['run-code', 'browser_run_code_unsafe', { code: 'async (page) => page.title()' }],
+  ['an allowlisted tool that saves a file', 'browser_evaluate', { function: '() => ({})', filename: '.claude/settings.local.json' }],
+]) {
+  test(`with ${OPTION} on, the browser guard still refuses ${name}`, () => {
+    const { status, stdout } = guardBrowser(tool, toolInput, { option: 'true' });
+    assert.strictEqual(status, 2, 'only exit status 2 stops the call');
+    assert.strictEqual(stdout, '');
+  });
+}
+
+const guardEntries = (event) => (require(path.join(ROOT, 'hooks/hooks.json')).hooks[event] ?? []).filter((entry) => entry.hooks.some((hook) => hook.command.includes('hooks/guard-browser.js')));
+
 test('every kosh browser tool goes through the browser guard', () => {
-  const entries = require(path.join(ROOT, 'hooks/hooks.json')).hooks.PreToolUse.filter((entry) => entry.hooks.some((hook) => hook.command.includes('hooks/guard-browser.js')));
-  const tools = [...require(path.join(ROOT, '.claude/settings.json')).permissions.allow, 'mcp__plugin_kosh_playwright__browser_run_code_unsafe'];
-  for (const tool of tools) assert.ok(entries.some((entry) => new RegExp(`^(?:${entry.matcher})$`).test(tool)), `${tool} skips hooks/guard-browser.js, so a page could have it write into the project`);
+  const entries = guardEntries('PreToolUse');
+  for (const tool of [...ALLOWED, 'mcp__plugin_kosh_playwright__browser_run_code_unsafe']) assert.ok(entries.some((entry) => new RegExp(`^(?:${entry.matcher})$`).test(tool)), `${tool} skips hooks/guard-browser.js, so a page could have it write into the project`);
+});
+
+test(`every allowlisted browser tool reaches the browser guard when Claude Code is about to ask`, () => {
+  const entries = guardEntries('PermissionRequest');
+  for (const tool of BROWSER_TOOLS) assert.ok(entries.some((entry) => new RegExp(`^(?:${entry.matcher})$`).test(tool)), `${tool} still prompts with ${OPTION} on`);
 });
 
 test('the marketplace and its plugin are named kosh', () => {
