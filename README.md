@@ -45,7 +45,7 @@ skills/          Full testing procedures, invoked as /kosh:a11y, /kosh:aeo, /kos
 schemas/         JSON schemas for report validation
 shared/          Canonical blocks each skill carries a verbatim copy of
 collectors/      Code Playwright MCP loads: into every page (window.__kosh), and in Node for every tab (the page capture)
-scripts/         Report generation, validation, provenance, the page-capture merge and summary, and run comparison
+scripts/         Report generation, validation, provenance, the page-capture merge and summary, run comparison, and the off-site link checker
 hooks/           Guards that keep page captures read-only and stop browser tools reaching past the page
 evals/           Promptfoo regression checks for skill decision rules
 tests/           node --test checks for the scripts, the collectors, the capture and its guard, skill snippets, shared-block copies, portability, JSON files, the Playwright MCP flags, allowlist and browser guard, skill ↔ schema drift, report validation and redacted report fixtures — run by .github/workflows/ci.yml on every PR

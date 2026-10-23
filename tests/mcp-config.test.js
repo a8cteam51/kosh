@@ -56,7 +56,7 @@ test('every browser tool a skill names is allowlisted', () => {
 
 // Claude Code applies .claude/settings.json only in a clone; a marketplace install gets the browser tools and kosh's scripts through each skill's allowed-tools.
 test('every skill pre-approves exactly the allowlisted browser tools and the scripts it runs', () => {
-  const wildcards = ['node <kosh>/scripts/page-capture.js summary *'];
+  const wildcards = ['node <kosh>/scripts/page-capture.js summary *', 'node <kosh>/scripts/check-links.js *'];
   const covers = (rule, command) => (rule.endsWith(' *') ? command.startsWith(rule.slice(0, -1)) : command === rule);
   for (const { name: skill } of fs.readdirSync(path.join(ROOT, 'skills'), { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
     const text = fs.readFileSync(path.join(ROOT, 'skills', skill, 'SKILL.md'), 'utf8');
