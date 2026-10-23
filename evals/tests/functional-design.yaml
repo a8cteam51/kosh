@@ -160,8 +160,10 @@ tests:
         - Facebook: https://www.facebook.com/example/
         - LinkedIn: https://www.linkedin.com/company/example/
 
-        The About page, https://example.com/about/, also links to a partner:
+        The About page, https://example.com/about/, also links to a partner and
+        to one of the partner's staff pages:
         https://partner.example.org/programs/?ref=example&utm_source=site
+        https://partner.example.org/people/o'brien/
 
         You need to verify these links aren't broken and lead to the intended
         destinations. Give every command or browser tool call you would run for
@@ -178,6 +180,8 @@ tests:
           return ['instagram.com', 'facebook.com', 'linkedin.com', 'partner.example.org'].every((host) => line.includes(host));
       - type: regex
         value: "'https://partner\\.example\\.org/[^']*&[^']*'"
+      - type: contains
+        value: 'o%27brien'
       - type: not-icontains
         value: curl
       - type: not-regex

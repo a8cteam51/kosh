@@ -2,6 +2,11 @@
 const POOL = 6;
 const TIMEOUT = 15000;
 
+// Only the scheme and the end of the host: a long host name, like a path, is text the other site chose and could carry an instruction.
+const shortOrigin = (url) => `${url.protocol}//${url.hostname.length > 40 ? `…${url.hostname.slice(-40)}` : url.hostname}${url.port ? `:${url.port}` : ''}`;
+const bare = (path) => path.replace(/\/+$/, '');
+const where = (target, final) => `${final.origin === target.origin ? '' : ` -> ${shortOrigin(final)}`}${bare(final.pathname) === bare(target.pathname) ? '' : ' (path changed)'}`;
+
 const check = async (url, timeout = TIMEOUT) => {
   let target;
   try { target = new URL(url); } catch { return `invalid ${url}`; }
@@ -10,16 +15,13 @@ const check = async (url, timeout = TIMEOUT) => {
   try {
     const res = await fetch(target, { redirect: 'follow', signal: AbortSignal.timeout(timeout), headers: { 'user-agent': 'Mozilla/5.0 (compatible; kosh-link-check)' } });
     await res.body?.cancel().catch(() => {});
-    // Only the origin: a path the other site chose could carry text meant for the model.
-    const final = new URL(res.url);
-    const moved = final.origin === target.origin ? '' : ` -> ${final.origin}`;
-    return `${res.status} ${url}${moved}${final.pathname === target.pathname ? '' : ' (path changed)'}`;
+    return `${res.status} ${url}${where(target, new URL(res.url))}`;
   } catch (error) {
     return `error ${url} ${error.cause?.code ?? error.cause?.message ?? error.name}`;
   }
 };
 
-module.exports = { check };
+module.exports = { check, where };
 
 if (require.main === module) {
   const urls = [...new Set(process.argv.slice(2))];
