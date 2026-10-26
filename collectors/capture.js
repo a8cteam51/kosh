@@ -80,6 +80,39 @@ const hopUrl = (from, to, first) => {
   }
 };
 
+// The checkout wall: Chrome pauses every navigation, fetch, XHR and beacon, but no image, script or style, so the cache stays on (a Playwright route turns it off for the page).
+const ORDER_PATTERNS = ['Document', 'XHR', 'Fetch', 'Ping'].map((resourceType) => ({ urlPattern: '*', resourceType }));
+// What WooCommerce acts on: the Store API checkout or order-pay route (by path, rest_route or batch), classic checkout's AJAX action, and the classic checkout and order-pay forms' submit fields; never a nonce name, which update_order_review's post_data carries too.
+const ORDER_ROUTE = /\/wc\/store(?:\/v\d+)?\/checkout\b/;
+const ORDER_AJAX = /[?&]wc-ajax=checkout(?:[&#]|$)/;
+const ORDER_FIELD = /woocommerce_checkout_place_order|woocommerce_pay\b/;
+const METHOD_PARAM = /[?&]_method=([a-z]+)/;
+// PHP decodes each %XX it can and skips a stray %, so one broken sequence can't hide the rest; JSON's \u escapes are undone by a round trip.
+const unescape = (text) => text.replace(/%([0-9a-f]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+const normalize = (text) => {
+  let out = String(text ?? '');
+  try { out = JSON.stringify(JSON.parse(out)); } catch {}
+  return unescape(out).toLowerCase();
+};
+// null when Chrome couldn't give the body, like a file from disk or a stream.
+const bodyOf = (request) => {
+  if (request.postData !== undefined) return request.postData;
+  const entries = request.postDataEntries ?? [];
+  if (request.hasPostData && (!entries.length || entries.some((entry) => entry.bytes === undefined))) return null;
+  return entries.map((entry) => Buffer.from(entry.bytes, 'base64').toString()).join('');
+};
+// The REST API takes its method from _method or X-HTTP-Method-Override, whatever the request's own is.
+const isOrder = (request) => {
+  if (!request) return false;
+  const url = normalize(request.url);
+  const header = Object.entries(request.headers ?? {}).find(([name]) => name.toLowerCase() === 'x-http-method-override')?.[1];
+  if (request.method !== 'POST' && String(url.match(METHOD_PARAM)?.[1] ?? header ?? '').toUpperCase() !== 'POST') return false;
+  const body = bodyOf(request);
+  if (body === null) return true;
+  const text = normalize(body);
+  return ORDER_ROUTE.test(url) || ORDER_AJAX.test(url) || ORDER_ROUTE.test(text) || ORDER_FIELD.test(text);
+};
+
 const safe = (fn) => (...args) => {
   try {
     const result = fn(...args);
@@ -207,6 +240,7 @@ exports.reportsDir = reportsDir;
 exports.makeReportsDir = makeReportsDir;
 exports.CAPTURE_NAME = CAPTURE_NAME;
 exports.redactUrl = redactUrl;
+exports.isOrder = isOrder;
 exports.EVALUATE_URL = EVALUATE_URL;
 exports.readTiming = readTiming;
 exports.readVitals = readVitals;
@@ -381,7 +415,14 @@ exports.default = async ({ page }) => {
       cdp.on('Network.requestWillBeSent', safe(({ request, initiator }) => {
         if (initiator.stack?.callFrames.some((frame) => frame.url === EVALUATE_URL)) fromModel.add(request.url);
       }));
-      await cdp.send('Network.enable');
+      // Every paused request gets an answer, or the page hangs.
+      cdp.on('Fetch.requestPaused', (event) => {
+        let order = false;
+        try { order = isOrder(event?.request); } catch {}
+        const requestId = event?.requestId;
+        Promise.resolve().then(() => cdp.send(order ? 'Fetch.failRequest' : 'Fetch.continueRequest', order ? { requestId, errorReason: 'BlockedByClient' } : { requestId })).catch(() => {});
+      });
+      await Promise.all([cdp.send('Fetch.enable', { patterns: ORDER_PATTERNS }), cdp.send('Network.enable')]);
     })();
   } catch {}
 };
