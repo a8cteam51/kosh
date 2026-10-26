@@ -534,6 +534,7 @@ test('the checkout wall refuses a request that would place or pay for an order, 
     'order-pay field as an array': post('/', 'woocommerce_pay[x]=1'),
     'a stream to an order url': { method: 'POST', url: 'https://example.com/wp-json/wc/store/v1/checkout', hasPostData: true },
     'a file to an order url': { method: 'POST', url: 'https://example.com/?wc-ajax=checkout', hasPostData: true, postDataEntries: [{ bytes: 'eA==' }, {}] },
+    'a multipart classic form with a file part Chrome left out': { method: 'POST', url: 'https://example.com/checkout/', hasPostData: true, postDataEntries: [{ bytes: Buffer.from('------x\r\nContent-Disposition: form-data; name="upload"; filename="a.txt"\r\n\r\n').toString('base64') }, {}, { bytes: Buffer.from('\r\n------x\r\nContent-Disposition: form-data; name="woocommerce_checkout_place_order"\r\n\r\n1\r\n------x--').toString('base64') }] },
   };
   const updateOrderReview = new URLSearchParams({ security: 'abc', payment_method: 'cod', post_data: 'billing_email=qa%40example.com&woocommerce-process-checkout-nonce=abc&_wp_http_referer=%2Fcheckout%2F' }).toString();
   const others = {

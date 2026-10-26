@@ -117,13 +117,8 @@ const sanitizeText = (text) => {
   while (/%[a-f0-9]{2}/i.test(out)) out = out.replace(/%[a-f0-9]{2}/gi, '');
   return phpTrim(out.replace(/ +/g, ' '));
 };
-// null when Chrome couldn't give the body, like a stream or a file from disk.
-const bodyOf = (request) => {
-  if (request.postData !== undefined) return request.postData;
-  const entries = request.postDataEntries ?? [];
-  if (request.hasPostData && (!entries.length || entries.some((entry) => entry.bytes === undefined))) return null;
-  return entries.map((entry) => Buffer.from(entry.bytes, 'base64').toString()).join('');
-};
+// What Chrome can give of the body: a part it can't, like a stream or a file from disk, is left out, and an order URL is refused without it.
+const bodyOf = (request) => request.postData ?? (request.postDataEntries ?? []).map((entry) => (entry.bytes === undefined ? '' : Buffer.from(entry.bytes, 'base64').toString())).join('');
 // The REST API takes its method from _method, else X-HTTP-Method-Override, whatever the request's own is.
 const isOrder = (request) => {
   if (!request) return false;
@@ -133,8 +128,6 @@ const isOrder = (request) => {
   if (request.method !== 'POST' && String(query.has('_method') ? query.get('_method') : header ?? '').toUpperCase() !== 'POST') return false;
   const orderUrl = ORDER_ROUTE.test(normalize(url)) || sanitizeText(query.get('wc-ajax') ?? '') === 'checkout';
   const body = bodyOf(request);
-  // An unreadable body is refused only on an order URL: elsewhere it's more likely a site's own upload than an order.
-  if (body === null) return orderUrl;
   const fields = new Set([...phpParams(body).keys(), ...[...body.matchAll(/name="([^"]*)"/g)].map(([, name]) => phpName(name))]);
   return orderUrl || ORDER_ROUTE.test(normalize(body)) || ORDER_FIELDS.some((field) => fields.has(field));
 };
