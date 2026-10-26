@@ -504,6 +504,103 @@ test("the model's own requests and their console errors are tagged, until the ne
   ]);
 });
 
+test('the checkout wall refuses a request that would place or pay for an order, however it is spelled', () => {
+  const post = (url, postData, extra) => ({ method: 'POST', url: `https://example.com${url}`, postData, ...extra });
+  const orders = {
+    'store api checkout': post('/wp-json/wc/store/v1/checkout'),
+    'unversioned store api': post('/wp-json/wc/store/checkout?_locale=user'),
+    'store api order-pay': post('/wp-json/wc/store/v1/checkout/123?key=wc_order_x'),
+    'case-folded route': post('/wp-json/wc/store/v1/Checkout'),
+    'rest_route in the query': post('/?rest_route=%2Fwc%2Fstore%2Fv1%2Fcheckout'),
+    'rest_route in the body': post('/', 'rest_route=%2Fwc%2Fstore%2Fv1%2Fcheckout&payment_method=cod'),
+    'batch with a checkout': post('/wp-json/wc/store/v1/batch', JSON.stringify({ requests: [{ method: 'POST', path: '/wc/store/v1/checkout', body: {} }] })),
+    'batch with an escaped checkout': post('/wp-json/wc/store/v1/batch', '{"requests":[{"path":"\\/wc\\/store\\/v1\\/\\u0063heckout"}]}'),
+    'classic ajax': post('/?wc-ajax=checkout'),
+    'classic ajax among other params': post('/shop/?wc-ajax=checkout&elementor_page_id=7'),
+    'classic ajax, encoded': post('/?wc-ajax=%63heckout'),
+    'classic form': post('/checkout/', 'billing_email=qa%40example.com&_wpnonce=abc&woocommerce_checkout_place_order=Place+order'),
+    'classic form fields, fetched to any url': post('/about/', 'woocommerce_checkout_place_order=1&_wpnonce=abc'),
+    'classic form, encoded field name with a stray %': post('/', 'woocommerce%5Fcheckout%5Fplace%5Forder=1&note=100%'),
+    'multipart classic form': post('/checkout/', '------x\r\nContent-Disposition: form-data; name="woocommerce_checkout_place_order"\r\n\r\n1'),
+    'order-pay form from entries': { method: 'POST', url: 'https://example.com/checkout/order-pay/123/?key=wc_order_x', postDataEntries: [{ bytes: Buffer.from('woocommerce_pay=1&_wpnonce=abc').toString('base64') }] },
+    'PUT overridden by _method': { method: 'PUT', url: 'https://example.com/wp-json/wc/store/v1/checkout?_method=POST' },
+    'GET overridden by header': { method: 'GET', url: 'https://example.com/wp-json/wc/store/v1/checkout', headers: { 'X-HTTP-Method-Override': 'post' } },
+    'the last _method': { method: 'PUT', url: 'https://example.com/wp-json/wc/store/v1/checkout?_method=get&_method=post' },
+    'classic ajax with a trailing space': post('/?wc-ajax=checkout%20'),
+    'classic ajax with a trailing +': post('/?wc-ajax=checkout+'),
+    'classic ajax in tags': post('/?wc-ajax=%3Cb%3Echeckout%3C%2Fb%3E'),
+    'classic ajax with an octet sanitize_text_field drops': post('/?wc-ajax=check%2541out'),
+    'classic form field renamed by PHP': post('/', 'woocommerce.checkout+place[order=1'),
+    'order-pay field as an array': post('/', 'woocommerce_pay[x]=1'),
+    'a stream to an order url': { method: 'POST', url: 'https://example.com/wp-json/wc/store/v1/checkout', hasPostData: true },
+    'a file to an order url': { method: 'POST', url: 'https://example.com/?wc-ajax=checkout', hasPostData: true, postDataEntries: [{ bytes: 'eA==' }, {}] },
+    'a multipart classic form with a file part Chrome left out': { method: 'POST', url: 'https://example.com/checkout/', hasPostData: true, postDataEntries: [{ bytes: Buffer.from('------x\r\nContent-Disposition: form-data; name="upload"; filename="a.txt"\r\n\r\n').toString('base64') }, {}, { bytes: Buffer.from('\r\n------x\r\nContent-Disposition: form-data; name="woocommerce_checkout_place_order"\r\n\r\n1\r\n------x--').toString('base64') }] },
+  };
+  const updateOrderReview = new URLSearchParams({ security: 'abc', payment_method: 'cod', post_data: 'billing_email=qa%40example.com&woocommerce-process-checkout-nonce=abc&_wp_http_referer=%2Fcheckout%2F' }).toString();
+  const others = {
+    'store api checkout read': { method: 'GET', url: 'https://example.com/wp-json/wc/store/v1/checkout' },
+    'store api checkout update': { method: 'PUT', url: 'https://example.com/wp-json/wc/store/v1/checkout?__experimental_calc_totals=true' },
+    'cart update': post('/wp-json/wc/store/v1/cart/update-item', '{"key":"abc","quantity":2}'),
+    'cart batch': post('/wp-json/wc/store/v1/batch', JSON.stringify({ requests: [{ method: 'POST', path: '/wc/store/v1/cart/add-item', body: { id: 1 } }] })),
+    'update_order_review, nonce and all': post('/?wc-ajax=update_order_review', updateOrderReview),
+    'a lookalike ajax action': post('/?wc-ajax=checkout_extra'),
+    'classic update totals': post('/checkout/', 'woocommerce_checkout_update_totals=1&woocommerce-process-checkout-nonce=abc'),
+    'WooPayments, not the pay form': post('/', 'woocommerce_payments_nonce=abc'),
+    'checkout page': { method: 'GET', url: 'https://example.com/checkout/' },
+    'contact form': post('/contact/', 'your-email=qa%40example.com&_wpcf7=12'),
+    'malformed url': post('/%E0%A4%A'),
+    'a stream elsewhere': { method: 'POST', url: 'https://example.com/upload', hasPostData: true },
+    'a file elsewhere': { method: 'POST', url: 'https://example.com/upload', hasPostData: true, postDataEntries: [{ bytes: 'eA==' }, {}] },
+    'the last _method is not POST': { method: 'PUT', url: 'https://example.com/wp-json/wc/store/v1/checkout?_method=post&_method=get' },
+    '_method wins over the header': { method: 'GET', url: 'https://example.com/wp-json/wc/store/v1/checkout?_method=PUT', headers: { 'X-HTTP-Method-Override': 'POST' } },
+    'an ajax action WooCommerce would not find': post('/?wc-ajax=CHECKOUT'),
+    'a < that is not a tag': post('/?wc-ajax=check%3Cout'),
+    'a longer field name': post('/', 'woocommerce_pay_for_order=1&woocommerce_pay[=1'),
+    'no request': undefined,
+  };
+  assert.deepStrictEqual(Object.keys(orders).filter((name) => !capture.isOrder(orders[name])), []);
+  assert.deepStrictEqual(Object.keys(others).filter((name) => capture.isOrder(others[name])), []);
+});
+
+test('the checkout wall pauses every navigation, fetch, xhr and beacon, never a subresource, and answers every paused request', async (t) => {
+  sandbox(t);
+  const sent = [];
+  const cdp = Object.assign(new EventEmitter(), { send: async (method, params) => { sent.push([method, params]); } });
+  await start(Object.assign(fakePage(), { context: () => ({ newCDPSession: async () => cdp }) }));
+  const patterns = sent.find(([method]) => method === 'Fetch.enable')[1].patterns;
+  assert.deepStrictEqual(patterns.map((pattern) => pattern.resourceType).sort(), ['Document', 'Fetch', 'Ping', 'XHR']);
+  sent.length = 0;
+
+  cdp.emit('Fetch.requestPaused', { requestId: 'order', request: { method: 'POST', url: 'https://example.com/?wc-ajax=checkout' } });
+  cdp.emit('Fetch.requestPaused', { requestId: 'cart', request: { method: 'POST', url: 'https://example.com/wp-json/wc/store/v1/cart/add-item' } });
+  cdp.emit('Fetch.requestPaused', { requestId: 'odd' });
+  await settle();
+  assert.deepStrictEqual(sent, [
+    ['Fetch.failRequest', { requestId: 'order', errorReason: 'BlockedByClient' }],
+    ['Fetch.continueRequest', { requestId: 'cart' }],
+    ['Fetch.continueRequest', { requestId: 'odd' }],
+  ]);
+});
+
+test('a refused Fetch.enable still leaves the model-request tagging on, and an answer Chrome refuses never throws', async (t) => {
+  const box = sandbox(t);
+  const rejections = [];
+  const onRejection = (reason) => rejections.push(reason);
+  process.on('unhandledRejection', onRejection);
+  t.after(() => process.off('unhandledRejection', onRejection));
+  const sent = [];
+  const cdp = Object.assign(new EventEmitter(), { send: async (method) => { sent.push(method); if (method.startsWith('Fetch.')) throw new Error('refused'); } });
+  const page = await start(Object.assign(fakePage(), { context: () => ({ newCDPSession: async () => cdp }) }));
+  cdp.emit('Fetch.requestPaused', { requestId: 'x', request: { method: 'GET', url: 'https://example.com/' } });
+  await settle();
+  assert.deepStrictEqual(sent, ['Fetch.enable', 'Network.enable', 'Fetch.continueRequest']);
+  assert.deepStrictEqual(rejections, []);
+  await navigate(page, 'https://example.com/');
+  cdp.emit('Network.requestWillBeSent', initiated('https://example.com/sitemap.xml', [capture.EVALUATE_URL]));
+  page.emit('response', response(request('https://example.com/sitemap.xml', { frame: page.main, type: 'fetch' }), 404));
+  assert.strictEqual(box.entries().find((entry) => entry.type === 'network').byModel, true);
+});
+
 test("a console call from browser_evaluate's code is the model's, and the site's own messages aren't", async (t) => {
   const box = sandbox(t);
   const page = await start(fakePage());

@@ -80,6 +80,58 @@ const hopUrl = (from, to, first) => {
   }
 };
 
+// The checkout wall: Chrome pauses every navigation, fetch, XHR and beacon, but no image, script or style, so the cache stays on (a Playwright route turns it off for the page).
+const ORDER_PATTERNS = ['Document', 'XHR', 'Fetch', 'Ping'].map((resourceType) => ({ urlPattern: '*', resourceType }));
+// What WooCommerce acts on, read the way PHP and WooCommerce read it: the Store API checkout or order-pay route (by path, rest_route or batch), classic checkout's AJAX action, and the classic checkout and order-pay forms' submit fields; never a nonce name, which update_order_review's post_data carries too.
+const ORDER_ROUTE = /\/wc\/store(?:\/v\d+)?\/checkout\b/;
+const ORDER_FIELDS = ['woocommerce_checkout_place_order', 'woocommerce_pay'];
+// PHP decodes each %XX it can and skips a stray %, so one broken sequence can't hide the rest; JSON's \u escapes are undone by a round trip.
+const unescape = (text) => text.replace(/%([0-9a-f]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+const normalize = (text) => {
+  let out = String(text ?? '');
+  try { out = JSON.stringify(JSON.parse(out)); } catch {}
+  return unescape(out).toLowerCase();
+};
+// PHP 8's field names: a[b] is a, otherwise every space, dot and [ is _, and leading spaces go.
+const phpName = (name) => {
+  const open = name.indexOf('[');
+  const base = open !== -1 && name.indexOf(']', open) !== -1 ? name.slice(0, open) : name;
+  return base.replace(/^ +/, '').replace(/[ .[]/g, '_');
+};
+// A query string or form body as PHP parses it: + is a space and the last value for a name wins.
+const phpParams = (text) => {
+  const params = new Map();
+  for (const pair of text.split('&')) {
+    if (!pair) continue;
+    const at = pair.indexOf('=');
+    const [name, value] = (at === -1 ? [pair, ''] : [pair.slice(0, at), pair.slice(at + 1)]).map((part) => unescape(part.replace(/\+/g, ' ')));
+    params.set(phpName(name), value);
+  }
+  return params;
+};
+// sanitize_text_field, which WooCommerce runs on wc-ajax: tags out, whitespace collapsed and trimmed, leftover %XX removed.
+const phpTrim = (text) => text.replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '');
+const sanitizeText = (text) => {
+  let out = phpTrim(text.replace(/<(script|style)[^>]*?>[\s\S]*?<\/\1>/gi, '').replace(/<[^>]*>/g, '').replace(/[\r\n\t ]+/g, ' '));
+  if (!/%[a-f0-9]{2}/i.test(out)) return out;
+  while (/%[a-f0-9]{2}/i.test(out)) out = out.replace(/%[a-f0-9]{2}/gi, '');
+  return phpTrim(out.replace(/ +/g, ' '));
+};
+// What Chrome can give of the body: a part it can't, like a stream or a file from disk, is left out, and an order URL is refused without it.
+const bodyOf = (request) => request.postData ?? (request.postDataEntries ?? []).map((entry) => (entry.bytes === undefined ? '' : Buffer.from(entry.bytes, 'base64').toString())).join('');
+// The REST API takes its method from _method, else X-HTTP-Method-Override, whatever the request's own is.
+const isOrder = (request) => {
+  if (!request) return false;
+  const url = String(request.url ?? '');
+  const query = phpParams(url.includes('?') ? url.slice(url.indexOf('?') + 1) : '');
+  const header = Object.entries(request.headers ?? {}).find(([name]) => name.toLowerCase() === 'x-http-method-override')?.[1];
+  if (request.method !== 'POST' && String(query.has('_method') ? query.get('_method') : header ?? '').toUpperCase() !== 'POST') return false;
+  const orderUrl = ORDER_ROUTE.test(normalize(url)) || sanitizeText(query.get('wc-ajax') ?? '') === 'checkout';
+  const body = bodyOf(request);
+  const fields = new Set([...phpParams(body).keys(), ...[...body.matchAll(/name="([^"]*)"/g)].map(([, name]) => phpName(name))]);
+  return orderUrl || ORDER_ROUTE.test(normalize(body)) || ORDER_FIELDS.some((field) => fields.has(field));
+};
+
 const safe = (fn) => (...args) => {
   try {
     const result = fn(...args);
@@ -207,6 +259,7 @@ exports.reportsDir = reportsDir;
 exports.makeReportsDir = makeReportsDir;
 exports.CAPTURE_NAME = CAPTURE_NAME;
 exports.redactUrl = redactUrl;
+exports.isOrder = isOrder;
 exports.EVALUATE_URL = EVALUATE_URL;
 exports.readTiming = readTiming;
 exports.readVitals = readVitals;
@@ -381,7 +434,14 @@ exports.default = async ({ page }) => {
       cdp.on('Network.requestWillBeSent', safe(({ request, initiator }) => {
         if (initiator.stack?.callFrames.some((frame) => frame.url === EVALUATE_URL)) fromModel.add(request.url);
       }));
-      await cdp.send('Network.enable');
+      // Every paused request gets an answer, or the page hangs.
+      cdp.on('Fetch.requestPaused', (event) => {
+        let order = false;
+        try { order = isOrder(event?.request); } catch {}
+        const requestId = event?.requestId;
+        Promise.resolve().then(() => cdp.send(order ? 'Fetch.failRequest' : 'Fetch.continueRequest', order ? { requestId, errorReason: 'BlockedByClient' } : { requestId })).catch(() => {});
+      });
+      await Promise.all([cdp.send('Fetch.enable', { patterns: ORDER_PATTERNS }), cdp.send('Network.enable')]);
     })();
   } catch {}
 };
