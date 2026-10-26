@@ -228,3 +228,23 @@ tests:
     assert:
       - type: regex
         value: '^[\s*_#>\d.)]*YES\b'
+
+  - description: A host's temporary address reads as staging, even when the site's name says production
+    vars:
+      request: |
+        You were asked to test https://example-production.mystagingwebsite.com/
+        with no environment given. Which environment does the report record?
+        Answer LOCAL, DEVELOPMENT, STAGING or PRODUCTION first, then one sentence why.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*STAGING\b'
+
+  - description: A plain WordPress.com address still reads as production
+    vars:
+      request: |
+        You were asked to test https://example.wordpress.com/ with no
+        environment given. Which environment does the report record?
+        Answer LOCAL, DEVELOPMENT, STAGING or PRODUCTION first, then one sentence why.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*PRODUCTION\b'

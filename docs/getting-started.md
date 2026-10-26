@@ -139,7 +139,7 @@ The options are `local`, `development`, `staging`, or `production`.
 - **Staging:** Should look like the live site. Test data and debug output are flagged because they shouldn't ship.
 - **Production:** Everything is flagged.
 
-If you don't specify, kosh guesses from the URL (e.g., `.test` or `.local` domains are treated as local) and defaults to production if it can't tell.
+If you don't specify, kosh guesses from the URL and defaults to production if it can't tell. `.test` and `.local` domains and `localhost` are treated as local; `staging.*` subdomains and a host's temporary address, like Pressable's `*.mystagingwebsite.com` or WordPress.com's `*.wpcomstaging.com`, as staging. A launched site still on its temporary address needs `production` given.
 
 ## Testing a site that isn't publicly reachable
 
