@@ -82,11 +82,9 @@ const hopUrl = (from, to, first) => {
 
 // The checkout wall: Chrome pauses every navigation, fetch, XHR and beacon, but no image, script or style, so the cache stays on (a Playwright route turns it off for the page).
 const ORDER_PATTERNS = ['Document', 'XHR', 'Fetch', 'Ping'].map((resourceType) => ({ urlPattern: '*', resourceType }));
-// What WooCommerce acts on: the Store API checkout or order-pay route (by path, rest_route or batch), classic checkout's AJAX action, and the classic checkout and order-pay forms' submit fields; never a nonce name, which update_order_review's post_data carries too.
+// What WooCommerce acts on, read the way PHP and WooCommerce read it: the Store API checkout or order-pay route (by path, rest_route or batch), classic checkout's AJAX action, and the classic checkout and order-pay forms' submit fields; never a nonce name, which update_order_review's post_data carries too.
 const ORDER_ROUTE = /\/wc\/store(?:\/v\d+)?\/checkout\b/;
-const ORDER_AJAX = /[?&]wc-ajax=checkout(?:[&#]|$)/;
-const ORDER_FIELD = /woocommerce_checkout_place_order|woocommerce_pay\b/;
-const METHOD_PARAM = /[?&]_method=([a-z]+)/;
+const ORDER_FIELDS = ['woocommerce_checkout_place_order', 'woocommerce_pay'];
 // PHP decodes each %XX it can and skips a stray %, so one broken sequence can't hide the rest; JSON's \u escapes are undone by a round trip.
 const unescape = (text) => text.replace(/%([0-9a-f]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
 const normalize = (text) => {
@@ -94,23 +92,51 @@ const normalize = (text) => {
   try { out = JSON.stringify(JSON.parse(out)); } catch {}
   return unescape(out).toLowerCase();
 };
-// null when Chrome couldn't give the body, like a file from disk or a stream.
+// PHP 8's field names: a[b] is a, otherwise every space, dot and [ is _, and leading spaces go.
+const phpName = (name) => {
+  const open = name.indexOf('[');
+  const base = open !== -1 && name.indexOf(']', open) !== -1 ? name.slice(0, open) : name;
+  return base.replace(/^ +/, '').replace(/[ .[]/g, '_');
+};
+// A query string or form body as PHP parses it: + is a space and the last value for a name wins.
+const phpParams = (text) => {
+  const params = new Map();
+  for (const pair of text.split('&')) {
+    if (!pair) continue;
+    const at = pair.indexOf('=');
+    const [name, value] = (at === -1 ? [pair, ''] : [pair.slice(0, at), pair.slice(at + 1)]).map((part) => unescape(part.replace(/\+/g, ' ')));
+    params.set(phpName(name), value);
+  }
+  return params;
+};
+// sanitize_text_field, which WooCommerce runs on wc-ajax: tags out, whitespace collapsed and trimmed, leftover %XX removed.
+const phpTrim = (text) => text.replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '');
+const sanitizeText = (text) => {
+  let out = phpTrim(text.replace(/<(script|style)[^>]*?>[\s\S]*?<\/\1>/gi, '').replace(/<[^>]*>/g, '').replace(/[\r\n\t ]+/g, ' '));
+  if (!/%[a-f0-9]{2}/i.test(out)) return out;
+  while (/%[a-f0-9]{2}/i.test(out)) out = out.replace(/%[a-f0-9]{2}/gi, '');
+  return phpTrim(out.replace(/ +/g, ' '));
+};
+// null when Chrome couldn't give the body, like a stream or a file from disk.
 const bodyOf = (request) => {
   if (request.postData !== undefined) return request.postData;
   const entries = request.postDataEntries ?? [];
   if (request.hasPostData && (!entries.length || entries.some((entry) => entry.bytes === undefined))) return null;
   return entries.map((entry) => Buffer.from(entry.bytes, 'base64').toString()).join('');
 };
-// The REST API takes its method from _method or X-HTTP-Method-Override, whatever the request's own is.
+// The REST API takes its method from _method, else X-HTTP-Method-Override, whatever the request's own is.
 const isOrder = (request) => {
   if (!request) return false;
-  const url = normalize(request.url);
+  const url = String(request.url ?? '');
+  const query = phpParams(url.includes('?') ? url.slice(url.indexOf('?') + 1) : '');
   const header = Object.entries(request.headers ?? {}).find(([name]) => name.toLowerCase() === 'x-http-method-override')?.[1];
-  if (request.method !== 'POST' && String(url.match(METHOD_PARAM)?.[1] ?? header ?? '').toUpperCase() !== 'POST') return false;
+  if (request.method !== 'POST' && String(query.has('_method') ? query.get('_method') : header ?? '').toUpperCase() !== 'POST') return false;
+  const orderUrl = ORDER_ROUTE.test(normalize(url)) || sanitizeText(query.get('wc-ajax') ?? '') === 'checkout';
   const body = bodyOf(request);
-  if (body === null) return true;
-  const text = normalize(body);
-  return ORDER_ROUTE.test(url) || ORDER_AJAX.test(url) || ORDER_ROUTE.test(text) || ORDER_FIELD.test(text);
+  // An unreadable body is refused only on an order URL: elsewhere it's more likely a site's own upload than an order.
+  if (body === null) return orderUrl;
+  const fields = new Set([...phpParams(body).keys(), ...[...body.matchAll(/name="([^"]*)"/g)].map(([, name]) => phpName(name))]);
+  return orderUrl || ORDER_ROUTE.test(normalize(body)) || ORDER_FIELDS.some((field) => fields.has(field));
 };
 
 const safe = (fn) => (...args) => {
