@@ -2,6 +2,8 @@
   "name": "kosh-tests",
   "private": true,
   "devDependencies": {
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
     "jsdom": "^29.1.1"
   }
 }
