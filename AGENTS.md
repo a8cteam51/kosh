@@ -6,11 +6,11 @@ kosh is a Claude Code plugin that runs functional, performance, accessibility, s
 
 Installing and running kosh is in `docs/getting-started.md`; these are for changing it. Work from a clone and start Claude Code there with `claude --plugin-dir .`: for that session the clone replaces an installed kosh, and `.claude/settings.json` pre-approves the browser tools.
 
-No build step — the scripts are plain `node` and `bash`. The root `package.json` has one dependency, `ajv`, for report validation. The collector tests' `jsdom` lives in `tests/package.json`, not the root: Claude Code runs `npm ci` in an installed plugin's root, devDependencies included. `evals/` has its own `package.json` for promptfoo. Install with `npm ci`: `npm install` rewrites the committed lockfile, which blocks the next `git pull`, so it's only for adding a dependency.
+No build step — the scripts are plain `node` and `bash`. The root `package.json` has one dependency, `ajv`, for report validation. The tests' `jsdom`, `eslint` and `globals` live in `tests/package.json`, not the root: Claude Code runs `npm ci` in an installed plugin's root, devDependencies included. `evals/` has its own `package.json` for promptfoo. Install with `npm ci`: `npm install` rewrites the committed lockfile, which blocks the next `git pull`, so it's only for adding a dependency.
 
 ```bash
 npm ci                                                     # once after cloning, and after any pull
-npm ci --prefix tests                                      # the same, for the collector tests' jsdom
+npm ci --prefix tests                                      # the same, for the tests' jsdom and eslint
 node --test "tests/*.test.js"                              # every test; CI runs the same line
 node scripts/generate-report.js tests/fixtures/performance-opus-5-5-2026-10-14.json --performance  # renderer only: validates, skips the stamp and the archive
 node scripts/page-capture.js summary https://example.com/ [<page>…]  # the rows a performance report's pages[] would get now
@@ -61,7 +61,7 @@ collectors/      → code Playwright MCP loads: `kosh.js` into every page as `wi
 scripts/         → report generation, validation, provenance, the page-capture merge, summary and archive, the run comparison, and the off-site link checker
 hooks/           → the PreToolUse guards: page captures (`guard-capture.js`), and browser tools that reach past the page (`guard-browser.js`, which also answers PermissionRequest for `approve_browser_tools`)
 evals/           → promptfoo regression checks for skill decision rules (evals/README.md)
-tests/           → `node --test` checks for the scripts, the collectors, the capture and its guard, skill-embedded snippets, shared-block copies, Claude Code-only constructs in skills, tracked JSON files, the Playwright MCP flags, allowlist and browser guard, the promptfoo eval wiring, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
+tests/           → `node --test` checks for the scripts, the collectors, the capture and its guard, skill-embedded snippets, undefined names in the code and the snippets (ESLint's `no-undef`), shared-block copies, Claude Code-only constructs in skills, tracked JSON files, the Playwright MCP flags, allowlist and browser guard, the promptfoo eval wiring, skill ↔ schema drift, report validation and redacted real reports (`tests/fixtures/`)
 docs/            → user-facing guides (getting-started.md)
 .github/         → the CI workflow (runs tests/ on every PR)
 .claude/         → project settings and Playwright tool permissions
@@ -94,7 +94,7 @@ A skill is a prompt the model reads once and follows for the whole run. `skills/
 - Carries the blocks in `shared/` as verbatim copies, because skills can't include files and a skill folder must hold everything it runs: every skill carries the preamble, the gate check and the `provenance.model` line, and the skills in `CARRIERS` in `tests/shared-blocks.test.js` carry the others (the screenshot rule, performance only so far). Edit the `shared/` file and every copy together; the test fails otherwise.
 - Write a path to kosh's own files (`scripts/`, `schemas/`, `collectors/`, a skill's references) as `<kosh>/…`. The shared preamble defines `<kosh>` as the folder two above the skill's, because a skill runs from the user's project, where `kosh-reports/` goes, not from kosh's folder. `tests/portability.test.js` fails on a bare one.
 - Don't add Claude Code-only constructs (host tool names like `PushNotification`, `/kosh:` references, `mcp__` tool names, `CLAUDE_…` variables, `$ARGUMENTS`, "Claude prompt"): other hosts load skill text verbatim. `tests/portability.test.js` holds today's count per file, counting each `shared/` block once in `shared/` rather than in every copy; lower a count when a rewrite removes one, never raise it. The frontmatter's `allowed-tools` isn't counted: hosts read it as metadata, and `tests/mcp-config.test.js` pins it.
-- Put page-side code in `collectors/kosh.js` and call it from the skill in one line (`() => __kosh.<name>(…)`), not as a multi-line `javascript` block. `tests/skill-snippets.test.js` holds today's count of multi-line blocks per file; lower it when a block moves out, never raise it.
+- Put page-side code in `collectors/kosh.js` and call it from the skill in one line (`() => __kosh.<name>(…)`), not as a multi-line `javascript` block. `tests/skill-snippets.test.js` holds today's count of multi-line blocks per file; lower it when a block moves out, never raise it. `tests/lint.test.js` fails on a name a snippet uses but never defines, which compiles and only breaks live, mid-run; its `UNDEFINED` holds today's count of known ones per file; lower it when one is fixed, never raise it.
 - Test your changes by running the skill against a real site and reviewing the report. For `functional-design` and `performance`, also run the promptfoo evals — see `evals/README.md`. A run started in the clone also loads this file and your Claude Code memory for the clone's folder, which a user's run doesn't have, so it can't show whether a skill change changed what the model does. For that, start Claude Code in another folder with `claude --plugin-dir <path to the clone>`: a plugin's CLAUDE.md loads only when Claude Code starts in its folder.
 
 ### Adding or editing a schema
