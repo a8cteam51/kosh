@@ -592,10 +592,16 @@ test("a skill report's timestamp is when its browser first loaded a page, not wh
   }
 });
 
-test('the renderer names a report with no usable timestamp undated instead of crashing', (t) => {
-  const box = sandbox(t);
-  const json = write(box, 'copied-report.json', report((r) => { r.timestamp = 'YYYY-MM-DDTHH:MM:SSZ'; }));
-  const { status, output } = run(box, 'node', [RENDERER, json, '--functional']);
-  assert.equal(status, 0, output);
-  assert.ok(fs.readdirSync(box.reportsDir).some((name) => name.endsWith('_undated.html')), output);
+test('the renderer names and dates a report with no usable timestamp undated instead of crashing', (t) => {
+  for (const written of ['YYYY-MM-DDTHH:MM:SSZ', 'ISO-8601']) {
+    const box = sandbox(t);
+    const json = write(box, 'copied-report.json', report((r) => { r.timestamp = written; }));
+    const { status, output } = run(box, 'node', [RENDERER, json, '--functional']);
+    assert.equal(status, 0, output);
+    const html = fs.readdirSync(box.reportsDir).find((name) => name.endsWith('_undated.html'));
+    assert.ok(html, `${written}: ${output}`);
+    const page = fs.readFileSync(path.join(box.reportsDir, html), 'utf8');
+    assert.match(page, /Test date<\/dt><dd>unknown<\/dd>/, written);
+    assert.doesNotMatch(page, /Invalid Date/, written);
+  }
 });
