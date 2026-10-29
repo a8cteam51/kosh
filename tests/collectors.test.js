@@ -170,6 +170,17 @@ test('imageSize: an image that never loads times out instead of hanging the call
   assert.deepStrictEqual((await pending).result, { error: 'timed out' });
 });
 
+test('contrast: flags text too faint for its background and passes text that is not', () => {
+  const { window } = new JSDOM(`<!doctype html><body style="background-color: rgb(255, 255, 255)">
+    <p style="color: rgb(200, 200, 200); font-size: 16px">Faint footer text</p>
+    <p style="color: rgb(20, 20, 20); font-size: 16px">Body copy</p>
+  </body>`, { url: 'https://example.com/', runScripts: 'outside-only' });
+  window.eval(SOURCE);
+  const flagged = window.__kosh.contrast();
+  assert.ok(Array.isArray(flagged), `expected flagged elements, got ${JSON.stringify(flagged)}`);
+  assert.deepStrictEqual([...flagged].map((entry) => entry.text), ['Faint footer text']);
+});
+
 test('a page cannot replace __kosh or its functions', () => {
   const window = page('https://example.com/');
   const original = window.__kosh.gate;
