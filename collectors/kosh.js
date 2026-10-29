@@ -33,5 +33,19 @@
     }
   };
 
-  Object.defineProperty(window, '__kosh', { value: Object.freeze({ gate, staticHtml }) });
+  // An image's real pixels, on any host: an image isn't held to the site like a fetch, and only its size comes back, never its bytes.
+  const imageSize = (url) => new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ error: 'timed out' }), 10000);
+    const done = (result) => { clearTimeout(timer); resolve(result); };
+    try {
+      const image = new Image();
+      image.onload = () => done({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => done({ error: 'not loaded as an image' });
+      image.src = new URL(url, location.href).href;
+    } catch (error) {
+      done({ error: String(error) });
+    }
+  });
+
+  Object.defineProperty(window, '__kosh', { value: Object.freeze({ gate, staticHtml, imageSize }) });
 })();

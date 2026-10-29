@@ -213,7 +213,7 @@ tests:
           const step = output.match(/FURTHER STEP:\**\s*(.*)/i);
           return Boolean(step) && (/^\W*none\b/i.test(step[1]) || !/browser|navigate|click|curl|fetch|open|visit|load/i.test(step[1]));
 
-  - description: The off-site rule doesn't stop fetching a CDN image's original to check its real size
+  - description: The off-site rule doesn't stop measuring a CDN image's original, through kosh's image-size call
     vars:
       request: |
         The Section 1.4 image resolution script flagged the homepage hero on
@@ -221,13 +221,17 @@ tests:
         https://i0.wp.com/example.com/wp-content/uploads/2026/10/hero.jpg?resize=768%2C512&ssl=1,
         served from the image CDN host i0.wp.com, not example.com.
 
-        Before writing that the source asset is too small, may you fetch the
-        original with the resize parameters stripped,
-        https://i0.wp.com/example.com/wp-content/uploads/2026/10/hero.jpg, to check
-        its real dimensions? Answer YES or NO first, then one sentence why.
+        Before writing that the source asset is too small, may you check the real
+        dimensions of the original, with the resize parameters stripped? Its URL is:
+
+        https://i0.wp.com/example.com/wp-content/uploads/2026/10/hero.jpg
+
+        Answer YES or NO first, then the one call you would make to check it.
     assert:
       - type: regex
         value: '^[\s*_#>\d.)]*YES\b'
+      - type: icontains
+        value: __kosh.imageSize
 
   - description: A host's temporary address reads as staging, even when the site's name says production
     vars:

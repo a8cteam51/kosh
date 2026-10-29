@@ -61,10 +61,15 @@
           "pattern": "^[0-9a-f]{64}$",
           "description": "SHA-256 of the page capture archived beside the report as <name>.capture.jsonl, which a performance report's pages[] are built from. Added by scripts/run-qa-report.sh — do not write this field."
         },
+        "heldTo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The host the run's browser was held to once the gate check came back clear, from the page capture: after that, a page on another host or the model's own request to one was refused. Added by scripts/run-qa-report.sh — do not write this field."
+        },
         "seal": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
-          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors, playwrightMcp, captureSha256, model, modelSource and effort, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
+          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors, playwrightMcp, captureSha256, model, modelSource, effort and heldTo, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
         }
       }
     },

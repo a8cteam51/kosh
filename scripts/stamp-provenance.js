@@ -57,12 +57,13 @@ function sessionFacts(env = process.env) {
 }
 
 // Catches accidental copy-forward and echoed blocks (new run, new timestamp, seal mismatch); unkeyed, so not proof against deliberate forgery.
-function sealFor(report, { model, modelSource, effort, pluginVersion, skills, collectors, playwrightMcp, captureSha256 }) {
+function sealFor(report, { model, modelSource, effort, pluginVersion, skills, collectors, playwrightMcp, captureSha256, heldTo }) {
   const fields = [report.timestamp, pluginVersion, Object.entries(skills || {}).sort()];
   // Blocks sealed before these fields existed keep their seal.
   if (collectors !== undefined || playwrightMcp !== undefined) fields.push(collectors, playwrightMcp);
   if (captureSha256 !== undefined) fields.push(captureSha256);
   if (modelSource !== undefined) fields.push(model, modelSource, effort);
+  if (heldTo !== undefined) fields.push(heldTo);
   return crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex');
 }
 
@@ -95,6 +96,7 @@ function stamp(report, flags, env = process.env) {
     playwrightMcp: plugin.mcpServers.playwright.args,
     // Hashed from the capture before the stamp runs; the stamp can't recompute it.
     ...(existing.captureSha256 !== undefined && { captureSha256: existing.captureSha256 }),
+    ...(existing.heldTo !== undefined && { heldTo: existing.heldTo }),
   };
   report.provenance = { ...stamped, seal: sealFor(report, stamped) };
   return 'stamped';

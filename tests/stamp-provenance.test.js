@@ -56,14 +56,16 @@ test('a fresh run is stamped with version, model, skill hash and seal', () => {
 });
 
 // The merge writes the hash before the stamp seals it, and only the merge may change it.
-test('a capture hash is sealed, and editing or removing it breaks the seal', () => {
+test('a capture hash and the host the browser was held to are sealed, and editing or removing either breaks the seal', () => {
   const report = freshRun();
   report.provenance.captureSha256 = 'e'.repeat(64);
+  report.provenance.heldTo = 'example.com';
   assert.equal(stamp(report, ['--performance']), 'stamped');
   assert.equal(report.provenance.captureSha256, 'e'.repeat(64));
+  assert.equal(report.provenance.heldTo, 'example.com');
   assert.equal(stamp(report, ['--performance']), 'kept');
 
-  for (const edit of [(p) => { p.captureSha256 = 'f'.repeat(64); }, (p) => { delete p.captureSha256; }]) {
+  for (const edit of [(p) => { p.captureSha256 = 'f'.repeat(64); }, (p) => { delete p.captureSha256; }, (p) => { p.heldTo = 'other.example.net'; }, (p) => { delete p.heldTo; }]) {
     const edited = structuredClone(report);
     edit(edited.provenance);
     assert.equal(stamp(edited, ['--performance']), 'stamped');
@@ -265,7 +267,7 @@ test('describeProvenance shortens hashes and tolerates partial blocks', () => {
 
 test('every JSON Schema documents exactly the fields the stamp writes, the same way', () => {
   const report = freshRun();
-  report.provenance.captureSha256 = 'e'.repeat(64);
+  Object.assign(report.provenance, { captureSha256: 'e'.repeat(64), heldTo: 'example.com' });
   stamp(report, ['--shop'], { CLAUDE_EFFORT: 'high' });
   const schemas = ['shop', 'aeo', 'performance'].map((type) => schemaFor(type).properties.provenance);
 

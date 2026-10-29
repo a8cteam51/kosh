@@ -69,12 +69,15 @@ const redactUrl = (url) => {
   }
 };
 
+const siteHost = (url) => {
+  try { return new URL(url).host.replace(/^www\./, ''); } catch { return null; }
+};
+
 // Only the site URL the run asked for keeps its page query: a step the server or a login host chose can carry a token anywhere.
 const hopUrl = (from, to, first) => {
   try {
     const hop = new URL(from);
-    const host = (url) => url.host.replace(/^www\./, '');
-    return first && host(hop) === host(new URL(to)) ? redactUrl(from) : `${hop.origin}${hop.pathname}`;
+    return first && siteHost(from) === siteHost(to) ? redactUrl(from) : `${hop.origin}${hop.pathname}`;
   } catch {
     return '';
   }
@@ -238,10 +241,23 @@ const consoleEntry = (message) => ({ type: 'console', level: message.type(), tex
 const pageErrorEntry = (error) => ({ type: 'console', level: 'pageerror', text: clip(redactText(error?.message), MAX_TEXT) });
 const isReported = (message) => ['error', 'warning'].includes(message.type());
 
+// The off-host wall: after the model's gate check clears (it needs other hosts' redirects and logins until then), the browser and the model's own requests stay on that host.
+const WALL_WAIT_MS = 500;
+// The URL the gate check asked about, if it came back clear; browser_evaluate's wrapper answers { result, isFunction }.
+const clearedGate = (arg, value) => {
+  const answer = value && typeof value === 'object' && 'isFunction' in value ? value.result : value;
+  const asked = /__kosh\s*\.\s*gate\s*\(\s*(["'`])(.*?)\1/.exec(arg)?.[2];
+  return asked && answer?.gate === null && answer?.redirectedTo === null ? asked : null;
+};
+
 const processId = crypto.randomBytes(3).toString('hex');
 let visits = 0;
 let browserCount = 0;
 const browsers = new WeakMap();
+const walls = new WeakMap();
+const wallOf = (page) => {
+  try { return walls.get(page.context()) ?? null; } catch { return null; }
+};
 
 // browser_close ends the context, so a run that starts by closing the browser starts a new one.
 const browserOf = (page) => {
@@ -263,11 +279,19 @@ exports.isOrder = isOrder;
 exports.EVALUATE_URL = EVALUATE_URL;
 exports.readTiming = readTiming;
 exports.readVitals = readVitals;
+exports.WALL_WAIT_MS = WALL_WAIT_MS;
+exports.siteHost = siteHost;
 
 exports.default = async ({ page }) => {
   try {
     const write = writerFor(captureFile());
     const browser = browserOf(page);
+    // A popup loads before its tab's wall is on, so one that opened on another host is closed before the model can select it.
+    const wall = wallOf(page);
+    if (wall && isWeb(page.url()) && siteHost(page.url()) !== wall) {
+      await page.close().catch(() => {});
+      return;
+    }
     const handled = new WeakSet();
     let pending = null;
     let current = null;
@@ -422,26 +446,70 @@ exports.default = async ({ page }) => {
     // Only browser_evaluate's wrapper evals its string; browser_run_code_unsafe hands the model this page, whose own strings are data.
     const isModelCode = (fn, arg) => typeof arg === 'string' && String(fn).includes('eval(`(${expr})`)');
     const evaluate = page.evaluate;
+    // The gate check's answer comes back through here, and the page is held only to the host it was asked about, so a page can't turn the wall on or point it at itself.
+    const holdTo = (url, asked) => {
+      const context = page.context();
+      if (walls.has(context) || !isWeb(url) || siteHost(url) !== siteHost(asked)) return;
+      walls.set(context, siteHost(url));
+      write({ type: 'wall', ...(browser && { browser }), host: new URL(url).host });
+    };
     if (typeof evaluate === 'function') {
       page.evaluate = function (fn, arg, ...rest) {
-        return evaluate.call(this, fn, isModelCode(fn, arg) ? `eval(${JSON.stringify(`(${arg})\n//# sourceURL=${EVALUATE_URL}`)})` : arg, ...rest);
+        if (!isModelCode(fn, arg)) return evaluate.call(this, fn, arg, ...rest);
+        const result = evaluate.call(this, fn, `eval(${JSON.stringify(`(${arg})\n//# sourceURL=${EVALUATE_URL}`)})`, ...rest);
+        return Promise.resolve(result).then((value) => {
+          const asked = clearedGate(arg, value);
+          if (asked) safe(holdTo)(page.url(), asked);
+          return value;
+        });
       };
     }
 
-    // Chromium only.
-    safe(async () => {
+    // Chromium only. Awaited, since MCP navigates a new tab as soon as this returns.
+    await (async () => {
       const cdp = await page.context().newCDPSession(page);
-      cdp.on('Network.requestWillBeSent', safe(({ request, initiator }) => {
-        if (initiator.stack?.callFrames.some((frame) => frame.url === EVALUATE_URL)) fromModel.add(request.url);
+      let mainFrameId;
+      // A request's tag is set when Chrome first sends it: a redirect hop carries no initiator, and CDP doesn't promise it arrives before the pause.
+      const modelRequests = new Map();
+      const waiting = new Map();
+      cdp.on('Network.requestWillBeSent', safe(({ requestId, request, initiator, redirectResponse }) => {
+        const mine = Boolean(initiator?.stack?.callFrames.some((frame) => frame.url === EVALUATE_URL));
+        if (mine) fromModel.add(request.url);
+        if (!redirectResponse || !modelRequests.has(requestId)) modelRequests.set(requestId, mine);
+        waiting.get(requestId)?.();
       }));
+      const forget = safe(({ requestId }) => modelRequests.delete(requestId));
+      cdp.on('Network.loadingFinished', forget);
+      cdp.on('Network.loadingFailed', forget);
+      const isModelRequest = async (id) => {
+        if (!id) return false;
+        if (!modelRequests.has(id)) await new Promise((resolve) => { waiting.set(id, resolve); setTimeout(resolve, WALL_WAIT_MS); });
+        waiting.delete(id);
+        return modelRequests.get(id) === true;
+      };
+      // An off-host iframe in one of the site's pages is the site's; a main frame whose id isn't known yet, like a popup's first load, is treated as main.
+      const isOffHost = async (event) => {
+        const wall = wallOf(page);
+        if (!wall || !isWeb(event.request.url) || siteHost(event.request.url) === wall) return false;
+        if (event.resourceType === 'Document' && (!mainFrameId || event.frameId === mainFrameId)) return true;
+        if (event.resourceType === 'Document' && siteHost(page.url()) !== wall) return true;
+        return isModelRequest(event.networkId);
+      };
       // Every paused request gets an answer, or the page hangs.
       cdp.on('Fetch.requestPaused', (event) => {
-        let order = false;
-        try { order = isOrder(event?.request); } catch {}
         const requestId = event?.requestId;
-        Promise.resolve().then(() => cdp.send(order ? 'Fetch.failRequest' : 'Fetch.continueRequest', order ? { requestId, errorReason: 'BlockedByClient' } : { requestId })).catch(() => {});
+        Promise.resolve()
+          .then(async () => {
+            try { return isOrder(event?.request) || await isOffHost(event); } catch { return false; }
+          })
+          .then((block) => cdp.send(block ? 'Fetch.failRequest' : 'Fetch.continueRequest', block ? { requestId, errorReason: 'BlockedByClient' } : { requestId }))
+          .catch(() => {});
       });
-      await Promise.all([cdp.send('Fetch.enable', { patterns: ORDER_PATTERNS }), cdp.send('Network.enable')]);
-    })();
+      await Promise.all([
+        cdp.send('Fetch.enable', { patterns: ORDER_PATTERNS }),
+        cdp.send('Network.enable'),
+        cdp.send('Page.getFrameTree').then((tree) => { mainFrameId = tree?.frameTree?.frame?.id; }, () => {}),
+      ]);
+    })().catch(() => {});
   } catch {}
 };

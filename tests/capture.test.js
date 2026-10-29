@@ -582,6 +582,177 @@ test('the checkout wall pauses every navigation, fetch, xhr and beacon, never a 
   ]);
 });
 
+// A tab in a browser (context) whose CDP session records every answer; browser_evaluate is MCP's wrapper around the model's code.
+const walledTab = async ({ context = {}, url = 'about:blank', gate = { gate: null, redirectedTo: null } } = {}) => {
+  const sent = [];
+  const cdp = Object.assign(new EventEmitter(), {
+    send: async (method, params) => {
+      if (method === 'Page.getFrameTree') return { frameTree: { frame: { id: 'main' } } };
+      sent.push([method, params]);
+    },
+  });
+  context.newCDPSession = async (of) => of.cdp;
+  const page = fakePage({ url, evaluate: async (fn, arg) => (typeof arg === 'string' ? { result: arg.includes('__kosh.gate(') ? gate : 42, isFunction: true } : answer(fn, { documentUrl: url, ...TIMING })) });
+  Object.assign(page, { cdp, context: () => context, close: async () => { page.closed = true; } });
+  await start(page);
+  const browserEvaluate = (code) => page.evaluate(async (expr) => eval(`(${expr})`), code);
+  const paused = async (requestId, url, { type = 'Document', frameId = 'main', networkId = requestId, method = 'GET' } = {}) => {
+    cdp.emit('Fetch.requestPaused', { requestId, networkId, frameId, resourceType: type, request: { method, url } });
+    await settle();
+    await settle();
+  };
+  const answers = () => sent.filter(([method]) => method.startsWith('Fetch.') && method !== 'Fetch.enable').map(([method, params]) => `${params.requestId} ${method === 'Fetch.failRequest' ? 'blocked' : 'continued'}`);
+  return { page, cdp, sent, browserEvaluate, paused, answers };
+};
+
+test('the off-host wall goes up when the gate check clears, and holds every later navigation in the main frame to that host', async (t) => {
+  const box = sandbox(t);
+  const tab = await walledTab();
+  await navigate(tab.page, 'https://www.example.com/');
+  await tab.paused('before', 'https://login.example.net/');
+  assert.deepStrictEqual(await tab.browserEvaluate('() => __kosh.gate("https://example.com/")'), { result: { gate: null, redirectedTo: null }, isFunction: true });
+  assert.deepStrictEqual(ofType(box.entries(), 'wall').map(({ browser, host }) => [typeof browser, host]), [['string', 'www.example.com']]);
+
+  await tab.paused('apex', 'https://example.com/about/');
+  await tab.paused('www', 'https://www.example.com/shop/');
+  await tab.paused('other', 'https://other.example.net/');
+  await tab.paused('subdomain', 'https://shop.example.com/');
+  await tab.paused('port', 'https://example.com:8443/');
+  await tab.paused('post', 'https://other.example.net/form', { method: 'POST' });
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'embed', ...initiated('https://video.example.net/embed', ['https://example.com/']) });
+  await tab.paused('embed', 'https://video.example.net/embed', { frameId: 'child' });
+  await tab.paused('data', 'data:text/html,hi');
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'site-fetch', ...initiated('https://analytics.example.net/collect', ['https://example.com/app.js']) });
+  await tab.paused('site-fetch', 'https://analytics.example.net/collect', { type: 'Fetch' });
+  assert.deepStrictEqual(tab.answers(), ['before continued', 'apex continued', 'www continued', 'other blocked', 'subdomain blocked', 'port blocked', 'post blocked', 'embed continued', 'data continued', 'site-fetch continued']);
+});
+
+test("the off-host wall stays down until the model's own gate check comes back clear", async (t) => {
+  const box = sandbox(t);
+  for (const [code, gate] of [
+    ['() => __kosh.gate("https://example.com/")', { gate: 'private', redirectedTo: null }],
+    ['() => __kosh.gate("https://example.com/")', { gate: null, redirectedTo: 'https://example.org/' }],
+    ['() => document.title', { gate: null, redirectedTo: null }],
+  ]) {
+    const tab = await walledTab({ gate });
+    await navigate(tab.page, 'https://example.com/');
+    await tab.browserEvaluate(code);
+    await tab.page.evaluate(capture.readTiming);
+    await tab.paused('other', 'https://other.example.net/');
+    assert.deepStrictEqual(tab.answers(), ['other continued'], code);
+  }
+  assert.deepStrictEqual(ofType(box.entries(), 'wall'), []);
+});
+
+test('a page that answers the gate check clear for a host it was not asked about is not held to', async (t) => {
+  const box = sandbox(t);
+  const tab = await walledTab();
+  await navigate(tab.page, 'https://other.example.net/');
+  await tab.browserEvaluate('() => __kosh.gate("https://example.com/")');
+  await tab.browserEvaluate('() => __kosh.gate(location.href)');
+  await tab.paused('other', 'https://example.org/');
+  assert.deepStrictEqual(tab.answers(), ['other continued']);
+  assert.deepStrictEqual(ofType(box.entries(), 'wall'), []);
+});
+
+test("behind the off-host wall, an off-host iframe passes only in the site's own page, and only if the model's code didn't make it", async (t) => {
+  sandbox(t);
+  const tab = await walledTab();
+  await navigate(tab.page, 'https://example.com/');
+  await tab.browserEvaluate('() => __kosh.gate("https://example.com/")');
+
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'site', ...initiated('https://video.example.net/embed', ['https://example.com/']) });
+  await tab.paused('site', 'https://video.example.net/embed', { frameId: 'child' });
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'model', ...initiated('https://other.example.net/frame', [capture.EVALUATE_URL]) });
+  await tab.paused('model', 'https://other.example.net/frame', { frameId: 'child' });
+  for (const url of ['blob:https://example.com/0b1c', 'data:text/html,frame', 'about:blank']) {
+    tab.page.setUrl(url);
+    tab.cdp.emit('Network.requestWillBeSent', { requestId: url, ...initiated('https://other.example.net/frame', [url]) });
+    await tab.paused(url, 'https://other.example.net/frame', { frameId: 'child' });
+  }
+  assert.deepStrictEqual(tab.answers(), ['site continued', 'model blocked', 'blob:https://example.com/0b1c blocked', 'data:text/html,frame blocked', 'about:blank blocked']);
+});
+
+test('a paused request Chrome gives no network id is answered at once, never held for the wait', async (t) => {
+  sandbox(t);
+  const tab = await walledTab();
+  await navigate(tab.page, 'https://example.com/');
+  await tab.browserEvaluate('() => __kosh.gate("https://example.com/")');
+  await tab.paused('a', 'https://other.example.net/a', { type: 'Fetch', networkId: null });
+  await tab.paused('b', 'https://other.example.net/b', { type: 'XHR', networkId: null });
+  assert.deepStrictEqual(tab.answers(), ['a continued', 'b continued']);
+});
+
+test("a tab's checkout and off-host walls are on before the capture hands the tab back to be navigated", async (t) => {
+  sandbox(t);
+  const sent = [];
+  const cdp = Object.assign(new EventEmitter(), { send: async (method) => { sent.push(method); } });
+  const slowSession = () => new Promise((resolve) => setTimeout(() => resolve(cdp), 20));
+  await capture.default({ page: Object.assign(fakePage(), { context: () => ({ newCDPSession: slowSession }) }) });
+  assert.ok(sent.includes('Fetch.enable'), sent.join(', '));
+});
+
+test("the off-host wall is the browser's: a tab or popup in it shares it, the first host stays, and a new browser starts without one", async (t) => {
+  const box = sandbox(t);
+  const context = {};
+  const first = await walledTab({ context });
+  await navigate(first.page, 'https://example.com/');
+  await first.browserEvaluate('() => __kosh.gate("https://example.com/")');
+  const second = await walledTab({ context });
+  await navigate(second.page, 'https://example.org/');
+  await second.browserEvaluate('() => __kosh.gate("https://example.org/")');
+  await second.paused('other', 'https://example.org/');
+  const fresh = await walledTab();
+  await navigate(fresh.page, 'https://example.com/');
+  await fresh.paused('other', 'https://example.org/');
+
+  assert.deepStrictEqual(second.answers(), ['other blocked']);
+  assert.deepStrictEqual(fresh.answers(), ['other continued']);
+  assert.deepStrictEqual(ofType(box.entries(), 'wall').map((entry) => entry.host), ['example.com']);
+});
+
+test("behind the off-host wall, the model's own request to another host is refused at every hop, and the site's isn't", async (t) => {
+  sandbox(t);
+  const tab = await walledTab();
+  await navigate(tab.page, 'https://example.com/');
+  await tab.browserEvaluate('() => __kosh.gate("https://example.com/")');
+
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'm1', ...initiated('https://other.example.net/data.json', [capture.EVALUATE_URL]) });
+  await tab.paused('m1', 'https://other.example.net/data.json', { type: 'Fetch' });
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'm2', ...initiated('https://example.com/go', [capture.EVALUATE_URL]) });
+  await tab.paused('m2', 'https://example.com/go', { type: 'Fetch' });
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'm2', request: { url: 'https://x.example.net/' }, initiator: { type: 'other' }, redirectResponse: { status: 302 } });
+  await tab.paused('m2-hop', 'https://x.example.net/', { type: 'Fetch', networkId: 'm2' });
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 's1', ...initiated('https://other.example.net/pixel', ['https://example.com/app.js']) });
+  await tab.paused('s1', 'https://other.example.net/pixel', { type: 'Ping' });
+
+  // The pause can come first: the answer waits for Chrome's record of who sent it.
+  const late = tab.paused('m3', 'https://other.example.net/late', { type: 'XHR' });
+  await settle();
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'm3', ...initiated('https://other.example.net/late', [capture.EVALUATE_URL]) });
+  await late;
+  await settle();
+  assert.deepStrictEqual(tab.answers(), ['m1 blocked', 'm2 continued', 'm2-hop blocked', 's1 continued', 'm3 blocked']);
+
+  await tab.paused('unknown', 'https://other.example.net/unknown', { type: 'Fetch' });
+  await new Promise((resolve) => setTimeout(resolve, capture.WALL_WAIT_MS + 50));
+  assert.deepStrictEqual(tab.answers().at(-1), 'unknown continued');
+});
+
+test('a popup that opened on another host behind the off-host wall is closed before anything is recorded', async (t) => {
+  const box = sandbox(t);
+  const context = {};
+  const tab = await walledTab({ context });
+  await navigate(tab.page, 'https://example.com/');
+  await tab.browserEvaluate('() => __kosh.gate("https://example.com/")');
+  const offHost = await walledTab({ context, url: 'https://other.example.net/' });
+  const onSite = await walledTab({ context, url: 'https://example.com/terms/' });
+
+  assert.strictEqual(offHost.page.closed, true);
+  assert.strictEqual(onSite.page.closed, undefined);
+  assert.deepStrictEqual(ofType(box.entries(), 'visit').map((visit) => visit.url), ['https://example.com/', 'https://example.com/terms/']);
+});
+
 test('a refused Fetch.enable still leaves the model-request tagging on, and an answer Chrome refuses never throws', async (t) => {
   const box = sandbox(t);
   const rejections = [];
@@ -593,7 +764,7 @@ test('a refused Fetch.enable still leaves the model-request tagging on, and an a
   const page = await start(Object.assign(fakePage(), { context: () => ({ newCDPSession: async () => cdp }) }));
   cdp.emit('Fetch.requestPaused', { requestId: 'x', request: { method: 'GET', url: 'https://example.com/' } });
   await settle();
-  assert.deepStrictEqual(sent, ['Fetch.enable', 'Network.enable', 'Fetch.continueRequest']);
+  assert.deepStrictEqual(sent, ['Fetch.enable', 'Network.enable', 'Page.getFrameTree', 'Fetch.continueRequest']);
   assert.deepStrictEqual(rejections, []);
   await navigate(page, 'https://example.com/');
   cdp.emit('Network.requestWillBeSent', initiated('https://example.com/sitemap.xml', [capture.EVALUATE_URL]));

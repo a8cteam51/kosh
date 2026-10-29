@@ -128,6 +128,48 @@ test('staticHtml: no url returns an error rather than fetching the wrong page', 
   assert.strictEqual(fetched, false);
 });
 
+// An Image that loads `sizes[url]` after a tick, or fails for a url it doesn't know, like a browser's.
+const imageSize = async (url, sizes, { never = false } = {}) => {
+  const window = page('https://example.com/blog/');
+  const requested = [];
+  window.Image = class {
+    set src(value) {
+      requested.push(value);
+      if (never) return;
+      setTimeout(() => {
+        if (!sizes[value]) return this.onerror?.();
+        [this.naturalWidth, this.naturalHeight] = sizes[value];
+        this.onload?.();
+      });
+    }
+  };
+  return { result: { ...(await window.__kosh.imageSize(url)) }, requested };
+};
+
+test('imageSize: an image on another host gives its real pixels, and only them', async () => {
+  const url = 'https://i0.wp.com/example.com/wp-content/uploads/hero.jpg';
+  assert.deepStrictEqual(await imageSize(url, { [url]: [2400, 1600] }), { result: { width: 2400, height: 1600 }, requested: [url] });
+});
+
+test('imageSize: a relative url is read against the page', async () => {
+  const { requested } = await imageSize('/wp-content/uploads/hero.jpg', { 'https://example.com/wp-content/uploads/hero.jpg': [800, 600] });
+  assert.deepStrictEqual(requested, ['https://example.com/wp-content/uploads/hero.jpg']);
+});
+
+test('imageSize: something that is not an image, or not a url, is an error, not a size', async () => {
+  assert.deepStrictEqual((await imageSize('https://example.com/about/', {})).result, { error: 'not loaded as an image' });
+  const notUrl = await imageSize('http://[', {});
+  assert.match(notUrl.result.error, /Invalid URL/);
+  assert.deepStrictEqual(notUrl.requested, []);
+});
+
+test('imageSize: an image that never loads times out instead of hanging the call', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const pending = imageSize('https://example.com/slow.jpg', {}, { never: true });
+  t.mock.timers.tick(10000);
+  assert.deepStrictEqual((await pending).result, { error: 'timed out' });
+});
+
 test('a page cannot replace __kosh or its functions', () => {
   const window = page('https://example.com/');
   const original = window.__kosh.gate;
