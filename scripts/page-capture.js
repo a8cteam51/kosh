@@ -56,7 +56,7 @@ const heldTo = (entries, reportUrl) => {
   const at = entries.findIndex((entry) => entry.type === 'wall' && host(`https://${entry.host}/`) === host(reportUrl));
   if (at === -1) return undefined;
   const gated = new Set(entries.filter((entry) => entry.type === 'load' && entry.gate).map((entry) => entry.visit));
-  const before = entries.slice(0, at).filter((entry) => entry.type === 'visit' && !gated.has(entry.visit));
+  const before = entries.slice(0, at).filter((entry) => entry.type === 'visit' && host(entry.url) === host(reportUrl) && !gated.has(entry.visit));
   return before.length <= 1 ? entries[at].host : undefined;
 };
 

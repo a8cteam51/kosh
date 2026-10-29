@@ -497,6 +497,7 @@ test("a performance run whose browser wasn't held to its site while it measured 
   const gatePage = [
     { type: 'visit', visit: 'p-g', browser: 'run', url: 'https://example.com/', status: 200, redirectedFrom: [] },
     { ...MEASURED[1], visit: 'p-g', gate: 'password-protected' },
+    { type: 'visit', visit: 'p-sso', browser: 'run', url: 'https://login.example.net/sso', status: 200, redirectedFrom: ['https://example.com/'] },
   ];
   writeCapture(held, SESSION, [earlierBrowser, ...gatePage, ...MEASURED.slice(0, 3), { ...WALL, host: 'www.example.com' }, MEASURED[3]]);
   const { status, output } = run(held, WRAPPER, [write(held, PERFORMANCE_OUTPUT, performanceReport())]);
