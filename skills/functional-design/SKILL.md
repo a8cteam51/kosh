@@ -24,6 +24,7 @@ allowed-tools:
   - mcp__plugin_kosh_playwright__browser_select_option
   - mcp__plugin_kosh_playwright__browser_type
   - Bash(${CLAUDE_PLUGIN_ROOT}/scripts/run-qa-report.sh kosh-reports/data/qa-report-functional.json)
+  - Edit(kosh-reports/data/qa-report-functional.json)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/check-links.js *)
 ---
 
@@ -628,7 +629,7 @@ As you perform testing in Sections 1-3, collect the following data:
 **General metadata:**
 - `url` - Homepage URL
 - `websiteName` - Website name (extract from og:title or page title)
-- `timestamp` - ISO 8601 format (e.g., `2025-11-19T23:58:45Z`)
+- `timestamp` - set by `run-qa-report.sh` to when the run's browser first loaded a page; leave the example's value
 
 ---
 
@@ -790,7 +791,6 @@ After testing, structure your data into `kosh-reports/data/qa-report-functional.
 **IMPORTANT:**
 - **`visitedPages` must contain ALL pages you tested**, not just the homepage
 - Minimum 4-6 pages required
-- **`timestamp`** must be a real ISO 8601 timestamp from actual test execution (e.g., `2025-11-19T23:58:45Z`), not a placeholder
 
 ### 4.3 Generate Report
 

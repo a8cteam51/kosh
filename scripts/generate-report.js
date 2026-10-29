@@ -19,7 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 const { TYPE_FLAGS, describeProvenance } = require('./stamp-provenance.js');
-const { checkReport, looksLikePerformance, typesFor } = require('./validate-report.js');
+const { checkReport, isDateTime, looksLikePerformance, typesFor } = require('./validate-report.js');
 const { makeReportsDir, reportsDir: findReportsDir } = require('../collectors/capture.js');
 
 const inputFile = process.argv[2];
@@ -114,7 +114,8 @@ const websiteName = report.websiteName || getWebsiteName(report.url);
 // the kosh skills' own behavior. The QA renderer also writes this through
 // the env-tag CSS; the .env-tag--production class exists for both paths.
 const environment = report.environment || 'production';
-const reportDate = report.timestamp ? new Date(report.timestamp).toLocaleString() : 'unknown';
+const dated = isDateTime(report.timestamp);
+const reportDate = dated ? new Date(report.timestamp).toLocaleString() : 'unknown';
 
 // ===== Dispatch =====
 //
@@ -879,7 +880,7 @@ ${explorationSection}
 </html>
 `;
 
-const timestamp = report.timestamp ? new Date(report.timestamp).toISOString().split('T')[0] : 'undated';
+const timestamp = dated ? new Date(report.timestamp).toISOString().split('T')[0] : 'undated';
 const safeName = String(websiteName).toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_.-]/g, '');
 const outputFilename = testTypeLabel
   ? `${safeName}_${testTypeLabel}_QA_REPORT_${timestamp}.html`

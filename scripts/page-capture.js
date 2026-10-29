@@ -139,6 +139,12 @@ const merge = (reportPath, flags) => {
   if (!fs.existsSync(taken)) console.warn(missingCapture(captureFile()));
   const all = readEntries(taken);
   const entries = reportEntries(all, report.url);
+  // Required here because validate-report.js requires this file.
+  const { isDateTime, typesFor } = require('./validate-report.js');
+  // The model's own value is a placeholder or a guess.
+  const started = entries.find((entry) => entry.type === 'visit')?.at;
+  const written = isDateTime(report.timestamp) ? report.timestamp : null;
+  report.timestamp = (started ?? written ?? new Date().toISOString()).replace(/\.\d+Z$/, 'Z');
 
   // Without the hash, validation reads a performance report's pages[] as the model's.
   if (visitCount(entries)) report.provenance ??= {};
@@ -149,8 +155,6 @@ const merge = (reportPath, flags) => {
     if (held) report.provenance.heldTo = held;
     else delete report.provenance.heldTo;
   }
-  // Required here because validate-report.js requires this file.
-  const { typesFor } = require('./validate-report.js');
   const performance = typesFor(flags, report).includes('performance');
   if (performance) report.pages = buildPages(entries);
   fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);

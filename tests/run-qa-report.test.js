@@ -567,3 +567,41 @@ test('re-rendering an archived performance report keeps its pages[] and its seal
   assert.equal(fs.readFileSync(archivedPerformance(box), 'utf8'), before);
   assert.ok(fs.existsSync(captureAt(box)), "a re-render took the next run's capture");
 });
+
+test("a skill report's timestamp is when its browser first loaded a page, not what the model wrote, and a placeholder never survives", (t) => {
+  const archived = (box) => {
+    const dir = path.join(box.reportsDir, 'data', 'archive');
+    return JSON.parse(fs.readFileSync(path.join(dir, fs.readdirSync(dir).find((name) => /QA_REPORT_.*\.json$/.test(name))), 'utf8'));
+  };
+  const box = sandbox(t);
+  writeCapture(box, SESSION, [
+    { at: '2026-03-04T05:06:07.890Z', type: 'visit', visit: 'v-1', browser: 'run', url: 'https://example.com/', status: 200, redirectedFrom: [] },
+    { at: '2026-03-04T05:09:00.000Z', type: 'visit', visit: 'v-2', browser: 'run', url: 'https://example.com/about/', status: 200, redirectedFrom: [] },
+  ]);
+  const ran = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report((r) => { r.timestamp = '2026-01-01T09:00:00Z'; }))]);
+  assert.equal(ran.status, 0, ran.output);
+  assert.equal(archived(box).timestamp, '2026-03-04T05:06:07Z');
+
+  for (const written of ['YYYY-MM-DDTHH:MM:SSZ', 'ISO-8601', '2026-02-30T00:00:00Z', 2026]) {
+    const blank = sandbox(t);
+    const before = Date.now();
+    const placeholder = run(blank, WRAPPER, [write(blank, SKILL_OUTPUT, report((r) => { r.timestamp = written; }))]);
+    assert.equal(placeholder.status, 0, placeholder.output);
+    const stamped = Date.parse(archived(blank).timestamp);
+    assert.ok(stamped >= before - 1000 && stamped <= Date.now(), `${written} → ${archived(blank).timestamp}`);
+  }
+});
+
+test('the renderer names and dates a report with no usable timestamp undated instead of crashing', (t) => {
+  for (const written of ['YYYY-MM-DDTHH:MM:SSZ', 'ISO-8601']) {
+    const box = sandbox(t);
+    const json = write(box, 'copied-report.json', report((r) => { r.timestamp = written; }));
+    const { status, output } = run(box, 'node', [RENDERER, json, '--functional']);
+    assert.equal(status, 0, output);
+    const html = fs.readdirSync(box.reportsDir).find((name) => name.endsWith('_undated.html'));
+    assert.ok(html, `${written}: ${output}`);
+    const page = fs.readFileSync(path.join(box.reportsDir, html), 'utf8');
+    assert.match(page, /Test date<\/dt><dd>unknown<\/dd>/, written);
+    assert.doesNotMatch(page, /Invalid Date/, written);
+  }
+});

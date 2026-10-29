@@ -96,4 +96,4 @@ function checkReport(report, reportPath, types) {
   return ok;
 }
 
-module.exports = { checkReport, looksLikePerformance, schemaFor, typesFor, validate };
+module.exports = { checkReport, isDateTime, looksLikePerformance, schemaFor, typesFor, validate };
