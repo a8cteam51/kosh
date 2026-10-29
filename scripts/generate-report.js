@@ -879,7 +879,8 @@ ${explorationSection}
 </html>
 `;
 
-const timestamp = report.timestamp ? new Date(report.timestamp).toISOString().split('T')[0] : 'undated';
+const reportTime = new Date(report.timestamp);
+const timestamp = report.timestamp && !Number.isNaN(reportTime.getTime()) ? reportTime.toISOString().split('T')[0] : 'undated';
 const safeName = String(websiteName).toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_.-]/g, '');
 const outputFilename = testTypeLabel
   ? `${safeName}_${testTypeLabel}_QA_REPORT_${timestamp}.html`

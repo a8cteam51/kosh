@@ -24,6 +24,7 @@ allowed-tools:
   - mcp__plugin_kosh_playwright__browser_select_option
   - mcp__plugin_kosh_playwright__browser_type
   - Bash(${CLAUDE_PLUGIN_ROOT}/scripts/run-qa-report.sh kosh-reports/data/qa-report-accessibility.json)
+  - Edit(kosh-reports/data/qa-report-accessibility.json)
 ---
 
 Parse $ARGUMENTS into a URL and an optional environment type before doing anything else:
@@ -658,7 +659,7 @@ After testing all pages, confirm:
 
 ## SECTION 5: Data Collection
 
-Populate `kosh-reports/data/qa-report-accessibility.json`:
+Populate `kosh-reports/data/qa-report-accessibility.json`. Leave `timestamp` as the example has it: `run-qa-report.sh` sets it to when the run's browser first loaded a page.
 
 - Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `<kosh>/scripts/run-qa-report.sh` adds the plugin version and skill hash.
 

@@ -55,19 +55,22 @@ test('every browser tool a skill names is allowlisted', () => {
 });
 
 // Claude Code applies .claude/settings.json only in a clone; a marketplace install gets the browser tools and kosh's scripts through each skill's allowed-tools.
-test('every skill pre-approves exactly the allowlisted browser tools and the scripts it runs', () => {
+test('every skill pre-approves exactly the allowlisted browser tools, the scripts it runs and the report it writes', () => {
   const wildcards = ['node <kosh>/scripts/page-capture.js summary *', 'node <kosh>/scripts/check-links.js *'];
   const covers = (rule, command) => (rule.endsWith(' *') ? command.startsWith(rule.slice(0, -1)) : command === rule);
   for (const { name: skill } of fs.readdirSync(path.join(ROOT, 'skills'), { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
     const text = fs.readFileSync(path.join(ROOT, 'skills', skill, 'SKILL.md'), 'utf8');
     const front = text.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? '';
     const listed = front.match(/^allowed-tools:\n((?: {2}- .*(?:\n|$))+)/m)?.[1].match(/(?<=- ).+/g) ?? [];
-    assert.deepStrictEqual(listed.filter((rule) => !rule.startsWith('Bash(')), BROWSER_TOOLS, `skills/${skill}: allowed-tools must match .claude/settings.json, or a marketplace install prompts for each tool`);
+    assert.deepStrictEqual(listed.filter((rule) => !rule.startsWith('Bash(') && !rule.startsWith('Edit(')), BROWSER_TOOLS, `skills/${skill}: allowed-tools must match .claude/settings.json, or a marketplace install prompts for each tool`);
     // The model runs them by absolute path, which Claude Code puts in for ${CLAUDE_PLUGIN_ROOT} (live, 2.1.309).
     const rules = listed.filter((rule) => rule.startsWith('Bash(')).map((rule) => rule.slice(5, -1).replace('${CLAUDE_PLUGIN_ROOT}', '<kosh>'));
     const commands = text.match(/^(?:[a-z]+ )?<kosh>\/scripts\/.+/gm) ?? [];
     assert.deepStrictEqual(rules.filter((rule) => !commands.some((command) => covers(rule, command))), [], `skills/${skill}: a script rule must match a command the skill runs`);
     assert.deepStrictEqual(commands.filter((command) => !rules.some((rule) => covers(rule, command))), [], `skills/${skill}: a script the skill runs prompts on a marketplace install`);
+    // Edit rules cover the Write tool (Write rules never match), and a relative path resolves against the folder Claude Code started in (live, 2.1.312).
+    const reports = [...new Set(commands.map((command) => command.match(/run-qa-report\.sh (\S+)/)?.[1]).filter(Boolean))];
+    assert.deepStrictEqual(listed.filter((rule) => rule.startsWith('Edit(')).map((rule) => rule.slice(5, -1)), reports, `skills/${skill}: the only file it may write without asking is the report run-qa-report.sh reads`);
     assert.deepStrictEqual(rules.filter((rule) => rule.includes('*') && !wildcards.includes(rule)), [], `skills/${skill}: a wildcard lets a page pick the file, like a JSON run-qa-report.sh copies into the project or one page-capture.js merge rewrites, so it's only for commands that take URLs`);
   }
 });

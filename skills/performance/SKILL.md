@@ -24,6 +24,7 @@ allowed-tools:
   - mcp__plugin_kosh_playwright__browser_select_option
   - mcp__plugin_kosh_playwright__browser_type
   - Bash(${CLAUDE_PLUGIN_ROOT}/scripts/run-qa-report.sh kosh-reports/data/qa-report-performance.json)
+  - Edit(kosh-reports/data/qa-report-performance.json)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/page-capture.js summary *)
 ---
 
@@ -138,7 +139,7 @@ A message seen on every page is one site-wide finding listing all its pages, not
 
 ## Report
 
-Write `kosh-reports/data/qa-report-performance.json`. Its contract is `<kosh>/schemas/qa-report-performance-schema.json`, and a report that doesn't match is refused with the fields to fix.
+Write `kosh-reports/data/qa-report-performance.json`. Leave `timestamp` as the example has it: `run-qa-report.sh` sets it to when the run's browser first loaded a page. Its contract is `<kosh>/schemas/qa-report-performance-schema.json`, and a report that doesn't match is refused with the fields to fix.
 
 - The measurements aren't yours to write: `run-qa-report.sh` builds `pages[]` from the browser's record. `issues` holds findings with a cause, each naming its pages and the measurement in `metric`.
 - `visitedPages` lists every page the test covered, at either viewport.

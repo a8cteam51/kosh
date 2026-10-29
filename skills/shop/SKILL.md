@@ -24,6 +24,7 @@ allowed-tools:
   - mcp__plugin_kosh_playwright__browser_select_option
   - mcp__plugin_kosh_playwright__browser_type
   - Bash(${CLAUDE_PLUGIN_ROOT}/scripts/run-qa-report.sh kosh-reports/data/qa-report-shop.json)
+  - Edit(kosh-reports/data/qa-report-shop.json)
 ---
 
 Parse $ARGUMENTS into a URL and an optional environment type before doing anything else:
@@ -750,7 +751,7 @@ Structure your data into `kosh-reports/data/qa-report-shop.json`:
 }
 ```
 
-Use the real values you observed. `timestamp` must be an actual ISO 8601 timestamp, not a placeholder. The `shop` block is the record of what was actually exercised — fill it honestly, including `false` values in `cartOperations` if an operation couldn't be completed (which should have a matching finding).
+Use the real values you observed. Leave `timestamp` as the example has it: `run-qa-report.sh` sets it to when the run's browser first loaded a page. The `shop` block is the record of what was actually exercised — fill it honestly, including `false` values in `cartOperations` if an operation couldn't be completed (which should have a matching finding).
 
 `explorationPass` holds the exploration pass, one entry per thread — including the ones that found nothing. Its value is precisely that it records work that produced no finding, so a reader can tell the difference between "this store is clean here" and "nobody looked". Keep `issues` for defects and `explorationPass` for what was examined; a thread that became a finding appears in both.
 

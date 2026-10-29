@@ -24,6 +24,7 @@ allowed-tools:
   - mcp__plugin_kosh_playwright__browser_select_option
   - mcp__plugin_kosh_playwright__browser_type
   - Bash(${CLAUDE_PLUGIN_ROOT}/scripts/run-qa-report.sh kosh-reports/data/qa-report-aeo.json --aeo)
+  - Edit(kosh-reports/data/qa-report-aeo.json)
 ---
 
 Parse $ARGUMENTS into a URL and an optional environment type before doing anything else:
@@ -1801,7 +1802,7 @@ Complete all items before generating the JSON report.
 
 ### File location
 
-Save the report to `kosh-reports/data/qa-report-aeo.json`. This is the fixed filename the kosh report generator expects.
+Save the report to `kosh-reports/data/qa-report-aeo.json`. This is the fixed filename the kosh report generator expects. Leave `timestamp` as the example has it: `run-qa-report.sh` sets it to when the run's browser first loaded a page.
 
 ### Top-level structure
 
