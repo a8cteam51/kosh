@@ -67,15 +67,17 @@
 
     document.querySelectorAll('img').forEach(img => {
       const rect = img.getBoundingClientRect();
-      const renderedW = Math.round(rect.width);
-      const renderedH = Math.round(rect.height);
-      if (renderedW === 0 || renderedH === 0) return;
+      const cs = getComputedStyle(img);
+      // The image is drawn inside the padding and border, so only the content box needs its pixels.
+      const inset = (...sides) => sides.reduce((sum, side) => sum + (parseFloat(cs[side]) || 0), 0);
+      const renderedW = Math.round(rect.width - inset('paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'));
+      const renderedH = Math.round(rect.height - inset('paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'));
+      if (renderedW <= 0 || renderedH <= 0) return;
 
       const srcUrl = img.currentSrc || img.src || '';
       // SVGs scale losslessly.
       if (/\.svgz?$/i.test(srcUrl.split(/[?#]/)[0]) || /^data:image\/svg/i.test(srcUrl)) return;
 
-      const cs = getComputedStyle(img);
       const objectFit = cs.objectFit;
       const srcset = img.getAttribute('srcset');
       const sizesAttr = img.getAttribute('sizes');
@@ -85,7 +87,18 @@
         ? img.parentElement.querySelectorAll('source[srcset]').length
         : 0;
 
-      if (!img.complete || img.naturalWidth === 0) {
+      // A finished image with no pixels failed to load; waiting won't change it.
+      if (img.complete && img.naturalWidth === 0) {
+        results.push({
+          src: srcUrl.split('/').pop().substring(0, 60),
+          renderedCSS: `${renderedW}x${renderedH}px`,
+          status: 'broken',
+          reason: 'the image finished loading with no pixels: its URL is broken or is not an image',
+          alt: (img.alt || '(no alt)').substring(0, 40)
+        });
+        return;
+      }
+      if (!img.complete) {
         results.push({
           src: srcUrl.split('/').pop().substring(0, 60),
           renderedCSS: `${renderedW}x${renderedH}px`,
@@ -109,8 +122,11 @@
       const unmeasuredNote = picksFromSrcset && !measured
         ? ' The real pixel size of this srcset pick could not be read, so `naturalSize` is the density-corrected figure the DOM reports and may under-count — check the real dimensions of the picked src with `__kosh.imageSize` before reporting.'
         : '';
-      const neededW = renderedW * dpr;
-      const neededH = renderedH * dpr;
+      // contain and scale-down letterbox the image inside its box, so it needs only the size it's drawn at; scale-down never enlarges it.
+      const fit = { contain: Infinity, 'scale-down': 1 }[objectFit];
+      const drawn = fit ? Math.min(renderedW / img.naturalWidth, renderedH / img.naturalHeight, fit) : null;
+      const neededW = (drawn ? img.naturalWidth * drawn : renderedW) * dpr;
+      const neededH = (drawn ? img.naturalHeight * drawn : renderedH) * dpr;
       const ratio = Math.min(naturalW / neededW, naturalH / neededH);
       if (ratio >= 1.0) return;
 
