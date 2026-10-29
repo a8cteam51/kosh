@@ -2,11 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { CAPTURE_NAME, captureFile, redactUrl } = require('../collectors/capture.js');
+const { CAPTURE_NAME, captureFile, redactUrl, siteHost: host } = require('../collectors/capture.js');
 
-const host = (url) => {
-  try { return new URL(url).host.replace(/^www\./, ''); } catch { return null; }
-};
 const normal = (url) => {
   try {
     const parsed = new URL(redactUrl(url));
@@ -54,8 +51,14 @@ const reportEntries = (entries, reportUrl) => {
   return entries.filter((entry) => (entry.visit ? visits.has(entry.visit) : entry.type === 'truncated' || (entry.type === 'wall' && browser && entry.browser === browser)));
 };
 
-// The host the run's browser was held to once the gate check cleared, if it was the report's.
-const heldTo = (entries, reportUrl) => entries.find((entry) => entry.type === 'wall' && host(`https://${entry.host}/`) === host(reportUrl))?.host;
+// The host the run's browser was held to once the gate check cleared, if it was the report's and went up on the first page past any gate, before the rest were measured.
+const heldTo = (entries, reportUrl) => {
+  const at = entries.findIndex((entry) => entry.type === 'wall' && host(`https://${entry.host}/`) === host(reportUrl));
+  if (at === -1) return undefined;
+  const gated = new Set(entries.filter((entry) => entry.type === 'load' && entry.gate).map((entry) => entry.visit));
+  const before = entries.slice(0, at).filter((entry) => entry.type === 'visit' && !gated.has(entry.visit));
+  return before.length <= 1 ? entries[at].host : undefined;
+};
 
 const visitCount = (entries) => entries.filter((entry) => entry.type === 'visit').length;
 const archiveText = (entries) => entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n';
@@ -142,7 +145,7 @@ const merge = (reportPath, flags) => {
   if (report.provenance && typeof report.provenance === 'object') {
     if (visitCount(entries)) report.provenance.captureSha256 = crypto.createHash('sha256').update(archiveText(entries)).digest('hex');
     else delete report.provenance.captureSha256;
-    const held = visitCount(entries) ? heldTo(entries, report.url) : undefined;
+    const held = heldTo(entries, report.url);
     if (held) report.provenance.heldTo = held;
     else delete report.provenance.heldTo;
   }
@@ -167,7 +170,7 @@ const merge = (reportPath, flags) => {
   if (unlisted.length) console.log(`  Captured but not in visitedPages: ${unlisted.map((page) => `${page.url} (${page.viewport ?? 'no viewport'})`).join(', ')}`);
   // Only a fresh run is refused: an archive from before the wall re-renders without one.
   if (report.pages.length && !report.provenance?.heldTo) {
-    console.error(`✗ This run's browser was never held to ${host(report.url)}: the gate check (\`__kosh.gate\`) didn't come back with both fields null in it, so nothing kept the browser on the site. Run the gate check on the homepage in the browser now, then re-run.`);
+    console.error(`✗ This run's browser wasn't held to ${host(report.url)} while it measured: the gate check (\`__kosh.gate\`) has to come back with both fields null on the first page, before any other is loaded, or nothing keeps the browser on the site. Close the browser with browser_close and run the skill again from the start.`);
     process.exitCode = 1;
   }
 };

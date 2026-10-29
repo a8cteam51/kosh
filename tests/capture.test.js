@@ -619,6 +619,7 @@ test('the off-host wall goes up when the gate check clears, and holds every late
   await tab.paused('subdomain', 'https://shop.example.com/');
   await tab.paused('port', 'https://example.com:8443/');
   await tab.paused('post', 'https://other.example.net/form', { method: 'POST' });
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'embed', ...initiated('https://video.example.net/embed', ['https://example.com/']) });
   await tab.paused('embed', 'https://video.example.net/embed', { frameId: 'child' });
   await tab.paused('data', 'data:text/html,hi');
   tab.cdp.emit('Network.requestWillBeSent', { requestId: 'site-fetch', ...initiated('https://analytics.example.net/collect', ['https://example.com/app.js']) });
@@ -641,6 +642,54 @@ test("the off-host wall stays down until the model's own gate check comes back c
     assert.deepStrictEqual(tab.answers(), ['other continued'], code);
   }
   assert.deepStrictEqual(ofType(box.entries(), 'wall'), []);
+});
+
+test('a page that answers the gate check clear for a host it was not asked about is not held to', async (t) => {
+  const box = sandbox(t);
+  const tab = await walledTab();
+  await navigate(tab.page, 'https://other.example.net/');
+  await tab.browserEvaluate('() => __kosh.gate("https://example.com/")');
+  await tab.browserEvaluate('() => __kosh.gate(location.href)');
+  await tab.paused('other', 'https://example.org/');
+  assert.deepStrictEqual(tab.answers(), ['other continued']);
+  assert.deepStrictEqual(ofType(box.entries(), 'wall'), []);
+});
+
+test("behind the off-host wall, an off-host iframe passes only in the site's own page, and only if the model's code didn't make it", async (t) => {
+  sandbox(t);
+  const tab = await walledTab();
+  await navigate(tab.page, 'https://example.com/');
+  await tab.browserEvaluate('() => __kosh.gate("https://example.com/")');
+
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'site', ...initiated('https://video.example.net/embed', ['https://example.com/']) });
+  await tab.paused('site', 'https://video.example.net/embed', { frameId: 'child' });
+  tab.cdp.emit('Network.requestWillBeSent', { requestId: 'model', ...initiated('https://other.example.net/frame', [capture.EVALUATE_URL]) });
+  await tab.paused('model', 'https://other.example.net/frame', { frameId: 'child' });
+  for (const url of ['blob:https://example.com/0b1c', 'data:text/html,frame', 'about:blank']) {
+    tab.page.setUrl(url);
+    tab.cdp.emit('Network.requestWillBeSent', { requestId: url, ...initiated('https://other.example.net/frame', [url]) });
+    await tab.paused(url, 'https://other.example.net/frame', { frameId: 'child' });
+  }
+  assert.deepStrictEqual(tab.answers(), ['site continued', 'model blocked', 'blob:https://example.com/0b1c blocked', 'data:text/html,frame blocked', 'about:blank blocked']);
+});
+
+test('a paused request Chrome gives no network id is answered at once, never held for the wait', async (t) => {
+  sandbox(t);
+  const tab = await walledTab();
+  await navigate(tab.page, 'https://example.com/');
+  await tab.browserEvaluate('() => __kosh.gate("https://example.com/")');
+  await tab.paused('a', 'https://other.example.net/a', { type: 'Fetch', networkId: null });
+  await tab.paused('b', 'https://other.example.net/b', { type: 'XHR', networkId: null });
+  assert.deepStrictEqual(tab.answers(), ['a continued', 'b continued']);
+});
+
+test("a tab's checkout and off-host walls are on before the capture hands the tab back to be navigated", async (t) => {
+  sandbox(t);
+  const sent = [];
+  const cdp = Object.assign(new EventEmitter(), { send: async (method) => { sent.push(method); } });
+  const slowSession = () => new Promise((resolve) => setTimeout(() => resolve(cdp), 20));
+  await capture.default({ page: Object.assign(fakePage(), { context: () => ({ newCDPSession: slowSession }) }) });
+  assert.ok(sent.includes('Fetch.enable'), sent.join(', '));
 });
 
 test("the off-host wall is the browser's: a tab or popup in it shares it, the first host stays, and a new browser starts without one", async (t) => {

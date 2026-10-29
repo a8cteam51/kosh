@@ -475,7 +475,7 @@ test('a skill report with no provenance block still gets its pages from the capt
   assert.deepEqual(archivedReport.pages.map(({ loadTime, lcp }) => [loadTime, lcp]), [[900, 700]]);
 });
 
-test("a performance run whose browser was never held to its site is refused until the gate check clears in it, and the archive records the host", (t) => {
+test("a performance run whose browser wasn't held to its site while it measured is refused, a gate check after the measuring doesn't lift it, and the archive records the host", (t) => {
   const box = sandbox(t);
   const otherSite = { ...WALL, host: 'other-client.example.org' };
   const earlierBrowser = { ...WALL, browser: 'earlier' };
@@ -484,17 +484,27 @@ test("a performance run whose browser was never held to its site is refused unti
 
   const refused = run(box, WRAPPER, [json]);
   assert.notEqual(refused.status, 0, refused.output);
-  assert.match(refused.output, /This run's browser was never held to example\.com: the gate check \(`__kosh\.gate`\) didn't come back with both fields null/);
+  assert.match(refused.output, /This run's browser wasn't held to example\.com while it measured: the gate check \(`__kosh\.gate`\) has to come back with both fields null on the first page.*Close the browser with browser_close and run the skill again/);
   assert.ok(!fs.existsSync(archivedPerformance(box)), 'the report was archived');
   assert.equal(JSON.parse(fs.readFileSync(json, 'utf8')).provenance.heldTo, undefined);
 
-  writeCapture(box, SESSION, [{ ...WALL, host: 'www.example.com' }]);
-  const { status, output } = run(box, WRAPPER, [json]);
+  writeCapture(box, SESSION, [{ type: 'visit', visit: 'p-3', browser: 'run', url: 'https://example.com/about/', status: 200, redirectedFrom: [] }, { ...WALL, host: 'www.example.com' }]);
+  const late = run(box, WRAPPER, [json]);
+  assert.notEqual(late.status, 0, late.output);
+  assert.equal(JSON.parse(fs.readFileSync(json, 'utf8')).provenance.heldTo, undefined);
+
+  const held = sandbox(t);
+  const gatePage = [
+    { type: 'visit', visit: 'p-g', browser: 'run', url: 'https://example.com/', status: 200, redirectedFrom: [] },
+    { ...MEASURED[1], visit: 'p-g', gate: 'password-protected' },
+  ];
+  writeCapture(held, SESSION, [earlierBrowser, ...gatePage, ...MEASURED.slice(0, 3), { ...WALL, host: 'www.example.com' }, MEASURED[3]]);
+  const { status, output } = run(held, WRAPPER, [write(held, PERFORMANCE_OUTPUT, performanceReport())]);
 
   assert.equal(status, 0, output);
-  const archivedReport = JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8'));
+  const archivedReport = JSON.parse(fs.readFileSync(archivedPerformance(held), 'utf8'));
   assert.equal(archivedReport.provenance.heldTo, 'www.example.com');
-  const archivedRows = lines(archivedPerformance(box, 'capture.jsonl'));
+  const archivedRows = lines(archivedPerformance(held, 'capture.jsonl'));
   assert.ok(archivedRows.some((entry) => entry.type === 'wall' && entry.host === 'www.example.com'));
   assert.ok(!archivedRows.some((entry) => entry.type === 'wall' && entry.browser === 'earlier'));
 });
