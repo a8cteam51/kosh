@@ -7,13 +7,15 @@ const { JSDOM } = require('jsdom');
 const SOURCE = fs.readFileSync(path.join(__dirname, '../collectors/kosh.js'), 'utf8');
 
 // Defaults: a 100x50 source in a 200x100 slot at 2x DPR, flagged unless the SVG guard skips it.
-const stubImg = (src, { natural = [100, 50], slot = [200, 100], srcset = null, pictureSources = 0, crossOrigin = null, complete = true } = {}) => ({
+const stubImg = (src, { natural = [100, 50], slot = [200, 100], srcset = null, pictureSources = 0, crossOrigin = null, complete = true, laidOut = null } = {}) => ({
   currentSrc: src,
   crossOrigin,
   alt: '',
   complete,
   naturalWidth: natural[0],
   naturalHeight: natural[1],
+  offsetWidth: laidOut?.[0],
+  offsetHeight: laidOut?.[1],
   getBoundingClientRect: () => ({ width: slot[0], height: slot[1] }),
   getAttribute: (name) => (name === 'srcset' ? srcset : null),
   parentElement: pictureSources ? { tagName: 'PICTURE', querySelectorAll: () => ({ length: pictureSources }) } : null,
@@ -179,4 +181,23 @@ test('a contained image needs only the size it is drawn at, and scale-down never
 test('padding and border are not part of the slot', () => {
   const framed = { paddingLeft: '30px', paddingRight: '30px', paddingTop: '30px', paddingBottom: '30px', borderLeftWidth: '10px', borderRightWidth: '10px', borderTopWidth: '10px', borderBottomWidth: '10px' };
   assert.equal(run('https://example.com/photo.png', { natural: [400, 400], slot: [280, 280], style: framed }), ALL_FINE);
+});
+
+test('an image with no source yet, like a lazy-load placeholder, is unknown, and a broken SVG is still broken', () => {
+  const [placeholder] = run('', { natural: [0, 0] });
+  assert.equal(placeholder.status, 'unknown');
+  assert.match(placeholder.reason, /placeholder/);
+  assert.equal(run('https://example.com/logo.svg', { natural: [0, 0] })[0].status, 'broken');
+});
+
+test('object-fit: none needs only the image at its own size', () => {
+  const [{ neededForCrisp, diagnosis }] = run('https://example.com/icon.png', { natural: [100, 100], slot: [400, 400], style: { objectFit: 'none' } });
+  assert.equal(neededForCrisp, '200x200px (2x DPR)');
+  assert.match(diagnosis, /measured at the size it is drawn/);
+});
+
+test('a transformed image keeps its padding in proportion, so its slot is what is drawn on screen', () => {
+  const padded = { paddingLeft: '20px', paddingRight: '20px', paddingTop: '20px', paddingBottom: '20px' };
+  const [{ renderedCSS }] = run('https://example.com/photo.png', { natural: [300, 300], slot: [220, 220], laidOut: [440, 440], style: padded });
+  assert.equal(renderedCSS, '200x200px');
 });
