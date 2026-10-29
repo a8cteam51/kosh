@@ -7,14 +7,17 @@ const { JSDOM } = require('jsdom');
 const SOURCE = fs.readFileSync(path.join(__dirname, '../collectors/kosh.js'), 'utf8');
 
 // Defaults: a 100x50 source in a 200x100 slot at 2x DPR, flagged unless the SVG guard skips it.
-const stubImg = (src, { natural = [100, 50], slot = [200, 100], srcset = null, pictureSources = 0, crossOrigin = null } = {}) => ({
+const stubImg = (src, { natural = [100, 50], slot = [200, 100], srcset = null, pictureSources = 0, crossOrigin = null, complete = true, laidOut = null, hidden = false } = {}) => ({
   currentSrc: src,
   crossOrigin,
   alt: '',
-  complete: true,
+  complete,
   naturalWidth: natural[0],
   naturalHeight: natural[1],
+  offsetWidth: laidOut?.[0],
+  offsetHeight: laidOut?.[1],
   getBoundingClientRect: () => ({ width: slot[0], height: slot[1] }),
+  getClientRects: () => (hidden ? [] : [{}]),
   getAttribute: (name) => (name === 'srcset' ? srcset : null),
   parentElement: pictureSources ? { tagName: 'PICTURE', querySelectorAll: () => ({ length: pictureSources }) } : null,
 });
@@ -35,7 +38,7 @@ const run = (src, stub = {}) => {
   const real = stub.real === undefined ? [img.naturalWidth, img.naturalHeight] : stub.real;
   const { window } = new JSDOM('<!doctype html><body></body>', { url: 'https://example.com/', runScripts: 'outside-only' });
   window.eval(SOURCE);
-  Object.assign(window, { devicePixelRatio: 2, getComputedStyle: () => ({ objectFit: 'fill' }), Image: stubProbe(img, real) });
+  Object.assign(window, { devicePixelRatio: 2, getComputedStyle: () => ({ objectFit: 'fill', ...stub.style }), Image: stubProbe(img, real) });
   window.document.querySelectorAll = () => [img];
   return window.__kosh.images();
 };
@@ -160,4 +163,49 @@ test('a probe miss falls back to the DOM size and says so', () => {
 test('an image with no srcset is never probed', () => {
   const [{ diagnosis }] = run('https://example.com/photo.png', { real: null });
   assert.ok(!diagnosis.includes(UNMEASURED), diagnosis);
+});
+
+test('an image that failed to load is broken, and one still loading is unknown', () => {
+  assert.equal(run('https://example.com/missing.jpg', { natural: [0, 0] })[0].status, 'broken');
+  assert.equal(run('https://example.com/lazy.jpg', { natural: [0, 0], complete: false })[0].status, 'unknown');
+});
+
+test('a contained image needs only the size it is drawn at, and scale-down never enlarges it', () => {
+  const contain = { objectFit: 'contain' };
+  assert.equal(run('https://example.com/logo.png', { natural: [800, 200], slot: [400, 400], style: contain }), ALL_FINE);
+  const [{ neededForCrisp }] = run('https://example.com/logo.png', { natural: [300, 100], slot: [400, 400], style: contain });
+  assert.equal(neededForCrisp, '800x267px (2x DPR)');
+  const [{ neededForCrisp: notEnlarged }] = run('https://example.com/logo.png', { natural: [300, 100], slot: [400, 400], style: { objectFit: 'scale-down' } });
+  assert.equal(notEnlarged, '600x200px (2x DPR)');
+});
+
+test('padding and border are not part of the slot', () => {
+  const framed = { paddingLeft: '30px', paddingRight: '30px', paddingTop: '30px', paddingBottom: '30px', borderLeftWidth: '10px', borderRightWidth: '10px', borderTopWidth: '10px', borderBottomWidth: '10px' };
+  assert.equal(run('https://example.com/photo.png', { natural: [400, 400], slot: [280, 280], style: framed }), ALL_FINE);
+});
+
+test('an image with no source yet, like a lazy-load placeholder, is unknown, and a broken SVG is still broken', () => {
+  const [placeholder] = run('', { natural: [0, 0] });
+  assert.equal(placeholder.status, 'unknown');
+  assert.match(placeholder.reason, /placeholder/);
+  assert.equal(run('https://example.com/logo.svg', { natural: [0, 0] })[0].status, 'broken');
+});
+
+test('object-fit: none needs only the image at its own size', () => {
+  const [{ neededForCrisp, diagnosis }] = run('https://example.com/icon.png', { natural: [100, 100], slot: [400, 400], style: { objectFit: 'none' } });
+  assert.equal(neededForCrisp, '200x200px (2x DPR)');
+  assert.match(diagnosis, /measured at the size it is drawn/);
+});
+
+test('a transformed image keeps its padding in proportion, so its slot is what is drawn on screen', () => {
+  const padded = { paddingLeft: '20px', paddingRight: '20px', paddingTop: '20px', paddingBottom: '20px' };
+  const [{ renderedCSS }] = run('https://example.com/photo.png', { natural: [300, 300], slot: [220, 220], laidOut: [440, 440], style: padded });
+  assert.equal(renderedCSS, '200x200px');
+});
+
+test('a broken image with no box, like a decorative alt="" 404, is still broken, unless it is hidden; an unsized placeholder stays out', () => {
+  assert.equal(run('https://example.com/missing.png', { natural: [0, 0], slot: [0, 0] })[0].status, 'broken');
+  assert.equal(run('https://example.com/missing.png', { natural: [0, 0], slot: [0, 0], hidden: true }), ALL_FINE);
+  assert.equal(run('', { natural: [0, 0], slot: [0, 0] }), ALL_FINE);
+  assert.equal(run('https://example.com/missing.png', { natural: [0, 0], slot: [0, 0], style: { paddingLeft: '20px', paddingTop: '20px' } })[0].renderedCSS, '0x0px');
 });
