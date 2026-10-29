@@ -8,7 +8,7 @@ Some WordPress sites are gated and not publicly reachable: the browser loads a c
 
 It returns `{ gate, redirectedTo }`. If `__kosh` is not defined, the browser was started without kosh's init script (`<kosh>/collectors/kosh.js`): stop and tell the user.
 
-If both are `null`, proceed with testing normally.
+If both are `null`, proceed with testing normally. From then on kosh's browser stays on that host: a page on another host, whether you open it or a link or redirect leads there, and a request your own code sends to another host fail with `net::ERR_BLOCKED_BY_CLIENT`. That is kosh keeping the run on the site under test, not a fault in the site, so it isn't a finding on its own; don't look for another way to reach that page.
 
 If `gate` is set (`coming-soon`, `password-protected` or `private`), **do NOT generate a report.** Stop and tell the user which gate was detected, then offer the bypass:
 

@@ -51,8 +51,11 @@ const reportEntries = (entries, reportUrl) => {
   const onSite = siteVisits(entries, reportUrl);
   const browser = onSite.at(-1)?.browser;
   const visits = new Set(onSite.filter((entry) => entry.browser === browser).map((entry) => entry.visit));
-  return entries.filter((entry) => (entry.visit ? visits.has(entry.visit) : entry.type === 'truncated'));
+  return entries.filter((entry) => (entry.visit ? visits.has(entry.visit) : entry.type === 'truncated' || (entry.type === 'wall' && browser && entry.browser === browser)));
 };
+
+// The host the run's browser was held to once the gate check cleared, if it was the report's.
+const heldTo = (entries, reportUrl) => entries.find((entry) => entry.type === 'wall' && host(`https://${entry.host}/`) === host(reportUrl))?.host;
 
 const visitCount = (entries) => entries.filter((entry) => entry.type === 'visit').length;
 const archiveText = (entries) => entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n';
@@ -139,6 +142,9 @@ const merge = (reportPath, flags) => {
   if (report.provenance && typeof report.provenance === 'object') {
     if (visitCount(entries)) report.provenance.captureSha256 = crypto.createHash('sha256').update(archiveText(entries)).digest('hex');
     else delete report.provenance.captureSha256;
+    const held = visitCount(entries) ? heldTo(entries, report.url) : undefined;
+    if (held) report.provenance.heldTo = held;
+    else delete report.provenance.heldTo;
   }
   // Required here because validate-report.js requires this file.
   const { typesFor } = require('./validate-report.js');
@@ -159,6 +165,11 @@ const merge = (reportPath, flags) => {
   ].filter(Boolean);
   console.log(`Page capture merged: ${report.pages.length} page × viewport rows from ${visitCount(entries)} visits on ${host(report.url)}${leftOut.length ? `, leaving out ${leftOut.join(' and ')}` : ''}`);
   if (unlisted.length) console.log(`  Captured but not in visitedPages: ${unlisted.map((page) => `${page.url} (${page.viewport ?? 'no viewport'})`).join(', ')}`);
+  // Only a fresh run is refused: an archive from before the wall re-renders without one.
+  if (report.pages.length && !report.provenance?.heldTo) {
+    console.error(`✗ This run's browser was never held to ${host(report.url)}: the gate check (\`__kosh.gate\`) didn't come back with both fields null in it, so nothing kept the browser on the site. Run the gate check on the homepage in the browser now, then re-run.`);
+    process.exitCode = 1;
+  }
 };
 
 const summary = ([site, ...urls]) => {
