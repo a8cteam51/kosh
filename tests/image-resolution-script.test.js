@@ -1,13 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
 const path = require('path');
-const { fences } = require('./fences.js');
+const { JSDOM } = require('jsdom');
 
-const SKILL = path.join(__dirname, '../skills/functional-design/SKILL.md');
-
-const blocks = fences(SKILL).filter(({ code }) => code.includes('resolutionRatio:'));
-assert.equal(blocks.length, 1, 'expected exactly one javascript block containing "resolutionRatio:" in functional-design/SKILL.md');
-const [{ code: script }] = blocks;
+const SOURCE = fs.readFileSync(path.join(__dirname, '../collectors/kosh.js'), 'utf8');
 
 // Defaults: a 100x50 source in a 200x100 slot at 2x DPR, flagged unless the SVG guard skips it.
 const stubImg = (src, { natural = [100, 50], slot = [200, 100], srcset = null, pictureSources = 0, crossOrigin = null } = {}) => ({
@@ -32,17 +29,15 @@ const stubProbe = (img, real) => class {
   }
 };
 
-// trim() matters: a newline straight after `return` would end the statement.
 // `real` defaults to `natural` (a density-1 pick); `real: null` is a probe miss.
 const run = (src, stub = {}) => {
   const img = stubImg(src, stub);
   const real = stub.real === undefined ? [img.naturalWidth, img.naturalHeight] : stub.real;
-  return new Function('window', 'document', 'getComputedStyle', 'Image', `return ${script.trim()}`)(
-    { devicePixelRatio: 2 },
-    { querySelectorAll: () => [img] },
-    () => ({ objectFit: 'fill' }),
-    stubProbe(img, real)
-  );
+  const { window } = new JSDOM('<!doctype html><body></body>', { url: 'https://example.com/', runScripts: 'outside-only' });
+  window.eval(SOURCE);
+  Object.assign(window, { devicePixelRatio: 2, getComputedStyle: () => ({ objectFit: 'fill' }), Image: stubProbe(img, real) });
+  window.document.querySelectorAll = () => [img];
+  return window.__kosh.images();
 };
 
 const isFlagged = (src) => {
