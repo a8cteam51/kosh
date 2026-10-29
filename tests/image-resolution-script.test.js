@@ -7,7 +7,7 @@ const { JSDOM } = require('jsdom');
 const SOURCE = fs.readFileSync(path.join(__dirname, '../collectors/kosh.js'), 'utf8');
 
 // Defaults: a 100x50 source in a 200x100 slot at 2x DPR, flagged unless the SVG guard skips it.
-const stubImg = (src, { natural = [100, 50], slot = [200, 100], srcset = null, pictureSources = 0, crossOrigin = null, complete = true, laidOut = null } = {}) => ({
+const stubImg = (src, { natural = [100, 50], slot = [200, 100], srcset = null, pictureSources = 0, crossOrigin = null, complete = true, laidOut = null, hidden = false } = {}) => ({
   currentSrc: src,
   crossOrigin,
   alt: '',
@@ -17,6 +17,7 @@ const stubImg = (src, { natural = [100, 50], slot = [200, 100], srcset = null, p
   offsetWidth: laidOut?.[0],
   offsetHeight: laidOut?.[1],
   getBoundingClientRect: () => ({ width: slot[0], height: slot[1] }),
+  getClientRects: () => (hidden ? [] : [{}]),
   getAttribute: (name) => (name === 'srcset' ? srcset : null),
   parentElement: pictureSources ? { tagName: 'PICTURE', querySelectorAll: () => ({ length: pictureSources }) } : null,
 });
@@ -200,4 +201,11 @@ test('a transformed image keeps its padding in proportion, so its slot is what i
   const padded = { paddingLeft: '20px', paddingRight: '20px', paddingTop: '20px', paddingBottom: '20px' };
   const [{ renderedCSS }] = run('https://example.com/photo.png', { natural: [300, 300], slot: [220, 220], laidOut: [440, 440], style: padded });
   assert.equal(renderedCSS, '200x200px');
+});
+
+test('a broken image with no box, like a decorative alt="" 404, is still broken, unless it is hidden; an unsized placeholder stays out', () => {
+  assert.equal(run('https://example.com/missing.png', { natural: [0, 0], slot: [0, 0] })[0].status, 'broken');
+  assert.equal(run('https://example.com/missing.png', { natural: [0, 0], slot: [0, 0], hidden: true }), ALL_FINE);
+  assert.equal(run('', { natural: [0, 0], slot: [0, 0] }), ALL_FINE);
+  assert.equal(run('https://example.com/missing.png', { natural: [0, 0], slot: [0, 0], style: { paddingLeft: '20px', paddingTop: '20px' } })[0].renderedCSS, '0x0px');
 });

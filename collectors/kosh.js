@@ -71,19 +71,22 @@
       // The image is drawn inside the padding and border, which a transform scales with it, so the content box's share of the on-screen box is what needs pixels.
       const inset = (...sides) => sides.reduce((sum, side) => sum + (parseFloat(cs[side]) || 0), 0);
       const content = (onScreen, laidOut, ...sides) => (laidOut ? onScreen * (1 - inset(...sides) / laidOut) : onScreen - inset(...sides));
-      const renderedW = Math.round(content(rect.width, img.offsetWidth, 'paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'));
-      const renderedH = Math.round(content(rect.height, img.offsetHeight, 'paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'));
-      if (renderedW <= 0 || renderedH <= 0) return;
+      const renderedW = Math.max(0, Math.round(content(rect.width, img.offsetWidth, 'paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth')));
+      const renderedH = Math.max(0, Math.round(content(rect.height, img.offsetHeight, 'paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth')));
+      // display:none leaves no layout box, so a hidden image stays out.
+      if (!img.getClientRects().length) return;
 
       const srcUrl = img.currentSrc || img.src || '';
       const about = { src: srcUrl.split('/').pop().substring(0, 60), renderedCSS: `${renderedW}x${renderedH}px`, alt: (img.alt || '(no alt)').substring(0, 40) };
-      // No currentSrc means nothing to load yet, like a lazy-load placeholder; a finished image with a source but no pixels failed.
-      if (!img.currentSrc || !img.complete) {
-        results.push({ ...about, status: 'unknown', reason: img.currentSrc ? 'image not yet loaded — re-run after scroll/wait' : 'no image source yet (a lazy-load placeholder?) — re-run after scroll/wait' });
+      // A finished image with a source but no pixels failed, whatever its size: Chrome lays out a broken alt="" image at 0x0.
+      if (img.currentSrc && img.complete && img.naturalWidth === 0) {
+        results.push({ ...about, status: 'broken', reason: 'the image finished loading with no pixels: its URL is broken or is not an image' });
         return;
       }
-      if (img.naturalWidth === 0) {
-        results.push({ ...about, status: 'broken', reason: 'the image finished loading with no pixels: its URL is broken or is not an image' });
+      if (renderedW <= 0 || renderedH <= 0) return;
+      // No currentSrc means nothing to load yet, like a lazy-load placeholder.
+      if (!img.currentSrc || !img.complete) {
+        results.push({ ...about, status: 'unknown', reason: img.currentSrc ? 'image not yet loaded — re-run after scroll/wait' : 'no image source yet (a lazy-load placeholder?) — re-run after scroll/wait' });
         return;
       }
 
