@@ -217,6 +217,13 @@
     const count = (rules) => rules.reduce((total, rule) => total + rule.nodes.length, 0);
     return { violations: nodes(violations), incomplete: nodes(incomplete), counts: { violations: count(violations), incomplete: count(incomplete) } };
   };
+  // Playwright serializes an unawaited Promise as its own properties, so one left inside a returned object says so instead of reading as `{}`.
+  // Its rejection is marked handled, or the page would log it as the site's error; an await still gets it.
+  const noted = (call, fn) => (...args) => {
+    const promise = fn(...args);
+    promise.catch(() => {});
+    return Object.assign(promise, { notAwaited: `This is a Promise: inside an async function write \`await __kosh.${call}\`, or call it on its own.` });
+  };
 
-  Object.defineProperty(window, '__kosh', { value: Object.freeze({ gate, staticHtml, imageSize, images, contrast }) });
+  Object.defineProperty(window, '__kosh', { value: Object.freeze({ gate, staticHtml: noted('staticHtml(url)', staticHtml), imageSize: noted('imageSize(url)', imageSize), images, contrast: noted('contrast()', contrast) }) });
 })();

@@ -204,6 +204,31 @@ test('contrast: keeps the first 50 nodes of each list, clips their markup and co
   assert.strictEqual(counts.violations, 60);
 });
 
+test("__kosh's async functions: an unawaited one says to await it, and an awaited one is just its result", async () => {
+  const { window } = withAxe({});
+  for (const [name, call] of [['staticHtml', (kosh) => kosh.staticHtml('http://[')], ['imageSize', (kosh) => kosh.imageSize('http://[')], ['contrast', (kosh) => kosh.contrast()]]) {
+    const pending = call(window.__kosh);
+    assert.deepStrictEqual(Object.keys(pending), ['notAwaited'], name);
+    assert.match(pending.notAwaited, new RegExp(`await __kosh\\.${name}\\(`), name);
+    assert.ok(!pending.notAwaited.includes('…'), name);
+    assert.ok(!('notAwaited' in Object(await pending)), name);
+  }
+  assert.match(window.__kosh.contrast().notAwaited, /`await __kosh\.contrast\(\)`/);
+});
+
+test('contrast: an unawaited rejection is marked handled, and an await still gets it', async () => {
+  const window = page('https://example.com/');
+  window.axe = { run: async () => { throw new Error('Axe is already running'); } };
+  const unhandled = [];
+  const listen = (reason) => unhandled.push(reason);
+  process.on('unhandledRejection', listen);
+  window.__kosh.contrast();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  process.off('unhandledRejection', listen);
+  assert.deepStrictEqual(unhandled, []);
+  await assert.rejects(window.__kosh.contrast(), /Axe is already running/);
+});
+
 test('contrast: says so when axe-core was not loaded into the page', async () => {
   assert.match(await page('https://example.com/').__kosh.contrast(), /axe-core is not loaded/);
 });
