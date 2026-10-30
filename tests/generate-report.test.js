@@ -289,6 +289,7 @@ test("a functional report shows each finding's fix and where it goes, its invent
     }],
     linkChecks: [
       { url: 'https://social.example/', outcome: 'checked', status: 999, redirectedTo: null, pathChanged: false },
+      { url: 'https://small-shop.example/members/', outcome: 'checked', status: 403, redirectedTo: null, pathChanged: false },
       { url: 'https://gone.example/', outcome: 'checked', status: 404, redirectedTo: 'https://login.example', pathChanged: true },
     ],
     openQuestions: [{ seen: 'The team page lists names', why: 'Not checked against anything', wouldSettle: 'The client confirms the list' }],
@@ -307,14 +308,15 @@ test("a functional report shows each finding's fix and where it goes, its invent
   assert.match(html, /<dt>Where<\/dt><dd>file: theme\/style\.css:12 — the \.hero rule<\/dd>/);
   assert.match(html, /<dt>WCAG<\/dt><dd>1\.4\.3 Contrast \(Minimum\)<\/dd>/);
   assert.equal((html.match(/<code>\/kosh:a11y<\/code>/g) || []).length, 1, 'only the accessibility finding without a contrast criterion points at the full audit');
-  assert.match(html, />F-01</);
+  assert.match(html, /<span class="finding__id">F-01<\/span>/);
   assert.match(html, /<h2>Pages as loaded<\/h2>/);
   assert.match(html, /<td>Welcome<\/td>/, 'a hidden h1 is not listed as the page\'s h1');
   assert.match(html, /2 <span class="muted">\(1 hidden\)<\/span>/);
   assert.match(html, /1 <span class="muted">\(1 no alt\)<\/span>/);
   assert.match(html, /<td>og:title<\/td>/);
   assert.match(html, /<h2>Off-site links checked<\/h2>/);
-  assert.match(html, /Unverified: likely bot protection/);
+  assert.equal((html.match(/Unverified: the site refused the checker \(bot protection or a login\)/g) || []).length, 2, 'a 999 and a small host\'s 403 both read as unverified, neither as broken');
+  assert.doesNotMatch(html, /likely bot protection/);
   assert.match(html, /https:\/\/login\.example, a different page<\/td>\s*<td>Broken/);
   assert.match(html, /<h2>Open questions<\/h2>[\s\S]*Would settle it:<\/strong> The client confirms the list/);
 });

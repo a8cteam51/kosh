@@ -245,7 +245,7 @@ const renderFinding = (finding, index) => {
   if (finding.fixAt) extraFields.push(`<dt>Where</dt><dd>${escHtml(fixPlace(finding.fixAt))}</dd>`);
   const extraDl = extraFields.length ? `<dl class="finding__extra">${extraFields.join('')}</dl>` : '';
   const device = finding.device ? `<span class="finding__device">${escHtml(finding.device)}</span>` : '';
-  const id = finding.id ? `<span class="finding__device">${escHtml(finding.id)}</span>` : '';
+  const id = finding.id ? `<span class="finding__id">${escHtml(finding.id)}</span>` : '';
   // Functional measures only contrast, so any other accessibility observation points at the full audit.
   const referred = runTypesLabel === 'functional' && finding.category === 'Accessibility' && !finding.wcag
     ? '<p class="check__referred">Run <code>/kosh:a11y</code> for a full accessibility audit: this test measures contrast only.</p>'
@@ -496,11 +496,11 @@ const inventorySection = inventory.length
   </section>`
   : '';
 
-// Large platforms answer an automated check with these when they block bots, so the link may well work.
-const BOT_WALL = new Set([400, 401, 403, 429, 999]);
+// Bot protection and logins answer an automated check with these, so the link may well work for a visitor; which it is depends on the host, the report's to judge.
+const REFUSED = new Set([400, 401, 403, 429, 999]);
 const linkChecks = listOf(report.linkChecks);
 const linkResult = (check) => (check.outcome === 'checked' ? `HTTP ${check.status}` : check.outcome === 'invalid' ? 'Not a URL' : `${check.outcome === 'skipped' ? 'Skipped' : 'Failed'}${check.reason ? `: ${check.reason}` : ''}`);
-const linkNote = (check) => (check.outcome === 'checked' && BOT_WALL.has(check.status) ? 'Unverified: likely bot protection' : check.outcome === 'checked' && check.status >= 400 ? 'Broken' : '');
+const linkNote = (check) => (check.outcome === 'checked' && REFUSED.has(check.status) ? 'Unverified: the site refused the checker (bot protection or a login)' : check.outcome === 'checked' && check.status >= 400 ? 'Broken' : '');
 const linkChecksSection = linkChecks.length
   ? `
   <section class="pages-measured">
@@ -796,6 +796,11 @@ const styles = `
     border-radius: 999px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+  }
+  .finding__id {
+    font-size: 0.75rem;
+    color: ${t.muted};
+    font-variant-numeric: tabular-nums;
   }
   .finding__issue {
     margin: 0.375rem 0;
