@@ -203,7 +203,7 @@
     const nodes = (rules) => rules.flatMap((rule) => rule.nodes).slice(0, MAX_CONTRAST_NODES).map((node) => {
       const data = [...node.any, ...node.all, ...node.none].find((check) => check.data)?.data ?? {};
       return {
-        selector: node.target.flat().join(' '),
+        selector: node.target.map((part) => [part].flat().join(' >>> ')).join(' '),
         html: node.html.length > 150 ? `${node.html.slice(0, 150)}…` : node.html,
         ratio: data.contrastRatio || null,
         threshold: parseFloat(data.expectedContrastRatio) || null,

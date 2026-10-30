@@ -190,7 +190,7 @@ test("contrast: runs only axe's color-contrast rule and returns each node's meas
   const { violations, incomplete, counts } = await window.__kosh.contrast();
   assert.deepStrictEqual(calls.map((options) => [...options.runOnly.values]), [['color-contrast']]);
   assert.deepStrictEqual({ ...violations[0] }, { selector: 'footer > p', html: '<p>text</p>', ratio: 1.67, threshold: 4.5, textColor: '#c8c8c8', background: '#ffffff', fontSize: '12.0pt (16px)', fontWeight: 'normal', reason: null });
-  assert.strictEqual(violations[1].selector, '#host p');
+  assert.strictEqual(violations[1].selector, '#host >>> p');
   assert.deepStrictEqual([incomplete[0].selector, incomplete[0].ratio, incomplete[0].threshold, incomplete[0].background, incomplete[0].reason], ['.wp-block-cover h2', null, 3, null, 'imgNode']);
   assert.deepStrictEqual({ ...counts }, { violations: 2, incomplete: 1 });
 });

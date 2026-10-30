@@ -220,7 +220,7 @@ Run this check with `browser_evaluate` on every page. It runs axe-core's color-c
 () => __kosh.contrast()
 ```
 
-It returns `{ violations, incomplete, counts }`: two lists of elements with `selector`, `html`, `ratio`, `threshold`, `textColor`, `background`, `fontSize`, `fontWeight` and `reason`, each holding at most the first 50, and `counts`, how many of each there were in all. It checks the text on the page as it is, so run it again after opening a menu or scrolling lazy content into view.
+It returns `{ violations, incomplete, counts }`: two lists of elements with `selector`, `html`, `ratio`, `threshold`, `textColor`, `background`, `fontSize`, `fontWeight` and `reason`, each holding at most the first 50, and `counts`, how many of each there were in all. A ` >>> ` in `selector` marks a shadow root: find `#host >>> p` with `document.querySelector('#host').shadowRoot.querySelector('p')`. It checks the text on the page as it is, so run it again after opening a menu or scrolling lazy content into view.
 
 Reading the results:
 
