@@ -134,3 +134,18 @@ test('a finished line prints before slower links are done, still in order', asyn
   const late = await run([`${origin(site)}/slow`, `${origin(site)}/ok`]);
   assert.deepStrictEqual(late.lines, [`200 ${origin(site)}/slow`, `200 ${origin(site)}/ok`]);
 });
+
+// Spawned, not spawnSync, so the stub site in this process can answer the checker.
+test('a link is checked as given and recorded without its credential query pairs', async () => {
+  const env = reportsEnv();
+  const tokened = `${origin(site)}/ok?token=abc&page=2`;
+  const out = await new Promise((resolve) => {
+    let text = '';
+    const child = spawn('node', [SCRIPT, tokened], { env });
+    child.stdout.on('data', (chunk) => { text += chunk; });
+    child.on('close', () => resolve(text));
+  });
+  assert.equal(out.trim().split(' ')[1], tokened, 'the checker requested a different URL than it was given');
+  const [row] = fs.readFileSync(path.join(env.KOSH_REPORTS_DIR, 'data/links-test-session.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.equal(row.url, `${origin(site)}/ok?page=2`);
+});

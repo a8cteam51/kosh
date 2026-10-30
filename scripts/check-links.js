@@ -1,7 +1,7 @@
 // Usage: node check-links.js '<url>'…   each off-site link's status and final origin, never its page or path
 const fs = require('fs');
 const path = require('path');
-const { captureFile, makeReportsDir } = require('../collectors/capture.js');
+const { captureFile, makeReportsDir, redactUrl } = require('../collectors/capture.js');
 
 const POOL = 6;
 const TIMEOUT = 15000;
@@ -37,8 +37,9 @@ const recordFile = () => {
   const session = process.env.CLAUDE_CODE_SESSION_ID;
   return path.join(path.dirname(capture), /^[A-Za-z0-9-]+$/.test(session ?? '') ? `links-${session}.jsonl` : 'links.jsonl');
 };
+// The link is checked as given, but recorded like every URL the capture keeps, without credential query pairs.
 const record = (result) => {
-  const kept = { ...result };
+  const kept = { ...result, url: redactUrl(result.url) || result.url };
   delete kept.where;
   try {
     const file = recordFile();
