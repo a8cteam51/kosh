@@ -210,8 +210,10 @@ test("__kosh's async functions: an unawaited one says to await it, and an awaite
     const pending = call(window.__kosh);
     assert.deepStrictEqual(Object.keys(pending), ['notAwaited'], name);
     assert.match(pending.notAwaited, new RegExp(`await __kosh\\.${name}\\(`), name);
+    assert.ok(!pending.notAwaited.includes('…'), name);
     assert.ok(!('notAwaited' in Object(await pending)), name);
   }
+  assert.match(window.__kosh.contrast().notAwaited, /`await __kosh\.contrast\(\)`/);
 });
 
 test('contrast: an unawaited rejection is marked handled, and an await still gets it', async () => {
