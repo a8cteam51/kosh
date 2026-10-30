@@ -19,6 +19,8 @@ const report = (edit = () => {}) => {
     url: 'https://example.com/',
     websiteName: 'Wrapper Fixture',
     timestamp: '2026-01-01T00:00:00Z',
+    environment: 'production',
+    visitedPages: ['https://example.com/'],
     issues: { critical: [], high: [], medium: [], low: [] },
   };
   edit(r);
@@ -53,13 +55,14 @@ const SKILL_OUTPUT = 'kosh-reports/data/qa-report-functional.json';
 
 test('a report missing a severity list is counted as empty and still archived', (t) => {
   const box = sandbox(t);
-  const json = write(box, 'qa-report-functional.json', report((r) => { delete r.issues.high; }));
+  // Accessibility, since its schema is still an example document: a validated type would refuse the report first.
+  const json = write(box, 'qa-report-accessibility.json', report((r) => { delete r.issues.high; }));
 
   const { status, output } = run(box, WRAPPER, [json]);
 
   assert.equal(status, 0, output);
   assert.match(output, /High Priority Issues: 0/);
-  assert.deepEqual(archived(box), ['WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json']);
+  assert.deepEqual(archived(box), ['WRAPPER_FIXTURE_ACCESSIBILITY_QA_REPORT_2026-01-01.json']);
 });
 
 // The rerun moves the first archived copy aside, which reads that copy by its path.
@@ -144,12 +147,15 @@ test('the report a skill wrote is removed once its stamped copy is archived', (t
   assert.ok(JSON.parse(fs.readFileSync(archiveCopy(box), 'utf8')).provenance.seal, 'the archive copy is unstamped');
 });
 
+const WALL = { type: 'wall', browser: 'run', host: 'example.com' };
+// A run's browser, held to the site once the gate check on its first page cleared.
 const CAPTURE = [
-  { type: 'visit', visit: 'a-1', url: 'https://example.com/' },
+  { type: 'visit', visit: 'a-1', browser: 'run', url: 'https://example.com/' },
   { type: 'load', visit: 'a-1', loadTime: 900 },
-  { type: 'visit', visit: 'a-2', url: 'https://other-client.example.org/' },
+  WALL,
+  { type: 'visit', visit: 'a-2', browser: 'run', url: 'https://other-client.example.org/' },
   { type: 'console', visit: 'a-2', level: 'error', text: 'another client' },
-  { type: 'visit', visit: 'a-3', url: 'https://www.example.com/about/' },
+  { type: 'visit', visit: 'a-3', browser: 'run', url: 'https://www.example.com/about/' },
   { type: 'network', visit: 'a-3', url: 'https://cdn.example.net/app.js', status: 404 },
   { type: 'truncated', reason: 'file' },
 ];
@@ -162,6 +168,36 @@ const writeCapture = (box, session, entries = CAPTURE) => {
 };
 const archivedCapture = (box, suffix = '') => path.join(box.reportsDir, 'data', 'archive', `WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01${suffix}.capture.jsonl`);
 const lines = (file) => fs.readFileSync(file, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+
+test("a fresh functional run whose browser wasn't held to the site is refused, as performance's is", (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, CAPTURE.filter((entry) => entry !== WALL));
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /This run's browser wasn't held to example\.com/);
+  assert.ok(!fs.existsSync(path.join(box.reportsDir, 'data', 'archive')), output);
+});
+
+test("a functional report takes its session's link checks, numbers its findings, and leaves no checks for the next run", (t) => {
+  const box = sandbox(t);
+  const json = write(box, SKILL_OUTPUT, report((r) => { r.issues.high = [{ category: 'Links', issue: 'x', impact: 'y', fix: 'z', device: 'both', pages: ['https://example.com/'] }]; }));
+  writeCapture(box, SESSION, [{ ...CAPTURE[0], at: '2026-01-01T00:00:00.000Z' }, ...CAPTURE.slice(1)]);
+  const links = path.join(box.reportsDir, 'data', `links-${SESSION}.jsonl`);
+  const check = (at, url, status) => JSON.stringify({ at, url, outcome: 'checked', status, redirectedTo: null, pathChanged: false });
+  fs.writeFileSync(links, `${check('2025-12-31T23:00:00.000Z', 'https://earlier-run.example/', 200)}\n${check('2026-01-01T00:05:00.000Z', 'https://x.example/', 404)}\n`);
+
+  const { status, output } = run(box, WRAPPER, [json]);
+
+  assert.equal(status, 0, output);
+  assert.match(output, /and 1 link check\b/);
+  const saved = JSON.parse(fs.readFileSync(path.join(box.reportsDir, 'data', 'archive', archived(box).find((name) => name.endsWith('.json'))), 'utf8'));
+  assert.deepEqual(saved.linkChecks.map((row) => [row.url, row.status]), [['https://x.example/', 404]]);
+  assert.deepEqual(saved.issues.high.map((finding) => finding.id), ['F-01']);
+  assert.ok(Array.isArray(saved.inventory));
+  assert.ok(!fs.existsSync(links), "the link checks are still there for the next run to inherit");
+});
 
 test("a skill's rendered report takes its session's page capture, for its own host only", (t) => {
   const box = sandbox(t);
@@ -179,17 +215,18 @@ test("a skill's rendered report takes its session's page capture, for its own ho
 test('a page that redirected off the report host mid-run stays in its capture', (t) => {
   const box = sandbox(t);
   const redirected = [
-    { type: 'visit', visit: 'b-1', url: 'https://example.com/', redirectedFrom: [] },
-    { type: 'visit', visit: 'b-2', url: 'https://shop.example.com/cart/', redirectedFrom: ['https://example.com/shop/'] },
+    { type: 'visit', visit: 'b-1', browser: 'run', url: 'https://example.com/', redirectedFrom: [] },
+    WALL,
+    { type: 'visit', visit: 'b-2', browser: 'run', url: 'https://shop.example.com/cart/', redirectedFrom: ['https://example.com/shop/'] },
     { type: 'network', visit: 'b-2', url: 'https://shop.example.com/cart.js', status: 404 },
-    { type: 'visit', visit: 'b-3', url: 'https://cdn.example.net/x', redirectedFrom: ['https://other-client.example.org/go'] },
+    { type: 'visit', visit: 'b-3', browser: 'run', url: 'https://cdn.example.net/x', redirectedFrom: ['https://other-client.example.org/go'] },
   ];
   writeCapture(box, SESSION, redirected);
 
   const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
 
   assert.equal(status, 0, output);
-  assert.deepEqual(lines(archivedCapture(box)).map((entry) => entry.visit), ['b-1', 'b-2', 'b-2']);
+  assert.deepEqual(lines(archivedCapture(box)).map((entry) => entry.visit ?? entry.type), ['b-1', 'wall', 'b-2', 'b-2']);
 });
 
 test("another session's capture is left alone, and named in the warning", (t) => {
@@ -248,14 +285,14 @@ test('a same-day rerun moves the previous capture aside with its report', (t) =>
   const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report((r) => { r.timestamp = '2026-01-01T09:00:00Z'; }))]);
 
   assert.equal(status, 0, output);
-  assert.equal(lines(archivedCapture(box, '_2026-01-01T00-00-00Z')).length, 5);
-  assert.equal(lines(archivedCapture(box)).length, 5);
+  assert.equal(lines(archivedCapture(box, '_2026-01-01T00-00-00Z')).length, 6);
+  assert.equal(lines(archivedCapture(box)).length, 6);
 });
 
 test("rendering the same report again keeps each run's capture beside its own JSON", (t) => {
   const box = sandbox(t);
   for (const loadTime of [900, 950]) {
-    writeCapture(box, SESSION, [CAPTURE[0], { ...CAPTURE[1], loadTime }]);
+    writeCapture(box, SESSION, [CAPTURE[0], { ...CAPTURE[1], loadTime }, WALL]);
     assert.equal(run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]).status, 0);
   }
 
@@ -295,10 +332,11 @@ test('a report with no url drops the capture with a warning', (t) => {
   const box = sandbox(t);
   const capture = writeCapture(box);
 
-  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report((r) => { delete r.url; }))]);
+  // Accessibility, since a validated type would refuse a report with no url before its capture is archived.
+  const { status, output } = run(box, WRAPPER, [write(box, 'kosh-reports/data/qa-report-accessibility.json', report((r) => { delete r.url; }))]);
 
   assert.equal(status, 0, output);
-  assert.match(output, /no usable url, so this session's page capture \(7 entries\) was dropped/);
+  assert.match(output, /no usable url, so this session's page capture \(8 entries\) was dropped/);
   assert.ok(!fs.existsSync(capture));
   assert.ok(!fs.existsSync(archivedCapture(box)));
 });
@@ -381,7 +419,6 @@ const performanceReport = (edit = () => {}) => report((r) => {
   edit(r);
 });
 // The capture holds the browser to the site once the gate check clears.
-const WALL = { type: 'wall', browser: 'run', host: 'example.com' };
 const MEASURED = [
   { type: 'visit', visit: 'p-1', browser: 'run', url: 'https://example.com/', status: 200, redirectedFrom: [] },
   { type: 'load', visit: 'p-1', viewport: { width: 1920, height: 1080 }, loadTime: 900, domContentLoaded: 500, ttfb: 80, transferSize: 4000, resourceTransferSize: 60000 },
@@ -415,15 +452,15 @@ test("a performance report's pages[] is built from the capture, replacing the mo
 
 const INVENTED = (r) => { r.pages = buildPages(MEASURED).map((page) => ({ ...page, loadTime: 1, lcp: 1 })); };
 
-test('a report with pages[] gets them from the capture whatever its name says', (t) => {
+test('a functional report with pages[] is refused, so its invented rows never render', (t) => {
   const box = sandbox(t);
   writeCapture(box, SESSION, MEASURED);
 
   const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, performanceReport(INVENTED))]);
 
-  assert.equal(status, 0, output);
-  const archivedReport = JSON.parse(fs.readFileSync(path.join(box.reportsDir, 'data', 'archive', 'WRAPPER_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json'), 'utf8'));
-  assert.deepEqual(archivedReport.pages.map(({ loadTime, lcp }) => [loadTime, lcp]), [[900, 700]]);
+  assert.notEqual(status, 0, output);
+  assert.match(output, /must NOT have additional properties: pages/);
+  assert.ok(!fs.existsSync(path.join(box.reportsDir, 'data', 'archive')), output);
 });
 
 for (const [output, flags] of [[PERFORMANCE_OUTPUT, ['--functional']], [SKILL_OUTPUT, ['--functional', '--performance']]]) {
@@ -576,6 +613,7 @@ test("a skill report's timestamp is when its browser first loaded a page, not wh
   const box = sandbox(t);
   writeCapture(box, SESSION, [
     { at: '2026-03-04T05:06:07.890Z', type: 'visit', visit: 'v-1', browser: 'run', url: 'https://example.com/', status: 200, redirectedFrom: [] },
+    WALL,
     { at: '2026-03-04T05:09:00.000Z', type: 'visit', visit: 'v-2', browser: 'run', url: 'https://example.com/about/', status: 200, redirectedFrom: [] },
   ]);
   const ran = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report((r) => { r.timestamp = '2026-01-01T09:00:00Z'; }))]);
@@ -596,7 +634,7 @@ test('the renderer names and dates a report with no usable timestamp undated ins
   for (const written of ['YYYY-MM-DDTHH:MM:SSZ', 'ISO-8601']) {
     const box = sandbox(t);
     const json = write(box, 'copied-report.json', report((r) => { r.timestamp = written; }));
-    const { status, output } = run(box, 'node', [RENDERER, json, '--functional']);
+    const { status, output } = run(box, 'node', [RENDERER, json, '--accessibility']);
     assert.equal(status, 0, output);
     const html = fs.readdirSync(box.reportsDir).find((name) => name.endsWith('_undated.html'));
     assert.ok(html, `${written}: ${output}`);

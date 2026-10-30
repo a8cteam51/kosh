@@ -1,8 +1,9 @@
-// Usage: node page-capture.js summary <site-url> [<page-url>…] | merge <report.json> [--<type>]
+// Usage: node page-capture.js summary <site-url> [<page-url>…] | inventory <site-url> [<page-url>…] | merge <report.json> [--<type>]
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { CAPTURE_NAME, captureFile, redactUrl, siteHost: host } = require('../collectors/capture.js');
+const { recordFile } = require('./check-links.js');
 
 const normal = (url) => {
   try {
@@ -121,6 +122,65 @@ const buildPages = (entries) => {
   return [...pages.values()];
 };
 
+// The page as it loaded, first visit per page and viewport, as functional's page table: what the model would otherwise transcribe.
+const INVENTORY_FIELDS = ['title', 'counts', 'headings', 'links', 'images', 'meta'];
+const buildInventory = (entries) => {
+  const visits = new Map(entries.filter((entry) => entry.type === 'visit').map((entry) => [entry.visit, { entry, load: null, inventory: null }]));
+  for (const entry of entries) {
+    const visit = visits.get(entry.visit);
+    if (visit && (entry.type === 'load' || entry.type === 'inventory')) visit[entry.type] = entry;
+  }
+  const rows = new Map();
+  for (const { entry, load, inventory } of visits.values()) {
+    if (load?.gate) continue;
+    const viewport = viewportOf(load?.viewport);
+    const key = `${normal(entry.url)} ${viewport}`;
+    // A later load stands in only for one whose inventory couldn't be read.
+    if (rows.has(key) && !(rows.get(key).notRead && inventory)) continue;
+    rows.set(key, {
+      url: entry.url,
+      redirectedFrom: entry.redirectedFrom ?? [],
+      viewport,
+      status: entry.status ?? null,
+      ...(entry.failure && { failure: entry.failure }),
+      ...(inventory ? Object.fromEntries(INVENTORY_FIELDS.map((field) => [field, inventory[field]])) : { notRead: true }),
+    });
+  }
+  return [...rows.values()];
+};
+
+// The link checker's results since this run's browser first loaded a page, the latest per link: a run starts by closing the browser, so earlier rows are an earlier run's.
+const readLinkChecks = (file, since) => {
+  const latest = new Map();
+  for (const row of readEntries(file)) {
+    if (row && typeof row.url === 'string' && !(since && row.at < since)) latest.set(row.url, { url: row.url, outcome: row.outcome, status: number(row.status), redirectedTo: row.redirectedTo ?? null, pathChanged: row.pathChanged === true, ...(row.reason && { reason: String(row.reason) }) });
+  }
+  return [...latest.values()];
+};
+
+// IDs a later verdict can point at, numbered in the order the report lists its findings.
+const numberFindings = (issues) => {
+  let n = 0;
+  for (const severity of ['critical', 'high', 'medium', 'low']) {
+    for (const finding of Array.isArray(issues?.[severity]) ? issues[severity] : []) {
+      if (finding && typeof finding === 'object') finding.id = `F-${String(++n).padStart(2, '0')}`;
+    }
+  }
+};
+
+// A fix pointed at a file has to point at one in the folder the run started in.
+const badFileFixes = (issues, cwd = process.cwd()) => ['critical', 'high', 'medium', 'low'].flatMap((severity) => (Array.isArray(issues?.[severity]) ? issues[severity] : []))
+  .filter((finding) => finding?.fixAt?.kind === 'file')
+  .flatMap(({ id, fixAt }) => {
+    const file = path.resolve(cwd, String(fixAt.path ?? ''));
+    if (!fixAt.path || path.isAbsolute(String(fixAt.path)) || !file.startsWith(cwd + path.sep)) return [`${id}: fixAt.path must be a path inside ${cwd}, relative to it`];
+    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return [`${id}: no file at ${fixAt.path}`];
+    const text = fs.readFileSync(file, 'utf8');
+    // A final newline ends the last line rather than starting another.
+    const lines = text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+    return fixAt.line !== undefined && !(Number.isInteger(fixAt.line) && fixAt.line >= 1 && fixAt.line <= lines) ? [`${id}: ${fixAt.path} has ${lines} lines, not a line ${fixAt.line}`] : [];
+  });
+
 const covers = (page, url) => [page.url, ...page.redirectedFrom].some((seen) => normal(seen) === normal(url));
 const uncovered = (urls, pages) => urls.filter((url) => !pages.some((page) => covers(page, url)));
 
@@ -155,9 +215,19 @@ const merge = (reportPath, flags) => {
     if (held) report.provenance.heldTo = held;
     else delete report.provenance.heldTo;
   }
-  const performance = typesFor(flags, report).includes('performance');
+  const types = typesFor(flags, report);
+  const performance = types.includes('performance');
   if (performance) report.pages = buildPages(entries);
+  const functional = types.includes('functional');
+  if (functional) {
+    // Without a capture there's nothing to check visitedPages against, and the warning above says why.
+    if (visitCount(entries)) report.inventory = buildInventory(entries);
+    else delete report.inventory;
+    report.linkChecks = readLinkChecks(recordFile(), started);
+    numberFindings(report.issues);
+  }
   fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  if (functional) return mergedFunctional(report, entries);
   if (!performance) return;
 
   const listed = report.visitedPages ?? [];
@@ -179,6 +249,20 @@ const merge = (reportPath, flags) => {
   }
 };
 
+const mergedFunctional = (report, entries) => {
+  console.log(`Page inventory merged: ${report.inventory?.length ?? 0} page × viewport rows from ${visitCount(entries)} visits on ${host(report.url)}, and ${report.linkChecks.length} link check${report.linkChecks.length === 1 ? '' : 's'}`);
+  const bad = badFileFixes(report.issues);
+  if (bad.length) {
+    console.error(`✗ A finding's fixAt names a file that isn't there:\n${bad.map((line) => `  ${line}`).join('\n')}\nUse kind "file" only for a file in the folder this run started in, or describe the fix in fixAt.detail with another kind.`);
+    process.exitCode = 1;
+  }
+  // Only a fresh run is refused, as for performance: without a capture there's no inventory, and an old archive re-renders.
+  if (report.inventory?.length && !report.provenance?.heldTo) {
+    console.error(`✗ This run's browser wasn't held to ${host(report.url)}: the gate check (\`__kosh.gate\`) has to come back with both fields null on the first page, before any other is loaded, or nothing keeps the browser on the site. Close the browser with browser_close and run the skill again from the start.`);
+    process.exitCode = 1;
+  }
+};
+
 const summary = ([site, ...urls]) => {
   const file = captureFile();
   const pages = buildPages(reportEntries([...readEntries(takenFile(file)), ...readEntries(file)], site));
@@ -187,14 +271,53 @@ const summary = ([site, ...urls]) => {
   console.log(missing.length ? `No visit captured yet for: ${missing.join(', ')}` : 'Every page given has a captured visit.');
 };
 
-module.exports = { archiveText, buildPages, host, readEntries, reportEntries, take, takenFile, uncovered, visitCount };
+// What functional's checks read from the inventory, small enough to print: each page's outline, then every link once, the site's own apart from the rest.
+const inventoryView = (rows, site) => {
+  const links = new Map();
+  const pages = rows.map((row) => {
+    for (const link of row.links ?? []) if (!links.has(link.href)) links.set(link.href, link.text);
+    if (row.notRead) return { url: row.url, viewport: row.viewport, status: row.status, notRead: true };
+    const headings = row.headings ?? [];
+    return {
+      url: row.url,
+      viewport: row.viewport,
+      status: row.status,
+      title: row.title,
+      counts: row.counts,
+      h1: headings.filter((heading) => heading.tag === 'h1' && !heading.hidden).map((heading) => heading.text),
+      headings: headings.map((heading) => `${heading.tag}${heading.hidden ? ' (hidden)' : ''}: ${heading.text}`),
+      hiddenLinks: (row.links ?? []).filter((link) => link.hidden).length,
+      imagesWithoutAlt: (row.images ?? []).filter((image) => image.alt === null).map((image) => image.src),
+      meta: row.meta,
+    };
+  });
+  const group = (test) => [...links].filter(([href]) => test(href)).map(([href, text]) => ({ text, href }));
+  const web = (href) => /^https?:/i.test(href);
+  return {
+    pages,
+    siteLinks: group((href) => web(href) && host(href) === host(site)),
+    offSiteLinks: group((href) => web(href) && host(href) !== host(site)),
+    otherLinks: group((href) => !web(href)),
+  };
+};
+
+const inventory = ([site, ...urls]) => {
+  const file = captureFile();
+  const rows = buildInventory(reportEntries([...readEntries(takenFile(file)), ...readEntries(file)], site));
+  console.log(JSON.stringify(inventoryView(rows, site), null, 2));
+  const missing = uncovered([site, ...urls], rows);
+  console.error(missing.length ? `No visit captured yet for: ${missing.join(', ')}` : 'Every page given has a captured visit.');
+};
+
+module.exports = { archiveText, badFileFixes, buildInventory, buildPages, host, inventoryView, numberFindings, readEntries, readLinkChecks, reportEntries, take, takenFile, uncovered, visitCount };
 
 if (require.main === module) {
   const [command, ...args] = process.argv.slice(2);
   if (command === 'merge' && args[0]) merge(args[0], args.slice(1));
   else if (command === 'summary' && host(args[0])) summary(args);
+  else if (command === 'inventory' && host(args[0]) && args.every((url) => host(url))) inventory(args);
   else {
-    console.error('Usage: node page-capture.js summary <site-url> [<page-url>…] | merge <report.json> [--<type>]');
+    console.error('Usage: node page-capture.js summary <site-url> [<page-url>…] | inventory <site-url> [<page-url>…] | merge <report.json> [--<type>]\nEvery URL is a full one, starting with https:// or http://.');
     process.exitCode = 1;
   }
 }

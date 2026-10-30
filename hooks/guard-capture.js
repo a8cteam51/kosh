@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { CAPTURE_NAME, reportsDir } = require('../collectors/capture.js');
 
-// kosh's own layout, so it holds from any folder and in any checkout.
-const IN_REPORTS = /kosh-reports\/data\/[^\s]*capture[^\s]*\.jsonl/i;
+// kosh's own layout, so it holds from any folder and in any checkout. The link checker's record is sealed into a report like the capture.
+const IN_REPORTS = /kosh-reports\/data\/[^\s]*(?:capture|links)[^\s]*\.jsonl/i;
 
 // Broader patterns only for commands that can reach a kosh-reports/ kosh has run in, since plugin hooks run in every project.
 const IN_KOSH = [
@@ -15,7 +15,7 @@ const IN_KOSH = [
 ];
 
 // This session's capture, by the variable or by its id: the file the merge reads, a name no other project uses, so it's refused everywhere.
-const namesSession = (text, session) => new RegExp(`capture-["']?\\$\\{?CLAUDE_CODE_SESSION_ID\\b${/^[A-Za-z0-9-]+$/.test(session ?? '') ? `|capture-${session}` : ''}`, 'i').test(text);
+const namesSession = (text, session) => new RegExp(`(?:capture|links)-["']?\\$\\{?CLAUDE_CODE_SESSION_ID\\b${/^[A-Za-z0-9-]+$/.test(session ?? '') ? `|(?:capture|links)-${session}` : ''}`, 'i').test(text);
 
 // The real path with the case the disk uses, through the nearest folder that exists.
 const real = (file) => {
@@ -69,6 +69,6 @@ process.stdin.on('end', () => {
   let call;
   try { call = JSON.parse(input); } catch { return; }
   if (!blocked(call)) return;
-  process.stderr.write("Blocked: page capture files (kosh-reports/data/capture-*.jsonl and archive/*.capture.jsonl) are written only by the browser. Don't create, edit, move or delete them. If a page is missing from the capture, load it in the browser again. To look at one, use the Read tool.\n");
+  process.stderr.write("Blocked: page capture files (kosh-reports/data/capture-*.jsonl and archive/*.capture.jsonl) are written only by the browser, and link checks (kosh-reports/data/links-*.jsonl) only by kosh's link checker. Don't create, edit, move or delete them. If a page is missing from the capture, load it in the browser again; if a link needs checking again, run the link checker. To look at one, use the Read tool.\n");
   process.exitCode = 2;
 });

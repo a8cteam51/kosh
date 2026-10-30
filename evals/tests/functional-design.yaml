@@ -5,15 +5,16 @@ config:
       - type: skill-used
         value: functional-design
 tests:
-  - description: WCAG cited for contrast only, /kosh:a11y recommended for the rest
+  - description: WCAG cited for contrast only, and the other accessibility observation filed as Accessibility
     vars:
       request: |
         During desktop testing on the About page, https://example.com/about/,
         you observed two problems:
 
         1. Six content images have no alt text.
-        2. The Section 1.5 contrast script flagged footer body text
-           (16px, weight 400) at a ratio of 3.2 against a threshold of 4.5.
+        2. The contrast check (`__kosh.contrast()`) returned a violation for
+           footer body text (16px, weight 400) at a ratio of 3.2 against a
+           threshold of 4.5.
            You saved a screenshot of the footer at
            kosh-reports/screenshots/about-footer-desktop.png.
 
@@ -27,13 +28,13 @@ tests:
         value: '1.4.3'
       - type: not-contains
         value: '1.1.1'
-      - type: contains
-        value: 'kosh:a11y'
+      - type: regex
+        value: '"category"\s*:\s*"Accessibility"'
 
   - description: Markup-category image finding recommends a sizes fix, not a re-upload
     vars:
       request: |
-        The Section 1.4 image resolution script returned this result on the
+        The image check (`__kosh.images()`) returned this result on the
         homepage:
 
         {
@@ -63,7 +64,7 @@ tests:
   - description: Source-category image finding points at the asset, not the markup
     vars:
       request: |
-        The Section 1.4 image resolution script returned this result on the
+        The image check (`__kosh.images()`) returned this result on the
         homepage:
 
         {
@@ -93,7 +94,7 @@ tests:
   - description: Request-category image finding fixes the requested size, not the upload
     vars:
       request: |
-        The Section 1.4 image resolution script returned this result on a
+        The image check (`__kosh.images()`) returned this result on a
         blog post:
 
         {
@@ -123,7 +124,7 @@ tests:
   - description: Request-category finding still owns the fix when the CDN rounded a pixel off the requested size
     vars:
       request: |
-        The Section 1.4 image resolution script returned this result on a
+        The image check (`__kosh.images()`) returned this result on a
         blog post:
 
         {
@@ -216,7 +217,7 @@ tests:
   - description: The off-site rule doesn't stop measuring a CDN image's original, through kosh's image-size call
     vars:
       request: |
-        The Section 1.4 image resolution script flagged the homepage hero on
+        The image check (`__kosh.images()`) flagged the homepage hero on
         https://example.com/ with `diagnosisCategory` `request`. Its picked src is
         https://i0.wp.com/example.com/wp-content/uploads/2026/10/hero.jpg?resize=768%2C512&ssl=1,
         served from the image CDN host i0.wp.com, not example.com.
@@ -256,8 +257,8 @@ tests:
   - description: Text axe couldn't measure is judged by eye and reported with no invented ratio
     vars:
       request: |
-        On the homepage, https://example.com/, at desktop, the Section 1.5
-        contrast check returned:
+        On the homepage, https://example.com/, at desktop, the contrast
+        check (`__kosh.contrast()`) returned:
 
         {
           "violations": [],
@@ -299,8 +300,8 @@ tests:
   - description: An icon-font glyph axe couldn't measure is skipped, not reported
     vars:
       request: |
-        On the About page, https://example.com/about/, at desktop, the Section
-        1.5 contrast check returned:
+        On the About page, https://example.com/about/, at desktop, the contrast check
+        (`__kosh.contrast()`) returned:
 
         {
           "violations": [],

@@ -175,6 +175,57 @@ const readTiming = () => new Promise((resolve) => {
   read();
 });
 
+// What the page holds when it loads, for functional's page table; a link or heading with no layout box (another breakpoint's copy, a closed menu) is marked hidden.
+const readInventory = () => {
+  const text = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const all = (selector) => [...document.querySelectorAll(selector)];
+  const hidden = (element) => (element.getClientRects().length ? {} : { hidden: true });
+  const meta = (key) => document.querySelector(`meta[property="${key}"], meta[name="${key}"]`)?.getAttribute('content') ?? null;
+  const links = all('a[href]');
+  const images = all('img');
+  const headings = all('h1, h2, h3, h4, h5, h6');
+  return {
+    title: document.title,
+    counts: { links: links.length, images: images.length, headings: headings.length },
+    headings: headings.slice(0, 100).map((heading) => ({ tag: heading.tagName.toLowerCase(), text: text(heading.textContent), ...hidden(heading) })),
+    links: links.slice(0, 300).map((link) => ({ text: text(link.textContent || link.getAttribute('aria-label') || link.querySelector('img')?.alt), href: link.href, ...hidden(link) })),
+    images: images.slice(0, 150).map((image) => ({ src: image.currentSrc || image.src, alt: image.getAttribute('alt') })),
+    meta: {
+      description: meta('description'),
+      ogTitle: meta('og:title'), ogDescription: meta('og:description'), ogImage: meta('og:image'), ogUrl: meta('og:url'), ogType: meta('og:type'),
+      twitterCard: meta('twitter:card'), twitterTitle: meta('twitter:title'), twitterDescription: meta('twitter:description'), twitterImage: meta('twitter:image'),
+      canonical: document.querySelector('link[rel="canonical"]')?.href ?? null,
+      appleTouchIcon: document.querySelector('link[rel="apple-touch-icon"]')?.href ?? null,
+    },
+  };
+};
+
+const MAX_LABEL = 120;
+const MAX_META = 300;
+const LIMITS = { headings: 100, links: 300, images: 150 };
+// The page answers in its own world, so its sizes and shapes are checked again here.
+const inventoryEntry = (read) => {
+  const list = (key, map) => (Array.isArray(read?.[key]) ? read[key].slice(0, LIMITS[key]).filter((item) => item && typeof item === 'object').map(map) : []);
+  const label = (value) => clip(value, MAX_LABEL);
+  const url = (value) => clip(redactUrl(String(value ?? '')), MAX_URL);
+  const hidden = (item) => (item.hidden === true ? { hidden: true } : {});
+  const count = (key) => (Number.isInteger(read?.counts?.[key]) ? read.counts[key] : null);
+  const meta = Object.fromEntries(['description', 'ogTitle', 'ogDescription', 'ogImage', 'ogUrl', 'ogType', 'twitterCard', 'twitterTitle', 'twitterDescription', 'twitterImage', 'canonical', 'appleTouchIcon']
+    .map((key) => {
+      const value = read?.meta?.[key];
+      // A share tag's URL that doesn't parse, like a relative og:image, is kept as written: that it isn't absolute is the finding.
+      return [key, typeof value !== 'string' ? null : /^(og(Image|Url)|twitterImage|canonical|appleTouchIcon)$/.test(key) ? clip(redactUrl(value) || value, MAX_URL) : clip(value, MAX_META)];
+    }));
+  return {
+    title: clip(read?.title, MAX_META),
+    counts: { headings: count('headings'), links: count('links'), images: count('images') },
+    headings: list('headings', (item) => ({ tag: /^h[1-6]$/.test(item.tag) ? item.tag : 'h?', text: label(item.text), ...hidden(item) })),
+    links: list('links', (item) => ({ text: label(item.text), href: url(item.href), ...hidden(item) })),
+    images: list('images', (item) => ({ src: url(item.src), alt: typeof item.alt === 'string' ? label(item.alt) : null })),
+    meta,
+  };
+};
+
 // CLS is the largest burst of shifts under 1 s apart and at most 5 s long, leaving out shifts just after input: https://web.dev/articles/cls
 const readVitals = () => {
   const buffered = (type) => {
@@ -285,6 +336,8 @@ exports.isOrder = isOrder;
 exports.EVALUATE_URL = EVALUATE_URL;
 exports.readTiming = readTiming;
 exports.readVitals = readVitals;
+exports.readInventory = readInventory;
+exports.inventoryEntry = inventoryEntry;
 exports.WALL_WAIT_MS = WALL_WAIT_MS;
 exports.siteHost = siteHost;
 
@@ -362,7 +415,11 @@ exports.default = async ({ page }) => {
       // A redirect on load can answer for the next document.
       if (documentUrl !== undefined && bare(documentUrl) !== bare(visit.url)) return write({ type: 'load', visit: visit.id, viewport: load.viewport, loadTime: null, error: 'the timing came from another document' });
       write({ type: 'load', visit: visit.id, ...load });
-      if (load.loadTime !== null) await recordVitals(visit, timeOrigin);
+      if (load.loadTime === null) return;
+      try {
+        write({ type: 'inventory', visit: visit.id, ...inventoryEntry(await page.evaluate(readInventory)) });
+      } catch {}
+      await recordVitals(visit, timeOrigin);
     };
 
     const newVisit = (url) => ({ id: `${processId}-${++visits}`, url, status: null, redirectedFrom: [], loaded: false, rows: 0 });

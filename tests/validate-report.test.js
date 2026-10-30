@@ -239,23 +239,50 @@ test('a report with no detectable type renders with a note that it was not valid
 });
 
 test('a type whose schema is still an example document renders without validation', (t) => {
-  const { status, output } = run(t, 'qa-report-functional.json', plainReport);
+  const { status, output } = run(t, 'qa-report-accessibility.json', plainReport);
 
   assert.equal(status, 0, output);
-  assert.match(output, /no JSON Schema for functional yet, not validated/);
+  assert.match(output, /no JSON Schema for accessibility yet, not validated/);
+});
+
+test('a functional report is validated, and a finding without a fix or with a key the schema lacks is refused', (t) => {
+  const valid = { ...plainReport, environment: 'production', visitedPages: ['https://example.com/'] };
+  assert.match(run(t, 'qa-report-functional.json', valid).output, /✓ Schema: valid against \S*\/schemas\/qa-report-functional-schema\.json/);
+
+  const finding = { category: 'Design', issue: 'a', impact: 'b', device: 'both', pages: ['https://example.com/'], recommendation: 'c' };
+  const { status, output } = run(t, 'qa-report-functional.json', { ...valid, issues: { ...valid.issues, high: [finding] } });
+  assert.notEqual(status, 0, output);
+  assert.match(output, /\/issues\/high\/0 must have required property 'fix'/);
+  assert.match(output, /\/issues\/high\/0 must NOT have additional properties: recommendation/);
+});
+
+test("a functional report's inventory must be the merge's, and cover every visited page", (t) => {
+  const row = { url: 'https://example.com/', redirectedFrom: [], viewport: '1920x1080', status: 200, title: 'Home' };
+  const valid = { ...plainReport, environment: 'production', visitedPages: ['https://example.com/'] };
+
+  const invented = run(t, 'qa-report-functional.json', { ...valid, inventory: [row] });
+  assert.notEqual(invented.status, 0, invented.output);
+  assert.match(invented.output, /inventory\[\] has rows the page capture didn't write/);
+
+  const merged = { ...valid, provenance: { model: 'claude-test-1', captureSha256: 'a'.repeat(64) }, inventory: [row] };
+  const uncovered = run(t, 'qa-report-functional.json', { ...merged, visitedPages: ['https://example.com/', 'https://example.com/about/'] });
+  assert.notEqual(uncovered.status, 0, uncovered.output);
+  assert.match(uncovered.output, /visitedPages lists pages the browser has no record of loading:\n {2}https:\/\/example\.com\/about\//);
+
+  assert.equal(run(t, 'qa-report-functional.json', merged).status, 0);
 });
 
 test('a compact report with no websiteName still reaches the renderer', (t) => {
   const { websiteName, ...report } = plainReport;
 
-  const { status, output } = run(t, 'qa-report-functional.json', report, { space: 0 });
+  const { status, output } = run(t, 'qa-report-accessibility.json', report, { space: 0 });
 
   assert.equal(status, 0, output);
   assert.match(output, /^HTML report generated: /m);
 });
 
 test('without ajv installed, a type that is never validated still renders', (t) => {
-  const { status, output } = run(t, 'qa-report-functional.json', plainReport, { prepare: () => {} });
+  const { status, output } = run(t, 'qa-report-accessibility.json', plainReport, { prepare: () => {} });
 
   assert.equal(status, 0, output);
   assert.match(output, /^HTML report generated: /m);
