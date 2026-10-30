@@ -208,31 +208,32 @@ Sanity checks before writing any of this into the report:
 - ✅ Navigation links (both active and inactive states) meet contrast requirements
 - ✅ Button text against button background meets contrast requirements
 - ✅ Footer text (a frequent failure point) meets contrast requirements
-- Document: Any text overlaid on images or gradients (the script cannot measure these — assess visually)
+- Document: any text the check returns as `incomplete` (text over an image, a gradient or video) and what you saw there
 
-WCAG 2.2 AA contrast thresholds:
-- Normal text (< 18pt regular or < 14pt bold): **4.5:1 minimum** — WCAG 1.4.3 Contrast (Minimum)
-- Large text (≥ 18pt regular or ≥ 14pt bold): **3:1 minimum** — WCAG 1.4.3 Contrast (Minimum)
-- UI components (buttons, form borders, icons): **3:1 minimum** — WCAG 1.4.11 Non-text Contrast
+WCAG 2.2 AA contrast thresholds, which the check returns with each result: **4.5:1** for normal text and **3:1** for large text (≥ 18pt regular or ≥ 14pt bold) — WCAG 1.4.3 Contrast (Minimum). UI components (buttons, form borders, icons) need **3:1** — WCAG 1.4.11 Non-text Contrast — which the check doesn't measure: judge those by eye.
 
 > **WCAG citations in this skill:** Cite a WCAG criterion only for contrast findings — `1.4.3 Contrast (Minimum)` for text and `1.4.11 Non-text Contrast` for UI components — because contrast is the only accessibility criterion this skill actually measures. For any other accessibility observation (missing alt text, heading structure, keyboard operability, form labels, focus indicators), describe what you see but do **not** cite a WCAG criterion or claim conformance — recommend running `/kosh:a11y` for a full audit. This skill is not an accessibility audit; citing WCAG beyond contrast implies coverage that did not happen.
 
-Run this check with `browser_evaluate` on every page to programmatically detect contrast failures on text against resolved backgrounds. Many elements use `rgba()` or `transparent` backgrounds, meaning the visible background is actually inherited from an ancestor — the script walks up the DOM to find the first opaque background and composites any semi-transparent layers on top of it. The script cannot measure text overlaid on images or gradients; assess those visually.
+Run this check with `browser_evaluate` on every page. It runs axe-core's color-contrast rule over the page's own text (not text inside iframes, such as an embedded form or map: judge that by eye), which resolves the background each piece of text actually sits on, translucent layers and modern color syntax included:
 
 ```javascript
 () => __kosh.contrast()
 ```
 
+It returns `{ violations, incomplete, counts }`: two lists of elements with `selector`, `html`, `ratio`, `threshold`, `textColor`, `background`, `fontSize`, `fontWeight` and `reason`, each holding at most the first 50, and `counts`, how many of each there were in all. A ` >>> ` in `selector` marks a shadow root: find `#host >>> p` with `document.querySelector('#host').shadowRoot.querySelector('p')`. It checks the text on the page as it is, so run it again after opening a menu or scrolling lazy content into view.
+
 Reading the results:
 
-- **Any element returned** — contrast failure. Report it with the actual ratio and threshold from the script output.
-- **`"All checked elements meet contrast thresholds"`** — no programmatic failures. Still visually assess text overlaid on images, gradients, or video, which the script cannot measure.
+- **`violations`** — text axe measured below its threshold. Report it with the actual ratio and threshold. `reason` is `null`, or `fgOnShadowColor` or `shadowOnBgColor` when the failing pair is the text and its `text-shadow`.
+- **`incomplete`** — text axe couldn't measure, and `reason` says why: `imgNode`, `bgImage` or `bgGradient` (text over an image or gradient; a cover block's text reads `imgNode`), `bgOverlap` or `elmPartiallyObscured` (something covers it), `fgAlpha` or `pseudoContent`, `nonBmp` or `shortTextContent` (an icon glyph or a character or two, usually not text, so skip it unless it carries meaning), and others. Look at each one on a screenshot and decide whether it's readable; report it only if the eye says it fails, and say it was judged by eye, without a ratio.
+- **Both empty** — no text on the page fails or needs a look.
+- **A string saying axe-core is not loaded** — call it exactly as above.
+- **An error saying axe-core is missing or couldn't be loaded** — if the page was still loading, run it again; otherwise tell the user what it says rather than measuring contrast another way.
 
 Sanity checks before writing any of this into the report:
-- Take a screenshot of every flagged element and confirm the failure is visible to the eye before reporting. The script is heuristic — verify the live render matches what the numbers say.
-- When the script flags many elements at the same color combination, the underlying issue is likely the color choice itself (e.g., a brand color that simply doesn't have enough contrast for body text). Write the finding at the system level ("brand red used as body text fails AA across the site") rather than listing every occurrence.
+- Take a screenshot of every flagged element and confirm the failure is visible to the eye before reporting.
+- When many elements fail at the same color combination, the underlying issue is likely the color choice itself (e.g., a brand color that simply doesn't have enough contrast for body text). Write the finding at the system level ("brand red used as body text fails AA across the site") rather than listing every occurrence.
 - If a flagged element sits inside a more prominent design problem (e.g., a nav whose colors fight with the brand palette), the contrast ratio may not be the real story — describe the larger design issue and treat the ratio as supporting evidence.
-- The script measures only text on resolved opaque backgrounds. Text on images, gradients, or video has no single background color it can extract — handle those by visual inspection only.
 
 ### 1.6 Design Baseline (Desktop 1920px)
 **Initial Page Load & Above-the-Fold:**
@@ -285,7 +286,7 @@ On **desktop (1920px) viewport**:
 - ✅ Font sizes are appropriate and readable
 - ✅ Line heights provide good readability
 - ✅ No text truncation issues
-- ✅ Run the contrast extraction script from Section 1.5 — report every element it returns as a contrast failure (with the actual ratio and threshold)
+- ✅ Run the contrast check from Section 1.5 — report every `violations` entry as a contrast failure (with the actual ratio and threshold), and judge each `incomplete` one by eye
 - ✅ Font family is consistent with homepage
 
 **Visual Consistency:**

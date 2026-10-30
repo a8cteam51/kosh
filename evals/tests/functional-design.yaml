@@ -252,3 +252,79 @@ tests:
     assert:
       - type: regex
         value: '^[\s*_#>`\d.)]*PRODUCTION\b'
+
+  - description: Text axe couldn't measure is judged by eye and reported with no invented ratio
+    vars:
+      request: |
+        On the homepage, https://example.com/, at desktop, the Section 1.5
+        contrast check returned:
+
+        {
+          "violations": [],
+          "incomplete": [
+            {
+              "selector": ".wp-block-cover h2",
+              "html": "<h2 class=\"wp-block-heading has-white-color\">Grow with us</h2>",
+              "ratio": null,
+              "threshold": 3,
+              "textColor": null,
+              "background": null,
+              "fontSize": "36.0pt (48px)",
+              "fontWeight": "bold",
+              "reason": "imgNode"
+            }
+          ],
+          "counts": { "violations": 0, "incomplete": 1 }
+        }
+
+        You took a screenshot of the cover block, saved at
+        kosh-reports/screenshots/home-cover-desktop.png. In it the white heading
+        sits over the pale sky at the top of the photo and is hard to make out.
+
+        First line: REPORT or SKIP. Then, if REPORT, the finding as it would
+        appear in the report's issues, as one fenced JSON block.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*REPORT\b'
+      - type: javascript
+        value: |
+          const report = [...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((block) => block[1]).join('\n');
+          const ratios = [...report.matchAll(/\b(\d+(?:\.\d+)?)\s*:\s*1\b/g)].map((match) => Number(match[1]));
+          return report.length > 0 && ratios.every((ratio) => ratio === 4.5 || ratio === 3) && !/"ratio"\s*:\s*\d/.test(report);
+      - type: javascript
+        value: |
+          const report = [...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((block) => block[1]).join('\n');
+          return /\bby eye\b|\bvisual(ly)?\b|\binspect/i.test(report);
+
+  - description: An icon-font glyph axe couldn't measure is skipped, not reported
+    vars:
+      request: |
+        On the About page, https://example.com/about/, at desktop, the Section
+        1.5 contrast check returned:
+
+        {
+          "violations": [],
+          "incomplete": [
+            {
+              "selector": ".section-divider > span",
+              "html": "<span class=\"icon icon-ornament\" aria-hidden=\"true\"></span>",
+              "ratio": null,
+              "threshold": 4.5,
+              "textColor": "#dddddd",
+              "background": "#ffffff",
+              "fontSize": "12.0pt (16px)",
+              "fontWeight": "normal",
+              "reason": "nonBmp"
+            }
+          ],
+          "counts": { "violations": 0, "incomplete": 1 }
+        }
+
+        In your screenshot, kosh-reports/screenshots/about-divider-desktop.png,
+        it is a pale grey ornament from the theme's icon font, drawn between two
+        sections of body text; it is faint against the white page.
+
+        Does it go in the report? Answer YES or NO first, then one sentence why.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*NO\b'
