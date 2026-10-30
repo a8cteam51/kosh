@@ -195,99 +195,27 @@
       : 'All images are sufficiently sized for their rendered dimensions';
   };
 
-  // functional-design's contrast check: text against its first opaque background, any translucent layers composited on top.
-  const contrast = () => {
-    // Parse an rgb/rgba string into {r, g, b, a}
-    function parseColor(str) {
-      const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-      if (!m) return null;
-      return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? +m[4] : 1 };
-    }
-
-    // Composite a semi-transparent foreground over an opaque background
-    function composite(fg, bg) {
+  const MAX_CONTRAST_NODES = 50;
+  // axe-core's color-contrast rule; kosh's capture loads axe into the page before a browser_evaluate that calls this.
+  const contrast = async () => {
+    if (typeof window.axe?.run !== 'function') return 'axe-core is not loaded: call this as `() => __kosh.contrast()` with browser_evaluate, which loads it first.';
+    const { violations, incomplete } = await window.axe.run(document, { runOnly: { type: 'rule', values: ['color-contrast'] }, resultTypes: ['violations', 'incomplete'], iframes: false });
+    const nodes = (rules) => rules.flatMap((rule) => rule.nodes).slice(0, MAX_CONTRAST_NODES).map((node) => {
+      const data = [...node.any, ...node.all, ...node.none].find((check) => check.data)?.data ?? {};
       return {
-        r: Math.round(fg.r * fg.a + bg.r * (1 - fg.a)),
-        g: Math.round(fg.g * fg.a + bg.g * (1 - fg.a)),
-        b: Math.round(fg.b * fg.a + bg.b * (1 - fg.a)),
-        a: 1
+        selector: node.target.flat().join(' '),
+        html: node.html.length > 150 ? `${node.html.slice(0, 150)}…` : node.html,
+        ratio: data.contrastRatio || null,
+        threshold: parseFloat(data.expectedContrastRatio) || null,
+        textColor: data.fgColor ?? null,
+        background: data.bgColor ?? null,
+        fontSize: data.fontSize ?? null,
+        fontWeight: data.fontWeight ?? null,
+        reason: data.messageKey ?? null
       };
-    }
-
-    // Walk up the DOM to resolve the effective background color
-    function resolveBackground(el) {
-      let layers = [];
-      let current = el;
-      while (current) {
-        const bg = parseColor(window.getComputedStyle(current).backgroundColor);
-        if (bg) {
-          layers.push(bg);
-          if (bg.a === 1) break; // found an opaque layer, stop
-        }
-        current = current.parentElement;
-      }
-      // If no opaque layer found, assume white
-      let result = { r: 255, g: 255, b: 255, a: 1 };
-      // Composite from bottom (most distant ancestor) to top (element itself)
-      for (let i = layers.length - 1; i >= 0; i--) {
-        result = composite(layers[i], result);
-      }
-      return result;
-    }
-
-    // Relative luminance per WCAG 2.x
-    function luminance(c) {
-      const [rs, gs, bs] = [c.r, c.g, c.b].map(v => {
-        v = v / 255;
-        return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-      });
-      return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
-    }
-
-    // Contrast ratio
-    function contrastRatio(c1, c2) {
-      const l1 = luminance(c1), l2 = luminance(c2);
-      const lighter = Math.max(l1, l2), darker = Math.min(l1, l2);
-      return +((lighter + 0.05) / (darker + 0.05)).toFixed(2);
-    }
-
-    // Collect elements to check
-    const selectors = 'a, button, p, h1, h2, h3, h4, h5, h6, span, li, td, th, label, input, select, textarea';
-    const seen = new Set();
-    const results = [];
-
-    document.querySelectorAll(selectors).forEach(el => {
-      const text = el.textContent?.trim().substring(0, 40);
-      if (!text || seen.has(el)) return;
-      seen.add(el);
-
-      const styles = window.getComputedStyle(el);
-      const textColor = parseColor(styles.color);
-      const effectiveBg = resolveBackground(el);
-      if (!textColor || !effectiveBg) return;
-
-      const ratio = contrastRatio(textColor, effectiveBg);
-      const fontSize = parseFloat(styles.fontSize);
-      const fontWeight = parseInt(styles.fontWeight) || 400;
-      const isLarge = fontSize >= 24 || (fontSize >= 18.66 && fontWeight >= 700);
-      const threshold = isLarge ? 3 : 4.5;
-
-      if (ratio < threshold) {
-        results.push({
-          tag: el.tagName.toLowerCase(),
-          text: text,
-          textColor: `rgb(${textColor.r},${textColor.g},${textColor.b})`,
-          effectiveBg: `rgb(${effectiveBg.r},${effectiveBg.g},${effectiveBg.b})`,
-          ratio: ratio,
-          threshold: threshold,
-          fontSize: fontSize + 'px',
-          fontWeight: fontWeight,
-          isLarge: isLarge
-        });
-      }
     });
-
-    return results.length ? results : 'All checked elements meet contrast thresholds';
+    const count = (rules) => rules.reduce((total, rule) => total + rule.nodes.length, 0);
+    return { violations: nodes(violations), incomplete: nodes(incomplete), counts: { violations: count(violations), incomplete: count(incomplete) } };
   };
 
   Object.defineProperty(window, '__kosh', { value: Object.freeze({ gate, staticHtml, imageSize, images, contrast }) });

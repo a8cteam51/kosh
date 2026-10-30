@@ -170,15 +170,42 @@ test('imageSize: an image that never loads times out instead of hanging the call
   assert.deepStrictEqual((await pending).result, { error: 'timed out' });
 });
 
-test('contrast: flags text too faint for its background and passes text that is not', () => {
-  const { window } = new JSDOM(`<!doctype html><body style="background-color: rgb(255, 255, 255)">
-    <p style="color: rgb(200, 200, 200); font-size: 16px">Faint footer text</p>
-    <p style="color: rgb(20, 20, 20); font-size: 16px">Body copy</p>
-  </body>`, { url: 'https://example.com/', runScripts: 'outside-only' });
-  window.eval(SOURCE);
-  const flagged = window.__kosh.contrast();
-  assert.ok(Array.isArray(flagged), `expected flagged elements, got ${JSON.stringify(flagged)}`);
-  assert.deepStrictEqual([...flagged].map((entry) => entry.text), ['Faint footer text']);
+// A color-contrast node as axe reports it: one selector per frame, an array of them for an element in a shadow root.
+const axeNode = (target, data, html = '<p>text</p>') => ({ target, html, any: [{ id: 'color-contrast', data }], all: [], none: [] });
+const withAxe = (results) => {
+  const window = page('https://example.com/');
+  const calls = [];
+  window.axe = { run: async (context, options) => (calls.push(options), { violations: [], incomplete: [], ...results }) };
+  return { window, calls };
+};
+
+test("contrast: runs only axe's color-contrast rule and returns each node's measurement", async () => {
+  const { window, calls } = withAxe({
+    violations: [{ id: 'color-contrast', nodes: [
+      axeNode(['footer > p'], { fgColor: '#c8c8c8', bgColor: '#ffffff', contrastRatio: 1.67, fontSize: '12.0pt (16px)', fontWeight: 'normal', expectedContrastRatio: '4.5:1' }),
+      axeNode([['#host', 'p']], { contrastRatio: 1.6, expectedContrastRatio: '4.5:1' }),
+    ] }],
+    incomplete: [{ id: 'color-contrast', nodes: [axeNode(['.wp-block-cover h2'], { fgColor: '#ffffff', contrastRatio: 0, expectedContrastRatio: '3:1', messageKey: 'imgNode' })] }],
+  });
+  const { violations, incomplete, counts } = await window.__kosh.contrast();
+  assert.deepStrictEqual(calls.map((options) => [...options.runOnly.values]), [['color-contrast']]);
+  assert.deepStrictEqual({ ...violations[0] }, { selector: 'footer > p', html: '<p>text</p>', ratio: 1.67, threshold: 4.5, textColor: '#c8c8c8', background: '#ffffff', fontSize: '12.0pt (16px)', fontWeight: 'normal', reason: null });
+  assert.strictEqual(violations[1].selector, '#host p');
+  assert.deepStrictEqual([incomplete[0].selector, incomplete[0].ratio, incomplete[0].threshold, incomplete[0].background, incomplete[0].reason], ['.wp-block-cover h2', null, 3, null, 'imgNode']);
+  assert.deepStrictEqual({ ...counts }, { violations: 2, incomplete: 1 });
+});
+
+test('contrast: keeps the first 50 nodes of each list, clips their markup and counts them all', async () => {
+  const many = Array.from({ length: 60 }, (_, i) => axeNode([`p:nth-child(${i + 1})`], { contrastRatio: 2, expectedContrastRatio: '4.5:1' }, `<p>${'x'.repeat(300)}</p>`));
+  const { window } = withAxe({ violations: [{ id: 'color-contrast', nodes: many }] });
+  const { violations, counts } = await window.__kosh.contrast();
+  assert.strictEqual(violations.length, 50);
+  assert.strictEqual(violations[0].html.length, 151);
+  assert.strictEqual(counts.violations, 60);
+});
+
+test('contrast: says so when axe-core was not loaded into the page', async () => {
+  assert.match(await page('https://example.com/').__kosh.contrast(), /axe-core is not loaded/);
 });
 
 test('a page cannot replace __kosh or its functions', () => {

@@ -472,6 +472,41 @@ test("browser_evaluate's code is named for Chrome's initiator stack and keeps it
   assert.strictEqual(seen.at(-1), 'data from browser_run_code_unsafe');
 });
 
+test("axe-core is evaluated into the page before model code that calls __kosh.contrast, and only then", async (t) => {
+  sandbox(t);
+  const seen = [];
+  const page = await start(fakePage({ evaluate: async (fn, arg) => (seen.push(typeof fn === 'string' ? fn : arg), typeof arg === 'string' ? 'ran' : answer(fn, { documentUrl: 'about:blank', ...TIMING })) }));
+
+  seen.length = 0;
+  assert.strictEqual(await page.evaluate(mcpEvaluate, '() => __kosh.contrast()'), 'ran');
+  assert.strictEqual(seen.length, 2);
+  assert.match(seen[0], /^\/\*! axe v4\.13\.0/);
+  assert.ok(seen[0].endsWith(`//# sourceURL=${capture.EVALUATE_URL}`), "axe's own messages are tagged as the model's");
+  assert.match(seen[1], /__kosh\.contrast\(\)/);
+  seen.length = 0;
+  await page.evaluate(mcpEvaluate, '() => __kosh.images()');
+  assert.strictEqual(seen.length, 1);
+});
+
+test("a contrast call is refused, with the reason, when axe-core can't be read or loaded, and the model's code never runs", async (t) => {
+  sandbox(t);
+  const ran = [];
+  let loadFails = false;
+  const page = await start(fakePage({ evaluate: async (fn, arg) => {
+    if (typeof fn === 'string') { if (loadFails) throw new Error('Execution context was destroyed'); return true; }
+    if (typeof arg === 'string') return (ran.push(arg), 'ran');
+    return answer(fn, { documentUrl: 'about:blank', ...TIMING });
+  } }));
+
+  loadFails = true;
+  await assert.rejects(page.evaluate(mcpEvaluate, '() => __kosh.contrast()'), /couldn't load axe-core into the page: Execution context was destroyed/);
+  loadFails = false;
+  const read = fs.readFileSync;
+  t.mock.method(fs, 'readFileSync', (file, ...rest) => (String(file).includes('axe-core') ? (() => { throw new Error('ENOENT'); })() : read(file, ...rest)));
+  await assert.rejects(page.evaluate(mcpEvaluate, '() => __kosh.contrast()'), /axe-core is missing from kosh's folder: run `npm ci` there/);
+  assert.deepStrictEqual(ran, []);
+});
+
 test("the model's own requests and their console errors are tagged, until the next visit, and a site request from Playwright's own URL-less select isn't", async (t) => {
   const box = sandbox(t);
   const cdp = Object.assign(new EventEmitter(), { send: async () => {} });
