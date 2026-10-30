@@ -77,11 +77,14 @@ function checkReport(report, reportPath, types) {
       console.log(`Schema: no JSON Schema for ${type} yet, not validated.`);
     } else if (errors.length === 0) {
       console.log(`✓ Schema: valid against ${schemaPath}`);
-      const missing = type === 'performance' ? uncovered(report.visitedPages, report.pages) : [];
-      // The merge writes captureSha256 with every pages[] it builds, so rows without one came from the model.
-      if (type === 'performance' && report.pages.length && !report.provenance?.captureSha256) {
+      // Performance's pages[] and functional's inventory[] are the merge's, built from the page capture.
+      const field = { performance: 'pages', functional: 'inventory' }[type];
+      const rows = field && Array.isArray(report[field]) ? report[field] : null;
+      const missing = rows ? uncovered(report.visitedPages, rows) : [];
+      // The merge writes captureSha256 with every list it builds, so rows without one came from the model.
+      if (rows?.length && !report.provenance?.captureSha256) {
         ok = false;
-        console.error(`✗ pages[] has rows the page capture didn't write. ${path.join(__dirname, 'run-qa-report.sh')} builds them from the browser's record, and only for ${path.join(path.dirname(captureFile()), 'qa-report-performance.json')}: save the report there without pages[], and re-run.`);
+        console.error(`✗ ${field}[] has rows the page capture didn't write. ${path.join(__dirname, 'run-qa-report.sh')} builds them from the browser's record, and only for ${path.join(path.dirname(captureFile()), `qa-report-${type}.json`)}: save the report there without ${field}[], and re-run.`);
       } else if (missing.length) {
         ok = false;
         console.error(`✗ visitedPages lists pages the browser has no record of loading:\n${missing.map((url) => `  ${url}`).join('\n')}\nLoad each in the browser and re-run, or take it out of visitedPages if this run didn't test it.`);

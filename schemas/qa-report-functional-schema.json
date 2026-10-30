@@ -1,87 +1,639 @@
 {
-  "url": "https://example.com",
-  "websiteName": "Example",
-  "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
-  "provenance": {
-    "model": "claude-sonnet-5",
-    "modelSource": "transcript or self-report, added by scripts/run-qa-report.sh — do not write this field",
-    "effort": "the reasoning effort the run was sent at, added by scripts/run-qa-report.sh — do not write this field",
-    "pluginVersion": "added by scripts/run-qa-report.sh — do not write this field",
-    "skills": {"functional-design": "sha256 of the skill directory, added by scripts/run-qa-report.sh — do not write this field"},
-    "collectors": "sha256 of collectors/, added by scripts/run-qa-report.sh — do not write this field",
-    "playwrightMcp": ["the Playwright MCP arguments from kosh's plugin.json, added by scripts/run-qa-report.sh — do not write this field"],
-    "seal": "added by scripts/run-qa-report.sh — do not write this field"
-  },
-  "environment": "production",
-  "testMethodology": "Manual QA testing following multi-page user journey simulation...",
-  "visitedPages": [
-    "https://example.com/",
-    "https://example.com/about/",
-    "https://example.com/products/",
-    "https://example.com/blog/",
-    "https://example.com/contact/"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kosh Functional & Design Report",
+  "description": "Schema for the kosh functional and design report: layout, content, links, images, contrast, metadata and mobile behaviour across several pages of a WordPress site. Each page's inventory (headings, links, images, share tags) in inventory[] and the off-site link results in linkChecks[] come from the browser's page capture and kosh's link checker, not from the model. Renders through the standard QA renderer in scripts/generate-report.js.",
+  "type": "object",
+  "required": [
+    "url",
+    "websiteName",
+    "timestamp",
+    "environment",
+    "visitedPages",
+    "issues"
   ],
-  "mobile": {
-    "viewport": "375x812",
-    "title": "Page Title",
-    "url": "https://example.com",
-    "loadTime": 1800,
-    "links": [
-      {"text": "Link text", "href": "https://example.com/page"}
-    ],
-    "images": [
-      {"src": "https://example.com/image.jpg", "alt": "Image description"}
-    ],
-    "headings": [
-      {"tag": "h1", "text": "Heading text"},
-      {"tag": "h2", "text": "Heading text"}
-    ],
-    "focusableElements": 42
-  },
-  "desktop": {
-    "viewport": "1920x1080",
-    "title": "Page Title",
-    "url": "https://example.com",
-    "loadTime": 1800,
-    "links": [
-      {"text": "Link text", "href": "https://example.com/page"}
-    ],
-    "images": [
-      {"src": "https://example.com/image.jpg", "alt": "Image description"}
-    ],
-    "headings": [
-      {"tag": "h1", "text": "Heading text"},
-      {"tag": "h2", "text": "Heading text"}
-    ],
-    "focusableElements": 58
-  },
-  "metadata": {
-    "ogTitle": "Page Title",
-    "ogDescription": "Page description",
-    "ogImage": "https://example.com/og-image.jpg",
-    "ogUrl": "https://example.com",
-    "ogType": "website",
-    "twitterCard": null,
-    "twitterTitle": null,
-    "twitterDescription": null,
-    "twitterImage": null
-  },
-  "links": [
-    {"text": "Link text", "href": "https://example.com/page", "ok": true, "status": 200}
-  ],
-  "issues": {
-    "critical": [
-      {
-        "category": "Design",
-        "issue": "Brief issue description",
-        "impact": "How this affects users",
-        "device": "mobile|desktop|both",
-        "pages": ["https://example.com/page1"],
-        "screenshots": ["screenshots/example-finding.png"]
+  "additionalProperties": false,
+  "properties": {
+    "url": {
+      "$ref": "#/definitions/webUrl",
+      "description": "The site URL the test was asked to run against."
+    },
+    "websiteName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The site's name, from its title or og:site_name."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the run's browser first loaded a page, from the page capture. Added by scripts/run-qa-report.sh, which replaces any value written here when the capture has a visit."
+    },
+    "provenance": {
+      "type": "object",
+      "description": "What produced this report, so runs can be compared across plugin versions, skill edits, and models.",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Exact model ID the run was served by. For a skill's own output on Claude Code, read from the session log by scripts/run-qa-report.sh; elsewhere self-reported by the model, \"unknown\" when its system prompt does not state one. The only provenance field the skill writes."
+        },
+        "modelSource": {
+          "type": "string",
+          "enum": [
+            "transcript",
+            "self-report"
+          ],
+          "description": "Where model came from: \"transcript\" is Claude Code's session log (the model that served the run's latest reply), \"self-report\" is the skill's own claim, used when there is no session log and when the report is re-rendered. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "effort": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The reasoning effort the run's latest reply was sent at, from Claude Code's session log or its CLAUDE_EFFORT variable; absent on hosts that set neither. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "pluginVersion": {
+          "type": "string",
+          "description": "kosh version from .claude-plugin/plugin.json. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "skills": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "description": "SHA-256 of each skill directory that produced the report, keyed by skill name. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "collectors": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the collectors/ directory, the page-side code Playwright MCP loads into every page, as it was on disk when the report was rendered. A session started before collectors/ changed ran the older code. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "playwrightMcp": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The Playwright MCP arguments (the pinned version and its flags) in kosh's plugin.json when the report was rendered. A session started before plugin.json changed ran with the older ones. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "captureSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the page capture archived beside the report as <name>.capture.jsonl, which a functional report's inventory[] is built from. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "heldTo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The host the run's browser was held to once the gate check came back clear, from the page capture: after that, a page on another host or the model's own request to one was refused. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "seal": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 over the report timestamp, pluginVersion, skills, collectors, playwrightMcp, captureSha256, model, modelSource, effort and heldTo, marking the block as script-stamped for this run. Added by scripts/run-qa-report.sh — do not write this field."
+        }
       }
-    ],
-    "high": [],
-    "medium": [],
-    "low": []
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "local",
+        "development",
+        "staging",
+        "production"
+      ],
+      "description": "Environment the site was running in during the test. Defaults to production."
+    },
+    "testMethodology": {
+      "type": "string",
+      "description": "A few sentences on how the run went: the pages and why, the viewports, and anything that changes how the findings read, such as an inferred environment."
+    },
+    "visitedPages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/webUrl"
+      },
+      "description": "URLs of every page the test covered. Each must have a captured visit in inventory[], or the report is refused."
+    },
+    "inventory": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/inventoryRow"
+      },
+      "description": "One row per page and viewport, as it first loaded. Added by scripts/run-qa-report.sh from the browser's record — do not write this field."
+    },
+    "linkChecks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/linkCheck"
+      },
+      "description": "kosh's link checker's result for each off-site link checked this run. Added by scripts/run-qa-report.sh from the link checker's record — do not write this field."
+    },
+    "explorationPass": {
+      "type": "array",
+      "description": "Threads investigated beyond the checks, recorded whatever the outcome, so an observation outside this test's scope survives here instead of becoming a finding. Findings themselves live in `issues`.",
+      "items": {
+        "type": "object",
+        "required": [
+          "check",
+          "outcome",
+          "detail"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "type": "string",
+            "description": "What was examined, specific enough for someone else to repeat it."
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "no-issue",
+              "finding-raised",
+              "inconclusive",
+              "out-of-scope"
+            ],
+            "description": "no-issue = investigated and fine. finding-raised = became an entry in `issues`. inconclusive = cannot be settled without access not available during the run. out-of-scope = a real problem outside performance, in which case set `referredTo`."
+          },
+          "detail": {
+            "type": "string",
+            "description": "What was actually observed, including the evidence. For inconclusive outcomes, say what would settle it. For finding-raised, name the finding."
+          },
+          "area": {
+            "type": "string",
+            "description": "Surface this relates to, e.g. Images, Fonts, Scripts. Free text."
+          },
+          "referredTo": {
+            "type": "string",
+            "description": "For out-of-scope outcomes, the kosh test that covers this territory, e.g. a11y or functional-design."
+          }
+        }
+      }
+    },
+    "openQuestions": {
+      "type": "array",
+      "description": "Things seen that might be problems but that this run could not settle, kept apart from the findings and their counts.",
+      "items": {
+        "type": "object",
+        "required": [
+          "seen",
+          "why",
+          "wouldSettle"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "seen": {
+            "type": "string",
+            "description": "What was observed, specifically enough to find it again."
+          },
+          "why": {
+            "type": "string",
+            "description": "Why it is uncertain: what the run could not see, reach or confirm."
+          },
+          "wouldSettle": {
+            "type": "string",
+            "description": "What would settle it, and who could: the client, the developer, an editor login, a check on another environment."
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/webUrl"
+            },
+            "description": "Pages it was seen on."
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "object",
+      "description": "Findings grouped by severity.",
+      "required": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "critical": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/finding"
+          },
+          "description": "Site-breaking."
+        },
+        "high": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/finding"
+          },
+          "description": "Significant user impact."
+        },
+        "medium": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/finding"
+          },
+          "description": "Noticeable but not blocking."
+        },
+        "low": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/finding"
+          },
+          "description": "Minor."
+        }
+      }
+    }
+  },
+  "definitions": {
+    "webUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "description": "An http(s) URL of a page kosh navigated to. URLs observed on the site, such as a failed request's, are plain strings: a malformed one is something to report, not to fix in the JSON."
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "category",
+        "issue",
+        "impact",
+        "fix",
+        "device",
+        "pages"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^F-\\d{2,}$",
+          "description": "A stable ID within this report, F-01 onwards in the order the findings are listed. Added by scripts/run-qa-report.sh — do not write this field."
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Design",
+            "Links",
+            "Content",
+            "Metadata",
+            "Functionality",
+            "Mobile",
+            "UX",
+            "Accessibility"
+          ],
+          "description": "Design = layout, spacing, typography, visual consistency, image quality. Links = broken or wrong destinations, icon mismatches. Content = spelling, grammar, placeholder or unpublishable content. Metadata = share tags, titles, descriptions, icons. Functionality = something that doesn't work: a form, a menu, a template rendering twice. Mobile = what breaks only at a small viewport. UX = confusing navigation, unclear calls to action. Accessibility = contrast, and other accessibility observations, which the renderer points at the accessibility test."
+        },
+        "issue": {
+          "type": "string",
+          "description": "What is wrong, naming the markup, block, template or asset that causes it."
+        },
+        "impact": {
+          "type": "string",
+          "description": "How this affects visitors or the site owner."
+        },
+        "fix": {
+          "type": "string",
+          "description": "What to change, specifically enough to act on without re-running the test."
+        },
+        "fixAt": {
+          "type": "object",
+          "required": [
+            "kind",
+            "detail"
+          ],
+          "additionalProperties": false,
+          "description": "Where the fix goes, when the run could tell. A file only when the folder the run started in holds the site's code: the report is refused if that file, or that line, isn't there.",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "file",
+                "content",
+                "setting",
+                "plugin",
+                "host"
+              ],
+              "description": "file = a file in the folder the run started in. content = a page, post, media item or menu edited in the WordPress editor. setting = a WordPress or block setting. plugin = a plugin's configuration or code. host = the hosting or CDN."
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "For kind file: the path relative to the folder the run started in."
+            },
+            "line": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "For kind file: the line, if one is known."
+            },
+            "detail": {
+              "type": "string",
+              "description": "What to change there: the setting's name and screen, the plugin, the selector or function."
+            }
+          },
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "file"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": true
+            }
+          }
+        },
+        "wcag": {
+          "type": "string",
+          "enum": [
+            "1.4.3",
+            "1.4.11"
+          ],
+          "description": "Only for contrast: 1.4.3 Contrast (Minimum) for text, 1.4.11 Non-text Contrast for UI components. No other criterion, since contrast is the only one this test measures."
+        },
+        "device": {
+          "type": "string",
+          "enum": [
+            "mobile",
+            "desktop",
+            "both"
+          ],
+          "description": "Which viewport the issue was observed on."
+        },
+        "pages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/webUrl"
+          },
+          "description": "URLs where the issue was observed."
+        },
+        "screenshots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^screenshots/"
+          },
+          "description": "Paths relative to the kosh-reports/ directory, e.g. 'screenshots/homepage-network-tab.png' for a file saved at kosh-reports/screenshots/homepage-network-tab.png."
+        }
+      }
+    },
+    "inventoryRow": {
+      "type": "object",
+      "required": [
+        "url",
+        "redirectedFrom",
+        "viewport",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "redirectedFrom": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "viewport": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "failure": {
+          "type": "string"
+        },
+        "notRead": {
+          "const": true,
+          "description": "The page loaded but its inventory couldn't be read."
+        },
+        "title": {
+          "type": "string"
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "headings": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "links": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "images": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "description": "How many there were in all; the lists below stop at 100 headings, 300 links and 150 images."
+        },
+        "headings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "tag",
+              "text"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "tag": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "hidden": {
+                "const": true
+              }
+            }
+          }
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "text",
+              "href"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "href": {
+                "type": "string"
+              },
+              "hidden": {
+                "const": true
+              }
+            }
+          }
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "src",
+              "alt"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "src": {
+                "type": "string"
+              },
+              "alt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "meta": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ogTitle": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ogDescription": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ogImage": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ogUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ogType": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "twitterCard": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "twitterTitle": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "twitterDescription": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "twitterImage": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "canonical": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "appleTouchIcon": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "linkCheck": {
+      "type": "object",
+      "required": [
+        "url",
+        "outcome",
+        "status",
+        "redirectedTo",
+        "pathChanged"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "checked",
+            "error",
+            "skipped",
+            "invalid"
+          ]
+        },
+        "status": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "redirectedTo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The origin it ended on when that is another site; a long host name is cut to its end."
+        },
+        "pathChanged": {
+          "type": "boolean",
+          "description": "It ended on a different page, such as a login or error page."
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
   }
 }

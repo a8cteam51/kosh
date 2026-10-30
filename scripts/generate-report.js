@@ -234,21 +234,33 @@ const renderPages = (pages) => {
   return `<details class="pages"><summary>${pages.length} page${pages.length === 1 ? '' : 's'}</summary><ul>${items}</ul></details>`;
 };
 
+const WCAG_NAMES = { '1.4.3': '1.4.3 Contrast (Minimum)', '1.4.11': '1.4.11 Non-text Contrast' };
+const fixPlace = ({ kind, path: file, line, detail }) => `${kind}${file ? `: ${file}${line ? `:${line}` : ''}` : ''} — ${detail}`;
+
 const renderFinding = (finding, index) => {
   const extraFields = [];
   if (finding.metric) extraFields.push(`<dt>Metric</dt><dd>${escHtml(finding.metric)}</dd>`);
   if (finding.wcag_criterion) extraFields.push(`<dt>WCAG</dt><dd>${escHtml(finding.wcag_criterion)}</dd>`);
+  if (finding.wcag) extraFields.push(`<dt>WCAG</dt><dd>${escHtml(WCAG_NAMES[finding.wcag] ?? finding.wcag)}</dd>`);
+  if (finding.fixAt) extraFields.push(`<dt>Where</dt><dd>${escHtml(fixPlace(finding.fixAt))}</dd>`);
   const extraDl = extraFields.length ? `<dl class="finding__extra">${extraFields.join('')}</dl>` : '';
   const device = finding.device ? `<span class="finding__device">${escHtml(finding.device)}</span>` : '';
+  const id = finding.id ? `<span class="finding__device">${escHtml(finding.id)}</span>` : '';
+  // Functional measures only contrast, so any other accessibility observation points at the full audit.
+  const referred = runTypesLabel === 'functional' && finding.category === 'Accessibility' && !finding.wcag
+    ? '<p class="check__referred">Run <code>/kosh:a11y</code> for a full accessibility audit: this test measures contrast only.</p>'
+    : '';
   return `
     <article class="finding" id="finding-${index}">
       <header class="finding__header">
         <h4 class="finding__category">${escHtml(finding.category || 'Finding')}</h4>
-        ${device}
+        ${device}${id}
       </header>
       <p class="finding__issue">${escHtml(finding.issue)}</p>
       <p class="finding__impact"><strong>Impact:</strong> ${escHtml(finding.impact)}</p>
+      ${finding.fix ? `<p class="finding__impact"><strong>Fix:</strong> ${escHtml(finding.fix)}</p>` : ''}
       ${extraDl}
+      ${referred}
       ${renderPages(finding.pages)}
       ${renderScreenshots(finding.screenshots)}
     </article>
@@ -427,6 +439,105 @@ const pagesSection = measuredPages.length
     </div>
     ${consolePatterns ? `<h3>Console errors and warnings</h3><ul class="patterns">${consolePatterns}</ul>` : ''}
     ${networkPatterns ? `<h3>Failed requests</h3><ul class="patterns">${networkPatterns}</ul>` : ''}
+  </section>`
+  : '';
+
+// Functional's inventory[] and linkChecks[] come from the page capture and the link checker, like performance's pages[].
+const inventory = Array.isArray(report.inventory) ? report.inventory.filter((row) => row && typeof row === 'object') : [];
+const listOf = (value) => (Array.isArray(value) ? value.filter((item) => item && typeof item === 'object') : []);
+const SHARE_TAGS = { ogTitle: 'og:title', ogDescription: 'og:description', ogImage: 'og:image', twitterCard: 'twitter:card' };
+const inventoryRow = (row) => {
+  const cells = row.notRead
+    ? '<td colspan="6" class="muted">Not read</td>'
+    : (() => {
+        const h1s = listOf(row.headings).filter((heading) => heading.tag === 'h1' && !heading.hidden).map((heading) => heading.text);
+        const hiddenLinks = listOf(row.links).filter((link) => link.hidden).length;
+        const noAlt = listOf(row.images).filter((image) => image.alt === null).length;
+        const tags = Object.entries(SHARE_TAGS).filter(([key]) => row.meta?.[key]).map(([, name]) => name);
+        return `
+          <td>${escHtml(row.title ?? '')}</td>
+          <td>${h1s.length ? escHtml(h1s.join(' · ')) : '<span class="muted">none</span>'}</td>
+          <td class="num">${escHtml(row.counts?.headings ?? '—')}</td>
+          <td class="num">${escHtml(row.counts?.links ?? '—')}${hiddenLinks ? ` <span class="muted">(${hiddenLinks} hidden)</span>` : ''}</td>
+          <td class="num">${escHtml(row.counts?.images ?? '—')}${noAlt ? ` <span class="muted">(${noAlt} no alt)</span>` : ''}</td>
+          <td>${tags.length ? escHtml(tags.join(', ')) : '<span class="muted">none</span>'}</td>`;
+      })();
+  return `
+        <tr>
+          <th scope="row">${renderLink(row.url, pathOf(row.url))}</th>
+          <td>${escHtml(viewportLabel(row.viewport))}</td>${cells}
+        </tr>`;
+};
+const outline = (row) => `
+      <details class="exploration__clean">
+        <summary class="exploration__clean-summary">${escHtml(`${pathOf(row.url)} (${viewportLabel(row.viewport)})`)}</summary>
+        <div class="exploration__clean-body">
+          <h3>Headings</h3>
+          <ul>${listOf(row.headings).map((heading) => `<li><code>${escHtml(heading.tag)}</code> ${escHtml(heading.text)}${heading.hidden ? ' <span class="muted">(hidden)</span>' : ''}</li>`).join('') || '<li class="muted">none</li>'}</ul>
+          <h3>Links</h3>
+          <ul>${listOf(row.links).map((link) => `<li>${escHtml(link.text || '(no text)')} <span class="muted">${escHtml(link.href)}${link.hidden ? ' (hidden)' : ''}</span></li>`).join('') || '<li class="muted">none</li>'}</ul>
+        </div>
+      </details>`;
+const inventorySection = inventory.length
+  ? `
+  <section class="pages-measured">
+    <h2>Pages as loaded</h2>
+    <p class="pages-measured__intro">Recorded by the browser as each page first loaded at each viewport, not reported by the model. Hidden counts links with no layout box, such as another breakpoint's copy of the menu; no alt counts images with no alt attribute at all, which is different from an empty one. The lists stop at 100 headings, 300 links and 150 images per page.</p>
+    <div class="pages-measured__scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Page</th><th scope="col">Viewport</th><th scope="col">Title</th><th scope="col">H1</th><th scope="col">Headings</th><th scope="col">Links</th><th scope="col">Images</th><th scope="col">Share tags</th></tr>
+        </thead>
+        <tbody>${inventory.map(inventoryRow).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${inventory.filter((row) => !row.notRead).map(outline).join('')}
+  </section>`
+  : '';
+
+// Large platforms answer an automated check with these when they block bots, so the link may well work.
+const BOT_WALL = new Set([400, 401, 403, 429, 999]);
+const linkChecks = listOf(report.linkChecks);
+const linkResult = (check) => (check.outcome === 'checked' ? `HTTP ${check.status}` : check.outcome === 'invalid' ? 'Not a URL' : `${check.outcome === 'skipped' ? 'Skipped' : 'Failed'}${check.reason ? `: ${check.reason}` : ''}`);
+const linkNote = (check) => (check.outcome === 'checked' && BOT_WALL.has(check.status) ? 'Unverified: likely bot protection' : check.outcome === 'checked' && check.status >= 400 ? 'Broken' : '');
+const linkChecksSection = linkChecks.length
+  ? `
+  <section class="pages-measured">
+    <h2>Off-site links checked</h2>
+    <p class="pages-measured__intro">Each off-site link was requested by kosh's link checker, never opened in the browser, and only its status and where it ended up were kept. A different page there can mean a login or error page.</p>
+    <div class="pages-measured__scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Link</th><th scope="col">Result</th><th scope="col">Ended on</th><th scope="col">Note</th></tr>
+        </thead>
+        <tbody>${linkChecks.map((check) => `
+          <tr>
+            <th scope="row">${renderLink(check.url)}</th>
+            <td>${escHtml(linkResult(check))}</td>
+            <td>${escHtml([check.redirectedTo, check.pathChanged ? 'a different page' : ''].filter(Boolean).join(', ') || (check.outcome === 'checked' ? 'the same page' : '—'))}</td>
+            <td>${escHtml(linkNote(check))}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </section>`
+  : '';
+
+const openQuestions = listOf(report.openQuestions);
+const openQuestionsSection = openQuestions.length
+  ? `
+  <section class="exploration">
+    <h2>Open questions</h2>
+    <p class="exploration__intro">Things that may be problems but that this run couldn't settle, with what would. They aren't counted as findings.</p>
+    <div class="exploration__grid">${openQuestions.map((question) => `
+      <article class="check">
+        <p class="check__what">${escHtml(question.seen)}</p>
+        <p class="check__detail">${escHtml(question.why)}</p>
+        <p class="check__referred"><strong>Would settle it:</strong> ${escHtml(question.wouldSettle)}</p>
+        ${renderPages(question.pages)}
+      </article>`).join('')}
+    </div>
   </section>`
   : '';
 
@@ -860,7 +971,10 @@ const html = `<!doctype html>
     <h2>Findings</h2>
     ${findingsBlocks}
   </section>
+${openQuestionsSection}
 ${pagesSection}
+${inventorySection}
+${linkChecksSection}
 ${explorationSection}
   <section class="methodology">
     <h2>Methodology</h2>

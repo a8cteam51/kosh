@@ -158,6 +158,10 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
         || echo -e "${YELLOW}Warning: could not archive this session's page capture${NC}"
       rm -f "$QA_REPORT_JSON" && echo -e "${BLUE}Source JSON removed: $QA_REPORT_JSON${NC}" \
         || echo -e "${YELLOW}Warning: could not remove $QA_REPORT_JSON; the next run must read it before overwriting it${NC}"
+      # The report now holds the link checker's results, so the next functional run starts from none.
+      if [ "$OWN_FLAG" = "--functional" ]; then
+        rm -f "$(node -p "require(require('path').resolve(process.argv[1])).recordFile()" "$(dirname "$0")/check-links.js")"
+      fi
     fi
   else
     echo -e "${YELLOW}Warning: could not archive source JSON to $ARCHIVE_JSON${NC}"

@@ -16,6 +16,8 @@ const report = (websiteName) => JSON.stringify({
   websiteName,
   url: 'https://example.com',
   timestamp: '2026-01-01T00:00:00Z',
+  environment: 'production',
+  visitedPages: ['https://example.com/'],
   issues: { critical: [], high: [], medium: [], low: [] },
 }, null, 2);
 
@@ -68,10 +70,15 @@ test('run-qa-report.sh runs when called by the relative path the skills use', (t
   const json = path.join(box.reportsDir, 'data', 'qa-report-functional.json');
   fs.writeFileSync(json, report('Reports Dir Fixture'));
 
-  const stdout = run('scripts/run-qa-report.sh', [json], { ...box, cwd: path.join(SCRIPTS, '..') }, { ...process.env, KOSH_REPORTS_DIR: box.reportsDir });
+  // Every require of a script beside it has to resolve from here too; a failed one inside $(…) only shows in what's left behind.
+  const links = path.join(box.reportsDir, 'data', 'links-relative-path.jsonl');
+  fs.writeFileSync(links, '{}\n');
+
+  const stdout = run('scripts/run-qa-report.sh', [json], { ...box, cwd: path.join(SCRIPTS, '..') }, { ...process.env, KOSH_REPORTS_DIR: box.reportsDir, CLAUDE_CODE_SESSION_ID: 'relative-path' });
 
   assert.doesNotMatch(stdout, /Cannot find module/);
   assert.deepEqual(fs.readdirSync(path.join(box.reportsDir, 'data', 'archive')), ['REPORTS_DIR_FIXTURE_FUNCTIONAL_QA_REPORT_2026-01-01.json']);
+  assert.ok(!fs.existsSync(links), 'the link checks were left for the next run');
 });
 
 // A copy of scripts/ beside its own empty kosh-reports/ shows the production default reads the project, never the folder next to the scripts.

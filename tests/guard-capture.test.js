@@ -48,6 +48,10 @@ const call = (tool_name, tool_input, cwd = KOSH) => ({ hook_event_name: 'PreTool
 for (const [name, input, options] of [
   ['writing a capture', call('Write', { file_path: path.join(KOSH, 'kosh-reports/data/capture-0b3f6c2e-5d1a.jsonl'), content: '{}' })],
   ['writing the no-session capture', call('Write', { file_path: 'kosh-reports/data/capture.jsonl', content: '{}' })],
+  ["writing the link checker's record", call('Write', { file_path: path.join(KOSH, 'kosh-reports/data/links-0b3f6c2e-5d1a.jsonl'), content: '{}' })],
+  ["editing the link checker's record", call('Edit', { file_path: 'kosh-reports/data/links.jsonl', old_string: '404', new_string: '200' })],
+  ["appending a result to the link checker's record", call('Bash', { command: `echo '{"url":"https://x.example/","status":200}' >> kosh-reports/data/links-abc.jsonl` })],
+  ["the link checker's record named by the session variable", call('Bash', { command: 'echo x >> "kosh-reports/data/links-${CLAUDE_CODE_SESSION_ID}.jsonl"' })],
   ['editing an archived capture', call('Edit', { file_path: 'kosh-reports/data/archive/EXAMPLE_SITE_PERFORMANCE_QA_REPORT_2026-10-13.capture.jsonl', old_string: 'a', new_string: 'b' })],
   ['multi-editing a capture', call('MultiEdit', { file_path: 'kosh-reports/data/capture-abc.jsonl', edits: [] })],
   ['appending to a capture from the shell', call('Bash', { command: `echo '{"type":"visit"}' >> kosh-reports/data/capture-abc.jsonl` })],
@@ -109,6 +113,8 @@ test('the guard blocks a cwd in the wrong case', { skip: !caseInsensitiveDisk &&
 for (const [name, input, options] of [
   ['writing a report', call('Write', { file_path: 'kosh-reports/data/qa-report-performance.json', content: '{}' })],
   ['rendering a report', call('Bash', { command: 'scripts/run-qa-report.sh kosh-reports/data/qa-report-performance.json' })],
+  ["running the link checker, which writes its record itself", call('Bash', { command: "node scripts/check-links.js 'https://x.example/' 'https://y.example/?a=1&b=2'" })],
+  ['reading the inventory', call('Bash', { command: 'node scripts/page-capture.js inventory https://example.com/ https://example.com/links/' })],
   ['editing the capture collector', call('Edit', { file_path: 'collectors/capture.js', old_string: 'a', new_string: 'b' })],
   ['staging the capture code and tests', call('Bash', { command: 'git add collectors/capture.js tests/capture.test.js scripts/archive-capture.js' })],
   ['running the tests', call('Bash', { command: 'node --test "tests/*.test.js"' })],

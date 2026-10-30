@@ -10,7 +10,7 @@ const SKILLS = path.join(ROOT, 'skills');
 const blocks = fs.readdirSync(SHARED).filter((name) => name.endsWith('.md'));
 const skills = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
 // A block every skill carries is left out; each rewrite adds its skill to the blocks it adopts.
-const CARRIERS = { 'screenshot-path.md': ['performance'] };
+const CARRIERS = { 'screenshot-path.md': ['performance', 'functional-design'] };
 
 test('shared/ and skills/ are not empty', () => {
   assert.ok(blocks.length > 0, 'no blocks in shared/');

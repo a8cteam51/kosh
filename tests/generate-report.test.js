@@ -33,7 +33,8 @@ const render = ({ root, reportsDir }, screenshots, pages) => {
     },
   }));
 
-  const { status, stdout, stderr } = spawnSync('node', [GENERATOR, input, '--functional'], {
+  // Past the schema, which refuses these paths first: this tests what the renderer itself lets through.
+  const { status, stdout, stderr } = spawnSync('node', [GENERATOR, input, '--functional', '--skip-validation'], {
     encoding: 'utf8',
     env: { ...process.env, KOSH_REPORTS_DIR: reportsDir },
   });
@@ -268,4 +269,64 @@ test('a report with no methodology prints none, rather than "Not recorded."', (t
   const html = renderPerformance(sandbox(t), withPages([{}], (r) => { delete r.testMethodology; }));
 
   assert.match(html, /<h2>Methodology<\/h2>\s*<div class="visited-pages">/);
+});
+
+test("a functional report shows each finding's fix and where it goes, its inventory, link checks and open questions, and points accessibility at the full audit", (t) => {
+  const { root, reportsDir } = sandbox(t);
+  const input = path.join(root, 'qa-report-functional.json');
+  const finding = (more) => ({ issue: 'Something', impact: 'Visitors notice', fix: 'Change it', device: 'both', pages: ['https://example.com/'], ...more });
+  fs.writeFileSync(input, JSON.stringify({
+    url: 'https://example.com/', websiteName: 'Functional Fixture', timestamp: '2026-01-01T00:00:00Z', environment: 'staging',
+    provenance: { model: 'claude-test-1', captureSha256: 'a'.repeat(64) },
+    visitedPages: ['https://example.com/'],
+    inventory: [{
+      url: 'https://example.com/', redirectedFrom: [], viewport: '1920x1080', status: 200, title: 'Home',
+      counts: { headings: 2, links: 2, images: 1 },
+      headings: [{ tag: 'h1', text: 'Welcome' }, { tag: 'h1', text: 'Mobile copy', hidden: true }],
+      links: [{ text: 'About', href: 'https://example.com/about/' }, { text: 'About', href: 'https://example.com/about/', hidden: true }],
+      images: [{ src: 'https://example.com/hero.jpg', alt: null }],
+      meta: { ogTitle: 'Home', twitterCard: null },
+    }],
+    linkChecks: [
+      { url: 'https://social.example/', outcome: 'checked', status: 999, redirectedTo: null, pathChanged: false },
+      { url: 'https://gone.example/', outcome: 'checked', status: 404, redirectedTo: 'https://login.example', pathChanged: true },
+    ],
+    openQuestions: [{ seen: 'The team page lists names', why: 'Not checked against anything', wouldSettle: 'The client confirms the list' }],
+    issues: {
+      critical: [],
+      high: [finding({ id: 'F-01', category: 'Design', fixAt: { kind: 'file', path: 'theme/style.css', line: 12, detail: 'the .hero rule' } })],
+      medium: [finding({ id: 'F-02', category: 'Accessibility', wcag: '1.4.3' }), finding({ id: 'F-03', category: 'Accessibility' })],
+      low: [],
+    },
+  }));
+  const { status, stdout, stderr } = spawnSync('node', [GENERATOR, input, '--functional'], { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: reportsDir } });
+  assert.equal(status, 0, stdout + stderr);
+  const html = fs.readFileSync(stdout.match(/^HTML report generated: (.*)$/m)[1], 'utf8');
+
+  assert.match(html, /<strong>Fix:<\/strong> Change it/);
+  assert.match(html, /<dt>Where<\/dt><dd>file: theme\/style\.css:12 — the \.hero rule<\/dd>/);
+  assert.match(html, /<dt>WCAG<\/dt><dd>1\.4\.3 Contrast \(Minimum\)<\/dd>/);
+  assert.equal((html.match(/<code>\/kosh:a11y<\/code>/g) || []).length, 1, 'only the accessibility finding without a contrast criterion points at the full audit');
+  assert.match(html, />F-01</);
+  assert.match(html, /<h2>Pages as loaded<\/h2>/);
+  assert.match(html, /<td>Welcome<\/td>/, 'a hidden h1 is not listed as the page\'s h1');
+  assert.match(html, /2 <span class="muted">\(1 hidden\)<\/span>/);
+  assert.match(html, /1 <span class="muted">\(1 no alt\)<\/span>/);
+  assert.match(html, /<td>og:title<\/td>/);
+  assert.match(html, /<h2>Off-site links checked<\/h2>/);
+  assert.match(html, /Unverified: likely bot protection/);
+  assert.match(html, /https:\/\/login\.example, a different page<\/td>\s*<td>Broken/);
+  assert.match(html, /<h2>Open questions<\/h2>[\s\S]*Would settle it:<\/strong> The client confirms the list/);
+});
+
+test("an accessibility report's findings never point at the accessibility test", (t) => {
+  const { root, reportsDir } = sandbox(t);
+  const input = path.join(root, 'qa-report-accessibility.json');
+  fs.writeFileSync(input, JSON.stringify({
+    url: 'https://example.com/', websiteName: 'A11y Fixture', timestamp: '2026-01-01T00:00:00Z',
+    issues: { critical: [], high: [{ category: 'Accessibility', issue: 'No label', impact: 'Screen readers say nothing', wcag_criterion: '1.3.1' }, { category: 'Accessibility', issue: 'Focus lost', impact: 'Keyboard users get lost' }], medium: [], low: [] },
+  }));
+  const { status, stdout, stderr } = spawnSync('node', [GENERATOR, input, '--accessibility'], { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: reportsDir } });
+  assert.equal(status, 0, stdout + stderr);
+  assert.doesNotMatch(fs.readFileSync(stdout.match(/^HTML report generated: (.*)$/m)[1], 'utf8'), /\/kosh:a11y/);
 });

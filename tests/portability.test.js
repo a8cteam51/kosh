@@ -16,7 +16,6 @@ const ALLOWED = {
   'shared/gate-check.md': { PushNotification: 1 },
   'shared/preamble.md': { $ARGUMENTS: 2 },
   'skills/aeo/SKILL.md': { 'Claude prompt': 9 },
-  'skills/functional-design/SKILL.md': { '/kosh:': 1 },
   'skills/shop/SKILL.md': { '/kosh:': 7 },
 };
 

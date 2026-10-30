@@ -9,9 +9,17 @@ const capture = require('../collectors/capture.js');
 
 const TIMING = { viewport: { width: 1920, height: 1080 }, loadTime: 1200, domContentLoaded: 800, ttfb: 100, transferSize: 5000, resourceTransferSize: 90000, navType: 'navigate' };
 const VITALS = { lcp: 900, cls: 0.02, quietFor: 1000, sinceLoad: 10000 };
-// Answers each read the capture makes, the way the page would: readyState, the vitals, or the timing.
+const INVENTORY = {
+  title: 'Home', counts: { links: 2, images: 1, headings: 1 },
+  headings: [{ tag: 'h1', text: 'Welcome' }],
+  links: [{ text: 'About', href: 'https://example.com/about/' }, { text: 'About', href: 'https://example.com/about/', hidden: true }],
+  images: [{ src: 'https://example.com/hero.jpg', alt: null }],
+  meta: { ogTitle: 'Home', canonical: 'https://example.com/' },
+};
+// Answers each read the capture makes, the way the page would: readyState, the vitals, the inventory, or the timing.
 const answer = (fn, timing, vitals = VITALS) => {
   if (String(fn).includes('readyState')) return 'loading';
+  if (String(fn).includes('getClientRects')) return INVENTORY;
   return String(fn).includes('layout-shift') ? vitals : timing;
 };
 
@@ -86,9 +94,10 @@ test('a navigation is one visit with its load', async (t) => {
   const box = sandbox(t);
   await navigate(await start(fakePage()), 'https://example.com/');
 
-  const [visit, load, vitals] = box.entries();
+  const [visit, load, inventory, vitals] = box.entries();
   assert.deepStrictEqual({ ...visit, at: undefined }, { at: undefined, type: 'visit', visit: visit.visit, url: 'https://example.com/', status: 200, redirectedFrom: [] });
   assert.deepStrictEqual({ ...load, at: undefined }, { at: undefined, type: 'load', visit: visit.visit, ...TIMING });
+  assert.deepStrictEqual([inventory.type, inventory.visit, inventory.title, inventory.links.length, inventory.meta.ogTitle], ['inventory', visit.visit, 'Home', 2, 'Home']);
   assert.deepStrictEqual({ ...vitals, at: undefined }, { at: undefined, type: 'vitals', visit: visit.visit, lcp: 900, cls: 0.02, settled: true });
 });
 
@@ -1077,4 +1086,35 @@ test('a capture name is the live file, its .taken or .<pid> copy, or an archived
 
 test('the capture exposes no function a page can call', () => {
   assert.doesNotMatch(fs.readFileSync(require.resolve('../collectors/capture.js'), 'utf8'), /expose(Binding|Function)/);
+});
+
+test("the inventory reads a page's headings, links, images and share tags, and marks what has no layout box", () => {
+  const { JSDOM } = require('jsdom');
+  const { window } = new JSDOM(`<!doctype html><title>Home</title>
+    <meta property="og:title" content="Home page"><meta name="twitter:card" content="summary"><link rel="canonical" href="/">
+    <h1>Welcome</h1><a href="/about/">About   us</a><a href="https://x.example/" aria-label="X profile"><svg></svg></a>
+    <img src="/hero.jpg"><img src="/logo.png" alt="">`, { url: 'https://example.com/', runScripts: 'outside-only' });
+  const read = window.eval(`(${capture.readInventory})()`);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(read.counts)), { links: 2, images: 2, headings: 1 });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(read.links)), [{ text: 'About us', href: 'https://example.com/about/', hidden: true }, { text: 'X profile', href: 'https://x.example/', hidden: true }]);
+  assert.deepStrictEqual([read.images[0].alt, read.images[1].alt], [null, '']);
+  assert.deepStrictEqual([read.meta.ogTitle, read.meta.twitterCard, read.meta.canonical, read.meta.ogImage], ['Home page', 'summary', 'https://example.com/', null]);
+});
+
+test("the inventory's sizes, shapes and URLs are checked again in Node, since the page answers in its own world", () => {
+  const entry = capture.inventoryEntry({
+    title: 'x'.repeat(1000),
+    counts: { links: 'lots', images: 9, headings: 1 },
+    headings: [{ tag: 'script', text: 'y'.repeat(500) }, 'not an object'],
+    links: Array.from({ length: 5000 }, (_, i) => ({ text: `link ${i}`, href: `https://example.com/?token=secret&page=${i}`, hidden: 'yes' })),
+    images: [{ src: 'https://example.com/a.jpg', alt: 42 }],
+    meta: { ogTitle: { toString: () => 'object' }, ogImage: 'https://example.com/og.jpg?share=abc', twitterImage: '/wp-content/card.jpg', injected: 'no' },
+  });
+  assert.strictEqual(entry.title.length, 301);
+  assert.deepStrictEqual(entry.counts, { headings: 1, links: null, images: 9 });
+  assert.deepStrictEqual(entry.headings, [{ tag: 'h?', text: `${'y'.repeat(120)}…` }]);
+  assert.strictEqual(entry.links.length, 300);
+  assert.deepStrictEqual(entry.links[0], { text: 'link 0', href: 'https://example.com/?page=0' });
+  assert.deepStrictEqual(entry.images, [{ src: 'https://example.com/a.jpg', alt: null }]);
+  assert.deepStrictEqual([entry.meta.ogTitle, entry.meta.ogImage, entry.meta.twitterImage, 'injected' in entry.meta], [null, 'https://example.com/og.jpg', '/wp-content/card.jpg', false]);
 });
