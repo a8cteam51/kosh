@@ -878,6 +878,20 @@ test("correcting a run after a later one took its archive name brings the run's 
   assert.equal(fs.readFileSync(archivedCapture(box, '_2026-01-01T09-00-00Z'), 'utf8'), laterCapture);
 });
 
+test("the merge's refusal prints after the line it follows, not above it", (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, CAPTURE.filter((entry) => entry !== WALL));
+  const json = write(box, SKILL_OUTPUT, report());
+
+  const { status, output } = run(box, 'bash', ['-c', '"$@" 2>&1', '_', WRAPPER, json]);
+
+  assert.notEqual(status, 0, output);
+  const merged = output.indexOf('Page inventory merged');
+  const refused = output.indexOf("wasn't held to");
+  assert.ok(merged !== -1 && refused !== -1, output);
+  assert.ok(merged < refused, output);
+});
+
 test("a copied seal that doesn't hold gets no pass: the report is merged like a fresh run", (t) => {
   const box = finishedRun(t);
   writeCapture(box, SESSION, CAPTURE.filter((entry) => entry !== WALL));

@@ -101,7 +101,7 @@ if [ "$(dirname "$QA_REPORT_JSON")" -ef "$DATA_DIR" ] && [[ "$(basename "$QA_REP
   done
   # Before the stamp, so the seal covers the capture a performance report's pages[] came from.
   # A performance report the merge didn't reach would render the model's own numbers.
-  if ! MERGE_OUTPUT=$(node "$MERGE_SCRIPT_PATH" merge "$QA_REPORT_JSON" $TEST_TYPE_FLAGS); then
+  if ! MERGE_OUTPUT=$(node "$MERGE_SCRIPT_PATH" merge "$QA_REPORT_JSON" $TEST_TYPE_FLAGS 2>&1); then
     echo "$MERGE_OUTPUT"
     echo -e "${RED}Error: could not merge this session's page capture into $QA_REPORT_JSON. Nothing was rendered.${NC}"
     exit 1
