@@ -605,6 +605,303 @@ test('re-rendering an archived performance report keeps its pages[] and its seal
   assert.ok(fs.existsSync(captureAt(box)), "a re-render took the next run's capture");
 });
 
+// A finished run, copied back from the archive the way a model corrects a report it has already rendered.
+const FINDING = { category: 'Links', issue: 'first wording', impact: 'y', fix: 'z', device: 'both', pages: ['https://example.com/'] };
+const finishedRun = (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, [{ ...CAPTURE[0], at: '2026-01-01T00:00:00.000Z' }, ...CAPTURE.slice(1)]);
+  fs.writeFileSync(path.join(box.reportsDir, 'data', `links-${SESSION}.jsonl`), `${JSON.stringify({ at: '2026-01-01T00:05:00.000Z', url: 'https://x.example/', outcome: 'checked', status: 404, redirectedTo: null, pathChanged: false })}\n`);
+  const ran = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report((r) => { r.issues.high = [{ ...FINDING }]; }))]);
+  assert.equal(ran.status, 0, ran.output);
+  return box;
+};
+const readArchived = (box, suffix = '') => JSON.parse(fs.readFileSync(archiveCopy(box).replace(/\.json$/, `${suffix}.json`), 'utf8'));
+const correct = (box, edit) => {
+  const copy = readArchived(box);
+  edit(copy);
+  return run(box, WRAPPER, [write(box, SKILL_OUTPUT, copy)]);
+};
+const reworded = (issue) => (copy) => { copy.issues.high[0].issue = issue; };
+
+test('correcting a rendered report keeps what the capture gave it, and each copy keeps its capture', (t) => {
+  const box = finishedRun(t);
+  const original = readArchived(box);
+  assert.equal(original.inventory.length, 2);
+  assert.equal(original.linkChecks.length, 1);
+  assert.equal(original.provenance.heldTo, 'example.com');
+
+  const { status, output } = correct(box, reworded('second wording'));
+
+  assert.equal(status, 0, output);
+  assert.match(output, /Provenance \(kept\)/);
+  const corrected = readArchived(box);
+  assert.equal(corrected.issues.high[0].issue, 'second wording');
+  assert.deepEqual({ ...corrected, issues: null }, { ...original, issues: null });
+  assert.deepEqual(readArchived(box, '_2026-01-01T00-00-00Z'), original);
+  const capture = fs.readFileSync(archivedCapture(box), 'utf8');
+  assert.equal(fs.readFileSync(archivedCapture(box, '_2026-01-01T00-00-00Z'), 'utf8'), capture);
+  assert.ok(!fs.existsSync(path.join(box.reportsDir, 'data', 'qa-report-functional.json')));
+});
+
+test('a second correction moves the first aside without overwriting the original', (t) => {
+  const box = finishedRun(t);
+  const original = readArchived(box);
+  assert.equal(correct(box, reworded('second wording')).status, 0);
+  const { status, output } = correct(box, reworded('third wording'));
+
+  assert.equal(status, 0, output);
+  assert.equal(readArchived(box, '_2026-01-01T00-00-00Z').issues.high[0].issue, 'first wording');
+  assert.deepEqual(readArchived(box, '_2026-01-01T00-00-00Z'), original);
+  assert.equal(readArchived(box, '_2026-01-01T00-00-00Z-2').issues.high[0].issue, 'second wording');
+  assert.equal(readArchived(box).issues.high[0].issue, 'third wording');
+  assert.ok(fs.existsSync(archivedCapture(box, '_2026-01-01T00-00-00Z-2')));
+  assert.ok(fs.existsSync(archivedCapture(box)));
+});
+
+test('pages the browser loaded after the render stay out of a correction, and in the next run\'s capture', (t) => {
+  const box = finishedRun(t);
+  const original = readArchived(box);
+  const later = [{ type: 'visit', visit: 'b-1', browser: 'run', url: 'https://example.com/recheck/' }];
+  writeCapture(box, SESSION, later);
+
+  const { status, output } = correct(box, reworded('second wording'));
+
+  assert.equal(status, 0, output);
+  assert.deepEqual(readArchived(box).inventory, original.inventory);
+  assert.equal(readArchived(box).provenance.heldTo, 'example.com');
+  assert.match(fs.readFileSync(captureAt(box), 'utf8'), /\/recheck\//);
+});
+
+test('a correction that adds a finding numbers it, and is held to the same fixAt check', (t) => {
+  const box = finishedRun(t);
+  const added = correct(box, (copy) => { copy.issues.high.push({ ...FINDING, issue: 'added' }); });
+  assert.equal(added.status, 0, added.output);
+  assert.deepEqual(readArchived(box).issues.high.map((finding) => finding.id), ['F-01', 'F-02']);
+
+  const before = readArchived(box);
+  const refused = correct(box, (copy) => { copy.issues.high[0].fixAt = { kind: 'file', path: 'not-here.php', detail: 'x' }; });
+  assert.notEqual(refused.status, 0, refused.output);
+  assert.match(refused.output, /no file at not-here\.php/);
+  assert.deepEqual(readArchived(box), before);
+});
+
+test("a later run with no capture doesn't take the earlier run's capture as its own", (t) => {
+  const box = finishedRun(t);
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
+
+  assert.equal(status, 0, output);
+  assert.ok(!fs.existsSync(archivedCapture(box)));
+  assert.ok(fs.existsSync(archivedCapture(box, '_2026-01-01T00-00-00Z')));
+});
+
+test('correcting a rendered performance report keeps its pages[]', (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, MEASURED);
+  assert.equal(run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, performanceReport())]).status, 0);
+  const copy = JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8'));
+  assert.equal(copy.pages.length, 1);
+
+  const { status, output } = run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, { ...copy, testMethodology: 'corrected' })]);
+
+  assert.equal(status, 0, output);
+  const corrected = JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8'));
+  assert.equal(corrected.testMethodology, 'corrected');
+  assert.deepEqual(corrected.pages, copy.pages);
+  assert.equal(corrected.provenance.seal, copy.provenance.seal);
+});
+
+test("a correction can't change what the capture measured", (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, MEASURED);
+  assert.equal(run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, performanceReport())]).status, 0);
+  const copy = JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8'));
+  const measured = copy.pages[0].lcp;
+  copy.pages[0].lcp = 1;
+
+  const { status, output } = run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, copy)]);
+
+  assert.equal(status, 0, output);
+  assert.match(output, /Restored from the archived report, not this copy: pages/);
+  assert.equal(JSON.parse(fs.readFileSync(archivedPerformance(box), 'utf8')).pages[0].lcp, measured);
+});
+
+test("a correction can't move the report to another site, or change its inventory or link checks", (t) => {
+  const box = finishedRun(t);
+  const original = readArchived(box);
+
+  const { status, output } = correct(box, (copy) => {
+    copy.url = 'https://other.example/';
+    copy.inventory = [];
+    copy.linkChecks = [];
+  });
+
+  assert.equal(status, 0, output);
+  assert.match(output, /Restored from the archived report, not this copy: url, inventory, linkChecks/);
+  assert.deepEqual(readArchived(box), original);
+});
+
+const LATER_BROWSER = [
+  { at: '2026-03-01T00:00:00.000Z', type: 'visit', visit: 'b-1', browser: 'later', url: 'https://example.com/new/', status: 200, redirectedFrom: [] },
+  { type: 'load', visit: 'b-1', loadTime: 1 },
+];
+
+test("an old report reused by a later browser's run is refused, and can still be corrected under another name", (t) => {
+  const box = finishedRun(t);
+  const original = readArchived(box);
+  writeCapture(box, SESSION, LATER_BROWSER);
+
+  const { status, output } = correct(box, reworded('from the later run'));
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /a browser that isn't in that run's capture has loaded example\.com/);
+  assert.deepEqual(readArchived(box), original);
+  assert.ok(fs.existsSync(captureAt(box)));
+  assert.notEqual(correct(box, (copy) => { copy.url = 'https://other.example/'; }).status, 0);
+
+  const renamed = run(box, WRAPPER, [write(box, 'kosh-reports/data/qa-report-functional-corrected.json', { ...readArchived(box), issues: { ...original.issues, high: [{ ...original.issues.high[0], issue: 'second wording' }] } })]);
+  assert.equal(renamed.status, 0, renamed.output);
+  assert.equal(readArchived(box).issues.high[0].issue, 'second wording');
+  assert.deepEqual(readArchived(box).inventory, original.inventory);
+  assert.ok(fs.existsSync(archivedCapture(box)));
+  assert.ok(fs.existsSync(captureAt(box)));
+});
+
+test("a refused report's retry from a new session isn't a correction: it warns and doesn't render", (t) => {
+  const box = sandbox(t);
+  writeCapture(box, 'old', MEASURED);
+  const json = write(box, PERFORMANCE_OUTPUT, performanceReport((r) => { r.testMethodology = 12; }));
+  assert.notEqual(run(box, WRAPPER, [json], { CLAUDE_CODE_SESSION_ID: 'old' }).status, 0);
+  const refused = JSON.parse(fs.readFileSync(json, 'utf8'));
+  assert.ok(refused.provenance.seal);
+
+  const { status, output } = run(box, WRAPPER, [write(box, PERFORMANCE_OUTPUT, { ...refused, testMethodology: 'fixed' })], { CLAUDE_CODE_SESSION_ID: 'new' });
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /left alone: capture-old\.jsonl\.taken/);
+  assert.ok(!fs.existsSync(path.join(box.reportsDir, 'data', 'archive')));
+});
+
+test("correcting a run leaves a later refused run's capture for its retry", (t) => {
+  const box = finishedRun(t);
+  const original = readArchived(box);
+  const originalCapture = fs.readFileSync(archivedCapture(box), 'utf8');
+  const later = CAPTURE.map((entry) => ({ ...entry, ...(entry.browser && { browser: 'later' }), ...(entry.visit && { visit: `z${entry.visit}` }), ...(entry.type === 'visit' && { at: '2026-03-01T00:00:00.000Z' }) }));
+  writeCapture(box, SESSION, later);
+  const refusedJson = write(box, SKILL_OUTPUT, report((r) => { r.testMethodology = 12; }));
+  assert.notEqual(run(box, WRAPPER, [refusedJson]).status, 0);
+  const refused = JSON.parse(fs.readFileSync(refusedJson, 'utf8'));
+  assert.ok(refused.provenance.seal);
+  const held = fs.readFileSync(`${captureAt(box)}.taken`, 'utf8');
+
+  const { status, output } = correct(box, reworded('second wording'));
+
+  assert.equal(status, 0, output);
+  assert.match(output, /Correcting archived report/);
+  assert.deepEqual({ ...readArchived(box), issues: null }, { ...original, issues: null });
+  assert.equal(fs.readFileSync(archivedCapture(box), 'utf8'), originalCapture);
+  assert.equal(fs.readFileSync(`${captureAt(box)}.taken`, 'utf8'), held);
+
+  const retry = run(box, WRAPPER, [write(box, SKILL_OUTPUT, { ...refused, testMethodology: 'fixed' })]);
+  assert.equal(retry.status, 0, retry.output);
+  assert.doesNotMatch(retry.output, /Correcting archived report/);
+  assert.ok(!fs.existsSync(`${captureAt(box)}.taken`));
+  const dir = path.join(box.reportsDir, 'data', 'archive');
+  assert.ok(fs.readdirSync(dir).some((name) => name.endsWith('2026-03-01.capture.jsonl')));
+});
+
+test("a correction leaves the next run's link record alone", (t) => {
+  const box = finishedRun(t);
+  const record = path.join(box.reportsDir, 'data', `links-${SESSION}.jsonl`);
+  fs.writeFileSync(record, `${JSON.stringify({ at: '2026-02-01T00:00:00.000Z', url: 'https://next.example/', outcome: 'checked', status: 200, redirectedTo: null, pathChanged: false })}\n`);
+
+  const { status, output } = correct(box, reworded('second wording'));
+
+  assert.equal(status, 0, output);
+  assert.ok(fs.existsSync(record));
+});
+
+test("a report with no capture hash doesn't get the one beside an older copy with none", (t) => {
+  const box = finishedRun(t);
+  const main = readArchived(box);
+  delete main.provenance.captureSha256;
+  fs.writeFileSync(archiveCopy(box), JSON.stringify(main, null, 2));
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
+
+  assert.equal(status, 0, output);
+  assert.ok(!fs.existsSync(archivedCapture(box)));
+  assert.ok(fs.existsSync(archivedCapture(box, '_2026-01-01T00-00-00Z')));
+});
+
+test('a correction archived under a new website name gets the run\'s capture beside it', (t) => {
+  const box = finishedRun(t);
+  const capture = fs.readFileSync(archivedCapture(box), 'utf8');
+
+  const { status, output } = correct(box, (copy) => { copy.websiteName = 'Renamed Site'; });
+
+  assert.equal(status, 0, output);
+  const dir = path.join(box.reportsDir, 'data', 'archive');
+  assert.equal(fs.readFileSync(path.join(dir, 'RENAMED_SITE_FUNCTIONAL_QA_REPORT_2026-01-01.capture.jsonl'), 'utf8'), capture);
+  assert.equal(fs.readFileSync(archivedCapture(box), 'utf8'), capture);
+});
+
+test("a correction reads the run's capture from whichever copy has it", (t) => {
+  const box = finishedRun(t);
+  const capture = fs.readFileSync(archivedCapture(box), 'utf8');
+  const dir = path.join(box.reportsDir, 'data', 'archive');
+  const renamed = run(box, WRAPPER, [write(box, 'kosh-reports/data/qa-report-functional-corrected.json', { ...readArchived(box), websiteName: 'A Renamed Site' })]);
+  assert.equal(renamed.status, 0, renamed.output);
+  const copy = path.join(dir, 'A_RENAMED_SITE_FUNCTIONAL_QA_REPORT_2026-01-01');
+  assert.ok(!fs.existsSync(`${copy}.capture.jsonl`));
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, JSON.parse(fs.readFileSync(`${copy}.json`, 'utf8')))]);
+
+  assert.equal(status, 0, output);
+  assert.equal(fs.readFileSync(`${copy}.capture.jsonl`, 'utf8'), capture);
+});
+
+test("correcting a run after a later one took its archive name brings the run's capture back to that name", (t) => {
+  const box = finishedRun(t);
+  const capture = fs.readFileSync(archivedCapture(box), 'utf8');
+  writeCapture(box, SESSION, [{ ...LATER_BROWSER[0], at: '2026-01-01T09:00:00.000Z', url: 'https://example.com/' }, LATER_BROWSER[1], { ...WALL, browser: 'later' }]);
+  const later = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
+  assert.equal(later.status, 0, later.output);
+  const aside = readArchived(box, '_2026-01-01T00-00-00Z');
+  const laterCapture = fs.readFileSync(archivedCapture(box), 'utf8');
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, { ...aside, issues: { ...aside.issues, high: [{ ...aside.issues.high[0], issue: 'second wording' }] } })]);
+
+  assert.equal(status, 0, output);
+  assert.equal(readArchived(box).timestamp, '2026-01-01T00:00:00Z');
+  assert.equal(fs.readFileSync(archivedCapture(box), 'utf8'), capture);
+  assert.equal(fs.readFileSync(archivedCapture(box, '_2026-01-01T09-00-00Z'), 'utf8'), laterCapture);
+});
+
+test("the merge's refusal prints after the line it follows, not above it", (t) => {
+  const box = sandbox(t);
+  writeCapture(box, SESSION, CAPTURE.filter((entry) => entry !== WALL));
+  const json = write(box, SKILL_OUTPUT, report());
+
+  const { status, output } = run(box, 'bash', ['-c', '"$@" 2>&1', '_', WRAPPER, json]);
+
+  assert.notEqual(status, 0, output);
+  const merged = output.indexOf('Page inventory merged');
+  const refused = output.indexOf("wasn't held to");
+  assert.ok(merged !== -1 && refused !== -1, output);
+  assert.ok(merged < refused, output);
+});
+
+test("a copied seal that doesn't hold gets no pass: the report is merged like a fresh run", (t) => {
+  const box = finishedRun(t);
+  writeCapture(box, SESSION, CAPTURE.filter((entry) => entry !== WALL));
+
+  const { status, output } = correct(box, (copy) => { copy.provenance.heldTo = 'forged.example'; });
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /wasn't held to example\.com/);
+});
+
 test("a skill report's timestamp is when its browser first loaded a page, not what the model wrote, and a placeholder never survives", (t) => {
   const archived = (box) => {
     const dir = path.join(box.reportsDir, 'data', 'archive');

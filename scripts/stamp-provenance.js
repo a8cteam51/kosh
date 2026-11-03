@@ -67,10 +67,12 @@ function sealFor(report, { model, modelSource, effort, pluginVersion, skills, co
   return crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex');
 }
 
+const sealHolds = (report) => Boolean(report.provenance?.seal) && report.provenance.seal === sealFor(report, report.provenance);
+
 function stamp(report, flags, env = process.env) {
   const existing = report.provenance;
   if (!existing || typeof existing !== 'object') return 'absent';
-  if (existing.seal && existing.seal === sealFor(report, existing)) return 'kept';
+  if (sealHolds(report)) return 'kept';
   // A seal is never rewritten, so a wrong skill in it would stay; any other flag would be hashed as a skill folder.
   const unique = [...new Set(flags)];
   if (unique.length > 1 || unique.some((flag) => !TYPE_FLAGS.includes(flag))) return 'refused';
@@ -129,4 +131,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { TYPE_FLAGS, describeProvenance, hashSkill, stamp };
+module.exports = { TYPE_FLAGS, describeProvenance, hashSkill, sealHolds, stamp };

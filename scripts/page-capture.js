@@ -2,8 +2,10 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const util = require('util');
 const { CAPTURE_NAME, captureFile, redactUrl, siteHost: host } = require('../collectors/capture.js');
 const { recordFile } = require('./check-links.js');
+const { sealHolds } = require('./stamp-provenance.js');
 
 const normal = (url) => {
   try {
@@ -193,8 +195,52 @@ const missingCapture = (live) => {
     : `Warning: no page capture at ${live}. A browser started before kosh added the capture records none: restart Claude Code.`;
 };
 
+const refuseBadFixes = (report) => {
+  const bad = badFileFixes(report.issues);
+  if (bad.length) {
+    console.error(`✗ A finding's fixAt names a file that isn't there:\n${bad.map((line) => `  ${line}`).join('\n')}\nUse kind "file" only for a file in the folder this run started in, or describe the fix in fixAt.detail with another kind.`);
+    process.exitCode = 1;
+  }
+};
+
+const RUN_FIELDS = ['url', 'pages', 'inventory', 'linkChecks'];
+const captureBeside = (file) => file.replace(/\.json$/, '.capture.jsonl');
+
+// A refused report is sealed too but never archived, so only a finished run's copy has a match here.
+const sealedCopy = (report) => {
+  if (!sealHolds(report)) return null;
+  const dir = path.join(path.dirname(captureFile()), 'archive');
+  let names = [];
+  try { names = fs.readdirSync(dir); } catch {}
+  const copies = names.filter((name) => name.endsWith('.json')).map((name) => path.join(dir, name)).filter((file) => {
+    try { return JSON.parse(fs.readFileSync(file, 'utf8')).provenance?.seal === report.provenance.seal; } catch { return false; }
+  });
+  return copies.find((file) => fs.existsSync(captureBeside(file))) ?? copies[0] ?? null;
+};
+
+const correction = (reportPath, report, copyPath, flags) => {
+  const copy = JSON.parse(fs.readFileSync(copyPath, 'utf8'));
+  const browsers = new Set(readEntries(captureBeside(copyPath)).map((entry) => entry.browser));
+  if (siteVisits(readEntries(captureFile()), copy.url).some((visit) => !browsers.has(visit.browser))) {
+    console.error(`✗ ${reportPath} is a copy of an archived report, but a browser that isn't in that run's capture has loaded ${host(copy.url)} since. A new run writes its own report rather than reusing an old one. To correct the old report, finish the later run first, or save the copy in the same folder under another name, like qa-report-<type>-corrected.json, and run that.`);
+    process.exitCode = 1;
+    return;
+  }
+  const changed = RUN_FIELDS.filter((field) => !util.isDeepStrictEqual(report[field], copy[field]));
+  for (const field of changed) report[field] = copy[field];
+  // run-qa-report.sh reads this line: the session's capture and link record aren't this render's to take.
+  console.log(`Correcting archived report: ${copyPath}`);
+  if (changed.length) console.log(`  Restored from the archived report, not this copy: ${changed.join(', ')}`);
+  const functional = flags.includes('--functional');
+  if (functional) numberFindings(report.issues);
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  if (functional) refuseBadFixes(report);
+};
+
 const merge = (reportPath, flags) => {
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  const copyPath = sealedCopy(report);
+  if (copyPath) return correction(reportPath, report, copyPath, flags);
   const taken = take();
   if (!fs.existsSync(taken)) console.warn(missingCapture(captureFile()));
   const all = readEntries(taken);
@@ -251,11 +297,7 @@ const merge = (reportPath, flags) => {
 
 const mergedFunctional = (report, entries) => {
   console.log(`Page inventory merged: ${report.inventory?.length ?? 0} page × viewport rows from ${visitCount(entries)} visits on ${host(report.url)}, and ${report.linkChecks.length} link check${report.linkChecks.length === 1 ? '' : 's'}`);
-  const bad = badFileFixes(report.issues);
-  if (bad.length) {
-    console.error(`✗ A finding's fixAt names a file that isn't there:\n${bad.map((line) => `  ${line}`).join('\n')}\nUse kind "file" only for a file in the folder this run started in, or describe the fix in fixAt.detail with another kind.`);
-    process.exitCode = 1;
-  }
+  refuseBadFixes(report);
   // Only a fresh run is refused, as for performance: without a capture there's no inventory, and an old archive re-renders.
   if (report.inventory?.length && !report.provenance?.heldTo) {
     console.error(`✗ This run's browser wasn't held to ${host(report.url)}: the gate check (\`__kosh.gate\`) has to come back with both fields null on the first page, before any other is loaded, or nothing keeps the browser on the site. Close the browser with browser_close and run the skill again from the start.`);
