@@ -101,10 +101,13 @@ if [ "$(dirname "$QA_REPORT_JSON")" -ef "$DATA_DIR" ] && [[ "$(basename "$QA_REP
   done
   # Before the stamp, so the seal covers the capture a performance report's pages[] came from.
   # A performance report the merge didn't reach would render the model's own numbers.
-  if ! node "$MERGE_SCRIPT_PATH" merge "$QA_REPORT_JSON" $TEST_TYPE_FLAGS; then
+  if ! MERGE_OUTPUT=$(node "$MERGE_SCRIPT_PATH" merge "$QA_REPORT_JSON" $TEST_TYPE_FLAGS); then
+    echo "$MERGE_OUTPUT"
     echo -e "${RED}Error: could not merge this session's page capture into $QA_REPORT_JSON. Nothing was rendered.${NC}"
     exit 1
   fi
+  echo "$MERGE_OUTPUT"
+  CORRECTS=$(printf '%s\n' "$MERGE_OUTPUT" | sed -n 's/^Correcting archived report: //p')
 fi
 
 # A missing stamp costs comparability, not the report, so it warns rather than exits.
@@ -141,9 +144,21 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
   # The HTML name carries only a date, so a same-day rerun moves the previous run aside under its own timestamp.
   if [ -e "$ARCHIVE_JSON" ] && ! cmp -s "$QA_REPORT_JSON" "$ARCHIVE_JSON"; then
     OLD_STAMP=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).timestamp" "$ARCHIVE_JSON" | tr -c 'A-Za-z0-9\n' '-')
-    mv "$ARCHIVE_JSON" "${ARCHIVE_JSON%.json}_$OLD_STAMP.json"
+    # A corrected report keeps its run's timestamp, so its earlier copies share one.
+    ASIDE="${ARCHIVE_JSON%.json}_$OLD_STAMP"
+    COPY=2
+    while [ -e "$ASIDE.json" ]; do
+      ASIDE="${ARCHIVE_JSON%.json}_$OLD_STAMP-$COPY"
+      COPY=$((COPY + 1))
+    done
+    mv "$ARCHIVE_JSON" "$ASIDE.json"
     if [ -e "$ARCHIVE_CAPTURE" ]; then
-      mv "$ARCHIVE_CAPTURE" "${ARCHIVE_JSON%.json}_$OLD_STAMP.capture.jsonl"
+      # Both copies of a corrected report hash the same capture, so each keeps it.
+      if [ "$(node -p "const hash = (file) => JSON.parse(require('fs').readFileSync(file, 'utf8')).provenance?.captureSha256; hash(process.argv[1]) !== undefined && hash(process.argv[1]) === hash(process.argv[2])" "$QA_REPORT_JSON" "$ASIDE.json")" = "true" ]; then
+        cp "$ARCHIVE_CAPTURE" "$ASIDE.capture.jsonl"
+      else
+        mv "$ARCHIVE_CAPTURE" "$ASIDE.capture.jsonl"
+      fi
     fi
   fi
 
@@ -153,13 +168,21 @@ if [ -n "$REPORT_FILE" ] && [ -f "$REPORT_FILE" ]; then
     echo -e "${BLUE}Source data archived: $ARCHIVE_JSON${NC}"
     # Only a skill's own output goes, so the next run saves its report without reading this one first.
     if $SKILL_OUTPUT; then
-      # A skill's rendered report ends its run, so the session's page capture goes with it.
-      node "$CAPTURE_SCRIPT_PATH" "$ARCHIVE_JSON" "$ARCHIVE_CAPTURE" \
-        || echo -e "${YELLOW}Warning: could not archive this session's page capture${NC}"
+      if [ -n "$CORRECTS" ]; then
+        # A new website name or a later run's archive leaves this name without the capture its hash covers.
+        if [ ! -e "$ARCHIVE_CAPTURE" ] && [ -e "${CORRECTS%.json}.capture.jsonl" ]; then
+          cp "${CORRECTS%.json}.capture.jsonl" "$ARCHIVE_CAPTURE" \
+            || echo -e "${YELLOW}Warning: could not copy the run's page capture beside $ARCHIVE_JSON${NC}"
+        fi
+      else
+        # A skill's rendered report ends its run, so the session's page capture goes with it.
+        node "$CAPTURE_SCRIPT_PATH" "$ARCHIVE_JSON" "$ARCHIVE_CAPTURE" \
+          || echo -e "${YELLOW}Warning: could not archive this session's page capture${NC}"
+      fi
       rm -f "$QA_REPORT_JSON" && echo -e "${BLUE}Source JSON removed: $QA_REPORT_JSON${NC}" \
         || echo -e "${YELLOW}Warning: could not remove $QA_REPORT_JSON; the next run must read it before overwriting it${NC}"
       # The report now holds the link checker's results, so the next functional run starts from none.
-      if [ "$OWN_FLAG" = "--functional" ]; then
+      if [ "$OWN_FLAG" = "--functional" ] && [ -z "$CORRECTS" ]; then
         rm -f "$(node -p "require(require('path').resolve(process.argv[1])).recordFile()" "$(dirname "$0")/check-links.js")"
       fi
     fi
