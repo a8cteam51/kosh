@@ -277,6 +277,8 @@
     }), [new Color(255, 255, 255, 1)]);
   };
 
+  const paintOf = (color) => (color.alpha < 1 ? `${color.toHexString()} at ${Math.round(color.alpha * 100)}%` : color.toHexString());
+
   const ratioRange = (foreground, element) => {
     const { flattenColors, getContrast } = window.axe.commons.color;
     const backgrounds = backgroundsBehind(element);
@@ -294,7 +296,7 @@
       foreground.parseString(getComputedStyle(node.element).getPropertyValue('-webkit-text-fill-color'));
       if (!foreground.alpha) return null;
       const range = ratioRange(foreground, node.element);
-      return range && { textColor: foreground.toHexString(), ratioRange: { min: range.min, max: range.max } };
+      return range && { textColor: paintOf(foreground), ratioRange: { min: range.min, max: range.max } };
     } catch {
       return null;
     }
@@ -321,7 +323,7 @@
         html: clip(field.outerHTML, 150),
         ratio: range?.flat ? range.min : null,
         threshold,
-        textColor: foreground.toHexString(),
+        textColor: paintOf(foreground),
         background: range?.flat ?? null,
         fontSize: `${pt.toFixed(1)}pt (${px}px)`,
         fontWeight: bold ? 'bold' : 'normal',
@@ -380,6 +382,9 @@
     const { fontSize, fontWeight } = getComputedStyle(heading);
     return `${heading.tagName.toLowerCase()} ${Math.round(parseFloat(fontSize) * 10) / 10}px/${fontWeight} ${clip(heading.textContent.replace(/\s+/g, ' ').trim(), 80)}`;
   });
+
+  const MAX_TEXT = 8000;
+  const mainText = () => clip((document.querySelector('main') ?? document.body).innerText.replace(/\n\s*\n+/g, '\n').trim(), MAX_TEXT);
 
   const MAX_LAYOUT_ROWS = 20;
   // ponytail: only an element holding its own text counts, so text cut off by a wrapper is left to the screenshot; walking every wrapper flags each carousel.
@@ -461,6 +466,7 @@
       images: Array.isArray(pictures) ? pictures.map(({ diagnosis, ...image }) => image) : pictures,
       contrast: measured.violations ? { violations: grouped(measured.violations), incomplete: grouped(measured.incomplete), counts: measured.counts } : measured,
       headings: headings(),
+      text: mainText(),
       clipped: clippedText(),
       overflow: overflow()
     };

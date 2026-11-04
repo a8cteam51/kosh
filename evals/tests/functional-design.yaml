@@ -472,3 +472,18 @@ tests:
     assert:
       - type: regex
         value: '^[\s*_#>`\d.)]*NO\b'
+
+  - description: The page's text comes from page(), so there's no code to write for it
+    vars:
+      request: |
+        You're checking the copy on https://example.com/contact/ at desktop for spelling
+        and grammar. You've already run `__kosh.page()` on it, and it returned its usual
+        fields. The text isn't cut off.
+
+        Do you need to write your own `browser_evaluate` code to read the page's main
+        text? Answer YES or NO first, then name the field or code you'd read it from.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*NO\b'
+      - type: javascript
+        value: /\btext\b/.test(output)

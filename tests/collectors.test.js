@@ -6,10 +6,14 @@ const { JSDOM } = require('jsdom');
 
 const SOURCE = fs.readFileSync(path.join(__dirname, '../collectors/kosh.js'), 'utf8');
 
+// jsdom has no innerText.
+const withInnerText = (window) => Object.defineProperty(window.HTMLElement.prototype, 'innerText', { get() { return this.textContent; }, configurable: true });
+
 // A page at `url` with kosh.js evaluated in it, as --init-script does.
 const page = (url, { bodyClass = '', title = 'Example Site' } = {}) => {
   const { window } = new JSDOM(`<!doctype html><title>${title}</title><body class="${bodyClass}"></body>`, { url, runScripts: 'outside-only' });
   window.eval(SOURCE);
+  withInnerText(window);
   return window;
 };
 
@@ -250,6 +254,7 @@ const withRealColors = (body, styles = {}, results = () => ({})) => {
   const { window } = new JSDOM(`<!doctype html><body>${body}</body>`, { url: 'https://example.com/', runScripts: 'outside-only' });
   window.eval(SOURCE);
   window.eval(AXE);
+  withInnerText(window);
   const computed = window.getComputedStyle.bind(window);
   window.getComputedStyle = (element, pseudo) => {
     const key = `${element.id}${pseudo ?? ''}`;
@@ -342,6 +347,12 @@ for (const [name, image] of [
   });
 }
 
+test('contrast: gradient text keeps its transparency in textColor', async () => {
+  const window = withRealColors('<div id="a"></div>', { a: { backgroundImage: 'linear-gradient(rgb(0, 0, 0), rgb(9, 9, 9))', color: 'rgba(255, 255, 255, 0.5)' } }, (w) => ({ incomplete: [{ id: 'color-contrast', nodes: [gradientNode(w.document.getElementById('a'))] }] }));
+  const { incomplete } = await window.__kosh.contrast();
+  assert.strictEqual(incomplete[0].textColor, '#ffffff at 50%');
+});
+
 test('contrast: only bgGradient text gets a range, and clear text paint leaves it without one', async () => {
   const window = withRealColors('<div id="a"></div><div id="b"></div>', { a: { backgroundImage: 'linear-gradient(rgb(0, 0, 0), rgb(9, 9, 9))' }, b: { backgroundImage: 'linear-gradient(rgb(0, 0, 0), rgb(9, 9, 9))', color: 'rgba(0, 0, 0, 0)' } }, (w) => ({ incomplete: [{ id: 'color-contrast', nodes: [
     { ...axeNode(['#a'], { messageKey: 'bgImage' }), element: w.document.getElementById('a') },
@@ -387,6 +398,7 @@ test('contrast: large placeholder text gets the 3:1 threshold, and its opacity c
   const { violations } = await window.__kosh.contrast();
   assert.deepStrictEqual(plain(violations).map((node) => node.selector), ['#faint']);
   assert.ok(violations[0].ratio < 2);
+  assert.strictEqual(violations[0].textColor, '#333333 at 30%');
 });
 
 test('contrast: a placeholder on a gradient that straddles the threshold is incomplete, with its range', async () => {
@@ -482,6 +494,20 @@ test('page: headings carry their size and weight, skip hidden ones and clip long
   const { window } = laidOut(`<h1 id="a">  Big\n title </h1><h2 id="b">Hidden</h2><h3 id="c">${'y'.repeat(100)}</h3>`, { styles: { a: { fontSize: '48.5px', fontWeight: '700' }, b: { visibility: 'hidden' }, c: { fontSize: '18px' } } });
   const { headings } = await window.__kosh.page();
   assert.deepStrictEqual(plain(headings), ['h1 48.5px/700 Big title', `h3 18px/400 ${'y'.repeat(80)}…`]);
+});
+
+test('page: text is main\'s, with blank lines closed up, and says when it was cut', async () => {
+  const { window } = laidOut('<nav>Menu</nav><main id="m">x</main><footer>Footer</footer>', { boxes: { m: { innerText: '  One\n\n \n\nTwo\nThree  ' } } });
+  assert.strictEqual((await window.__kosh.page()).text, 'One\nTwo\nThree');
+  const long = laidOut('<main id="m">x</main>', { boxes: { m: { innerText: 'y'.repeat(8001) } } });
+  assert.strictEqual((await long.window.__kosh.page()).text, `${'y'.repeat(8000)}…`);
+  const exact = laidOut('<main id="m">x</main>', { boxes: { m: { innerText: 'y'.repeat(8000) } } });
+  assert.strictEqual((await exact.window.__kosh.page()).text, 'y'.repeat(8000));
+});
+
+test('page: a page with no main gives the body\'s text', async () => {
+  const { window } = laidOut('<div>Only this</div>');
+  assert.strictEqual((await window.__kosh.page()).text, 'Only this');
 });
 
 test('page: clipped text is an element cutting off its own text, not a screen-reader label, a scroller or an empty wrapper', async () => {
