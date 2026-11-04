@@ -297,6 +297,149 @@ tests:
           const report = [...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((block) => block[1]).join('\n');
           return /\bby eye\b|\bvisual(ly)?\b|\binspect/i.test(report);
 
+  - description: Gradient text whose whole range is below the threshold is a failure, reported with its range
+    vars:
+      request: |
+        On the homepage, https://example.com/, at desktop, the page check
+        (`__kosh.page()`) returned this under `contrast`:
+
+        {
+          "violations": [],
+          "incomplete": [
+            {
+              "selector": ".hero p",
+              "html": "<p>Grow with us</p>",
+              "ratio": null,
+              "threshold": 4.5,
+              "textColor": "#999999",
+              "background": null,
+              "reason": "bgGradient",
+              "ratioRange": { "min": 1.24, "max": 1.57 },
+              "count": 1
+            }
+          ],
+          "counts": { "violations": 0, "incomplete": 1 }
+        }
+
+        Your screenshot is at kosh-reports/screenshots/home-hero-desktop.png,
+        and the paragraph sits in the middle of the hero's gradient.
+
+        First line: REPORT or SKIP. Then, if REPORT, the finding as it would
+        appear in the report's issues, as one fenced JSON block.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*REPORT\b'
+      - type: javascript
+        value: |
+          const report = [...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((block) => block[1]).join('\n');
+          return /1\.24/.test(report) && /1\.57/.test(report);
+
+  - description: Gradient text whose whole range clears the threshold is skipped
+    vars:
+      request: |
+        On the homepage, https://example.com/, at desktop, the page check
+        (`__kosh.page()`) returned this under `contrast`:
+
+        {
+          "violations": [],
+          "incomplete": [
+            {
+              "selector": ".hero p",
+              "html": "<p>Grow with us</p>",
+              "ratio": null,
+              "threshold": 4.5,
+              "textColor": "#999999",
+              "background": null,
+              "reason": "bgGradient",
+              "ratioRange": { "min": 15.91, "max": 21 },
+              "count": 1
+            }
+          ],
+          "counts": { "violations": 0, "incomplete": 1 }
+        }
+
+        Your screenshot is at kosh-reports/screenshots/home-hero-desktop.png.
+
+        First line: REPORT or SKIP. Then one sentence saying why.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*SKIP\b'
+
+  - description: A gradient range that straddles the threshold is judged by eye, with the range and not one ratio
+    vars:
+      request: |
+        On the homepage, https://example.com/, at desktop, the page check
+        (`__kosh.page()`) returned this under `contrast`:
+
+        {
+          "violations": [],
+          "incomplete": [
+            {
+              "selector": ".hero p",
+              "html": "<p>Grow with us</p>",
+              "ratio": null,
+              "threshold": 4.5,
+              "textColor": "#999999",
+              "background": null,
+              "reason": "bgGradient",
+              "ratioRange": { "min": 1.8, "max": 9.6 },
+              "count": 1
+            }
+          ],
+          "counts": { "violations": 0, "incomplete": 1 }
+        }
+
+        Your screenshot is at kosh-reports/screenshots/home-hero-desktop.png. In it
+        the paragraph sits where the gradient is palest and is hard to make out.
+
+        First line: REPORT, SKIP or MEASURE, where MEASURE means writing your own
+        browser_evaluate code to work out the ratio where the text sits. Then, if
+        REPORT, the finding as it would appear in the report's issues, as one
+        fenced JSON block.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*REPORT\b'
+      - type: javascript
+        value: |
+          const report = [...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((block) => block[1]).join('\n');
+          return /\bby eye\b|\bvisual(ly)?\b|\binspect/i.test(report) && /1\.8/.test(report) && /9\.6/.test(report);
+
+  - description: A failing placeholder is reported with its ratio, like any other measured text
+    vars:
+      request: |
+        On the Contact page, https://example.com/contact/, at desktop, the page
+        check (`__kosh.page()`) returned this under `contrast`:
+
+        {
+          "violations": [
+            {
+              "selector": "input.email",
+              "html": "<input class=\"email\" placeholder=\"Your email\">",
+              "ratio": 1.61,
+              "threshold": 4.5,
+              "textColor": "#cccccc",
+              "background": "#ffffff",
+              "reason": "placeholder",
+              "count": 1
+            }
+          ],
+          "incomplete": [],
+          "counts": { "violations": 1, "incomplete": 0 }
+        }
+
+        Your screenshot is at kosh-reports/screenshots/contact-desktop.png, and
+        the "Your email" placeholder is faint in it.
+
+        First line: REPORT or SKIP. Then, if REPORT, the finding as it would
+        appear in the report's issues, as one fenced JSON block.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*REPORT\b'
+      - type: javascript
+        value: |
+          const report = [...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((block) => block[1]).join('\n');
+          return /1\.61/.test(report) && /1\.4\.3/.test(report);
+
   - description: An icon-font glyph axe couldn't measure is skipped, not reported
     vars:
       request: |

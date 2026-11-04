@@ -155,14 +155,16 @@ test('a w descriptor smaller than the slot cannot inflate the measurement', () =
 });
 
 test('a probe miss falls back to the DOM size and says so', () => {
-  const [{ naturalSize, diagnosis }] = run(HERO, { ...HERO_PICK, real: null });
+  const [{ naturalSize, diagnosis, sizeUnconfirmed }] = run(HERO, { ...HERO_PICK, real: null });
   assert.equal(naturalSize, '374x172px');
   assert.ok(diagnosis.includes(UNMEASURED), diagnosis);
+  assert.strictEqual(sizeUnconfirmed, true);
 });
 
 test('an image with no srcset is never probed', () => {
-  const [{ diagnosis }] = run('https://example.com/photo.png', { real: null });
+  const [{ diagnosis, sizeUnconfirmed }] = run('https://example.com/photo.png', { real: null });
   assert.ok(!diagnosis.includes(UNMEASURED), diagnosis);
+  assert.strictEqual(sizeUnconfirmed, undefined);
 });
 
 test('an image that failed to load is broken, and one still loading is unknown', () => {

@@ -186,7 +186,8 @@
         diagnosis: diagnosis.explanation + objectFitNote + pictureNote + unmeasuredNote,
         objectFit,
         largestSrcsetCandidate: largestCandidate ? `${largestCandidate}w` : 'none',
-        sizesAttr: sizesAttr || 'missing'
+        sizesAttr: sizesAttr || 'missing',
+        ...(picksFromSrcset && !measured && { sizeUnconfirmed: true })
       });
     });
 
@@ -195,28 +196,276 @@
       : 'All images are sufficiently sized for their rendered dimensions';
   };
 
+  const shown = (element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility === 'visible';
+  const clip = (text, length) => (text.length > length ? `${text.slice(0, length)}…` : text);
+  const label = (element) => {
+    if (element.id) return `#${element.id}`;
+    const classes = [...element.classList].slice(0, 2).map((name) => `.${name}`).join('');
+    return `${element.tagName.toLowerCase()}${classes}`;
+  };
+
+  const splitOuterCommas = (text) => {
+    const parts = [''];
+    let depth = 0;
+    for (const character of text) {
+      if (character === '(') depth += 1;
+      if (character === ')') depth -= 1;
+      if (character === ',' && !depth) parts.push('');
+      else parts[parts.length - 1] += character;
+    }
+    return parts;
+  };
+
+  // Each layer of a background-image as a list of axe's Colors, top layer first, or null if one isn't a gradient: an image can't be worked out from CSS alone.
+  const gradientLayers = (image, opacity) => {
+    const { Color } = window.axe.commons.color;
+    const layers = [];
+    for (const layer of splitOuterCommas(image)) {
+      const gradient = /^\s*(?:repeating-)?(?:linear|radial|conic)-gradient\((.*)\)\s*$/.exec(layer);
+      if (!gradient) return null;
+      const stops = splitOuterCommas(gradient[1]).flatMap((part) => {
+        const written = /^\s*([a-z-]+\([^)]*\)|#[0-9a-f]+|[a-z]+)/i.exec(part)?.[1];
+        if (!written) return [];
+        try {
+          const color = new Color();
+          color.parseString(written);
+          color.alpha *= opacity;
+          return [color];
+        } catch {
+          return [];
+        }
+      });
+      layers.push(stops);
+    }
+    return layers;
+  };
+
+  const MAX_GRADIENT_LAYERS = 3;
+  // Each background `element`'s text could sit on, sampled along any gradient, from the same stack axe resolves. Null when something in it can't be worked out.
+  const backgroundsBehind = (element) => {
+    const { Color, flattenColors, getBackgroundStack, getOwnBackgroundColor } = window.axe.commons.color;
+    const stack = getBackgroundStack(element);
+    if (!stack) return null;
+    const opaque = (color) => color.alpha === 1;
+    const layers = [];
+    walk: for (const item of stack) {
+      const style = getComputedStyle(item);
+      if (style.backgroundImage !== 'none') {
+        const gradients = gradientLayers(style.backgroundImage, Number(style.opacity));
+        if (!gradients) return null;
+        for (const stops of gradients) {
+          layers.push(stops);
+          if (stops.every(opaque)) break walk;
+        }
+      }
+      const color = getOwnBackgroundColor(style);
+      if (color.alpha > 0) layers.push(color);
+      if (opaque(color)) break;
+    }
+    // Every combination of stops is sampled, so a pile of layers would hang the page.
+    if (layers.filter(Array.isArray).length > MAX_GRADIENT_LAYERS) return null;
+    // Text's luminance gap can peak or vanish between two stops, so a segment's ends aren't enough.
+    const SAMPLES = 10;
+    const mix = (from, to, t) => {
+      const alpha = from.alpha + (to.alpha - from.alpha) * t;
+      const channel = (name) => (alpha ? (from[name] * from.alpha * (1 - t) + to[name] * to.alpha * t) / alpha : 0);
+      return new Color(channel('red'), channel('green'), channel('blue'), alpha);
+    };
+    return layers.reduceRight((below, layer) => below.flatMap((back) => {
+      if (!Array.isArray(layer)) return [flattenColors(layer, back)];
+      return layer.slice(1).flatMap((stop, i) => Array.from({ length: SAMPLES + 1 }, (_, n) => flattenColors(mix(layer[i], stop, n / SAMPLES), back)));
+    }), [new Color(255, 255, 255, 1)]);
+  };
+
+  const ratioRange = (foreground, element) => {
+    const { flattenColors, getContrast } = window.axe.commons.color;
+    const backgrounds = backgroundsBehind(element);
+    if (!backgrounds?.length) return null;
+    const ratios = backgrounds.map((back) => getContrast(back, flattenColors(foreground, back)));
+    return { min: +Math.min(...ratios).toFixed(2), max: +Math.max(...ratios).toFixed(2), flat: backgrounds.length === 1 ? backgrounds[0].toHexString() : null };
+  };
+
+  // axe gives no text color for text it couldn't measure, so it's read here, as the browser paints it. Null for text with no paint of its own, like a background-clip gradient.
+  const gradientRange = (node, data) => {
+    if (data.messageKey !== 'bgGradient' || !node.element) return null;
+    try {
+      const { Color } = window.axe.commons.color;
+      const foreground = new Color();
+      foreground.parseString(getComputedStyle(node.element).getPropertyValue('-webkit-text-fill-color'));
+      if (!foreground.alpha) return null;
+      const range = ratioRange(foreground, node.element);
+      return range && { textColor: foreground.toHexString(), ratioRange: { min: range.min, max: range.max } };
+    } catch {
+      return null;
+    }
+  };
+
+  // axe doesn't check ::placeholder. A disabled field is exempt from 1.4.3, and a filled one isn't showing its placeholder.
+  const placeholders = () => {
+    const found = { violations: [], incomplete: [] };
+    const { Color } = window.axe.commons.color;
+    for (const field of document.querySelectorAll('input[placeholder], textarea[placeholder]')) {
+      if (field.disabled || field.value || !field.placeholder.trim() || !shown(field)) continue;
+      const style = getComputedStyle(field, '::placeholder');
+      const foreground = new Color();
+      foreground.parseString(style.color);
+      foreground.alpha *= Number(style.opacity);
+      const px = parseFloat(style.fontSize);
+      const bold = parseInt(style.fontWeight, 10) >= 700;
+      const pt = px * 0.75;
+      const threshold = pt >= 18 || (bold && pt >= 14) ? 3 : 4.5;
+      const range = ratioRange(foreground, field);
+      if (range && range.min >= threshold) continue;
+      const entry = {
+        selector: label(field),
+        html: clip(field.outerHTML, 150),
+        ratio: range?.flat ? range.min : null,
+        threshold,
+        textColor: foreground.toHexString(),
+        background: range?.flat ?? null,
+        fontSize: `${pt.toFixed(1)}pt (${px}px)`,
+        fontWeight: bold ? 'bold' : 'normal',
+        reason: 'placeholder',
+        ...(range && !range.flat && { ratioRange: { min: range.min, max: range.max } })
+      };
+      found[range && range.max < threshold ? 'violations' : 'incomplete'].push(entry);
+    }
+    return found;
+  };
+
   const MAX_CONTRAST_NODES = 50;
   // axe-core's color-contrast rule; kosh's capture loads axe into the page before a browser_evaluate that calls this.
   const contrast = async () => {
     if (typeof window.axe?.run !== 'function') return 'axe-core is not loaded: call this as `() => __kosh.contrast()` with browser_evaluate, which loads it first.';
-    const { violations, incomplete } = await window.axe.run(document, { runOnly: { type: 'rule', values: ['color-contrast'] }, resultTypes: ['violations', 'incomplete'], iframes: false });
-    const nodes = (rules) => rules.flatMap((rule) => rule.nodes).slice(0, MAX_CONTRAST_NODES).map((node) => {
+    const { violations, incomplete } = await window.axe.run(document, { runOnly: { type: 'rule', values: ['color-contrast'] }, resultTypes: ['violations', 'incomplete'], iframes: false, elementRef: true });
+    const all = (rules) => rules.flatMap((rule) => rule.nodes);
+    const nodes = (rules, more, measure) => [...more, ...all(rules).slice(0, MAX_CONTRAST_NODES).map((node) => {
       const data = [...node.any, ...node.all, ...node.none].find((check) => check.data)?.data ?? {};
+      const range = measure ? gradientRange(node, data) : null;
       return {
         selector: node.target.map((part) => [part].flat().join(' >>> ')).join(' '),
-        html: node.html.length > 150 ? `${node.html.slice(0, 150)}…` : node.html,
+        html: clip(node.html, 150),
         ratio: data.contrastRatio || null,
         threshold: parseFloat(data.expectedContrastRatio) || null,
         textColor: data.fgColor ?? null,
         background: data.bgColor ?? null,
         fontSize: data.fontSize ?? null,
         fontWeight: data.fontWeight ?? null,
-        reason: data.messageKey ?? null
+        reason: data.messageKey ?? null,
+        ...range
       };
+    })].slice(0, MAX_CONTRAST_NODES);
+    const build = (extra, measure) => ({
+      violations: nodes(violations, extra.violations, measure),
+      incomplete: nodes(incomplete, extra.incomplete, measure),
+      counts: { violations: all(violations).length + extra.violations.length, incomplete: all(incomplete).length + extra.incomplete.length }
     });
-    const count = (rules) => rules.reduce((total, rule) => total + rule.nodes.length, 0);
-    return { violations: nodes(violations), incomplete: nodes(incomplete), counts: { violations: count(violations), incomplete: count(incomplete) } };
+    // axe.run tears its tree down when it finishes, and its stack helpers need one. Axe's own results stand if they can't run.
+    try {
+      window.axe.setup(document);
+    } catch {
+      return build({ violations: [], incomplete: [] }, false);
+    }
+    try {
+      return build(placeholders(), true);
+    } catch {
+      return build({ violations: [], incomplete: [] }, false);
+    } finally {
+      window.axe.teardown();
+    }
   };
+
+  const MAX_HEADINGS = 40;
+  const headings = () => [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')].filter(shown).slice(0, MAX_HEADINGS).map((heading) => {
+    const { fontSize, fontWeight } = getComputedStyle(heading);
+    return `${heading.tagName.toLowerCase()} ${Math.round(parseFloat(fontSize) * 10) / 10}px/${fontWeight} ${clip(heading.textContent.replace(/\s+/g, ' ').trim(), 80)}`;
+  });
+
+  const MAX_LAYOUT_ROWS = 20;
+  // ponytail: only an element holding its own text counts, so text cut off by a wrapper is left to the screenshot; walking every wrapper flags each carousel.
+  const clippedText = () => {
+    const rows = [];
+    for (const element of document.body.querySelectorAll('*')) {
+      if (rows.length === MAX_LAYOUT_ROWS) break;
+      if (![...element.childNodes].some((child) => child.nodeType === 3 && child.textContent.trim())) continue;
+      const { overflowX, overflowY } = getComputedStyle(element);
+      const hides = (value) => value === 'hidden' || value === 'clip';
+      const { clientWidth, clientHeight, scrollWidth, scrollHeight } = element;
+      // A 1px box is a screen-reader-only label, hidden on purpose.
+      if (clientWidth <= 1 || clientHeight <= 1) continue;
+      const cut = (hides(overflowX) && scrollWidth > clientWidth + 1) || (hides(overflowY) && scrollHeight > clientHeight + 1);
+      if (cut && shown(element)) rows.push({ selector: label(element), text: clip(element.textContent.replace(/\s+/g, ' ').trim(), 80), box: `${clientWidth}x${clientHeight}`, content: `${scrollWidth}x${scrollHeight}` });
+    }
+    return rows;
+  };
+
+  const heldBack = (element) => {
+    for (let item = element; item && item !== document.body; item = item.parentElement) {
+      const { position, overflowX } = getComputedStyle(item);
+      if (position === 'fixed' || (item !== element && overflowX !== 'visible')) return true;
+    }
+    return false;
+  };
+  const overflow = () => {
+    const width = document.documentElement.clientWidth;
+    const past = new Set();
+    const elements = [];
+    for (const element of document.body.querySelectorAll('*')) {
+      const rect = element.getBoundingClientRect();
+      if (!rect.width || !rect.height || (rect.right <= width + 1 && rect.left >= -1)) continue;
+      if (!shown(element) || heldBack(element)) continue;
+      past.add(element);
+      // The outermost one is the cause; what's inside it just moved with it.
+      if (!past.has(element.parentElement) && elements.length < MAX_LAYOUT_ROWS) elements.push({ selector: label(element), left: Math.round(rect.left), right: Math.round(rect.right) });
+    }
+    return { viewportWidth: width, pageWidth: document.documentElement.scrollWidth, elements };
+  };
+
+  // Elements with the same measurement read as one: the color choice is the finding, not each element.
+  const grouped = (nodes) => {
+    const groups = new Map();
+    for (const { fontSize, fontWeight, ...node } of nodes) {
+      const key = JSON.stringify([node.ratio, node.threshold, node.textColor, node.background, node.reason, node.ratioRange]);
+      if (groups.has(key)) groups.get(key).count += 1;
+      else groups.set(key, { ...node, html: clip(node.html, 80), count: 1 });
+    }
+    return [...groups.values()];
+  };
+
+  const pause = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+  const MAX_SCROLL_STEPS = 30;
+  const IMAGE_WAIT_MS = 2000;
+  // Scrolls first, since lazy images and text are what the rest measures, and ends back at the top for the next screenshot.
+  const page = async () => {
+    const root = document.documentElement;
+    for (let step = 0, y = 0; step < MAX_SCROLL_STEPS && y < root.scrollHeight; step += 1) {
+      window.scrollTo({ top: y, behavior: 'instant' });
+      await pause(100);
+      y += Math.max(window.innerHeight * 0.8, root.scrollHeight / MAX_SCROLL_STEPS);
+    }
+    const waited = Date.now() + IMAGE_WAIT_MS;
+    while (Date.now() < waited && [...document.images].some((image) => image.currentSrc && !image.complete)) await pause(100);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+
+    const pictures = images();
+    let measured;
+    try {
+      measured = await contrast();
+    } catch (error) {
+      measured = { error: String(error) };
+    }
+    return {
+      url: location.href,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      // Long diagnosis text is what models trimmed by hand; the category decides what to say, and `__kosh.images()` still has the words.
+      images: Array.isArray(pictures) ? pictures.map(({ diagnosis, ...image }) => image) : pictures,
+      contrast: measured.violations ? { violations: grouped(measured.violations), incomplete: grouped(measured.incomplete), counts: measured.counts } : measured,
+      headings: headings(),
+      clipped: clippedText(),
+      overflow: overflow()
+    };
+  };
+
   // Playwright serializes an unawaited Promise as its own properties, so one left inside a returned object says so instead of reading as `{}`.
   // Its rejection is marked handled, or the page would log it as the site's error; an await still gets it.
   const noted = (call, fn) => (...args) => {
@@ -225,5 +474,5 @@
     return Object.assign(promise, { notAwaited: `This is a Promise: inside an async function write \`await __kosh.${call}\`, or call it on its own.` });
   };
 
-  Object.defineProperty(window, '__kosh', { value: Object.freeze({ gate, staticHtml: noted('staticHtml(url)', staticHtml), imageSize: noted('imageSize(url)', imageSize), images, contrast: noted('contrast()', contrast) }) });
+  Object.defineProperty(window, '__kosh', { value: Object.freeze({ gate, staticHtml: noted('staticHtml(url)', staticHtml), imageSize: noted('imageSize(url)', imageSize), images, contrast: noted('contrast()', contrast), page: noted('page()', page) }) });
 })();

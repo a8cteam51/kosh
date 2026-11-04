@@ -302,7 +302,7 @@ const clearedGate = (arg, value) => {
 };
 
 // axe-core is ~580 KB, so it's evaluated into a page only for a contrast check, never through the init script that runs on every page performance times.
-const callsContrast = (arg) => /__kosh\s*\.\s*contrast\b/.test(arg);
+const needsAxe = (arg) => /__kosh\s*\.\s*(?:contrast|page)\b/.test(arg);
 const readAxe = () => {
   try { return `${fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8')}\n//# sourceURL=${EVALUATE_URL}`; } catch { return null; }
 };
@@ -521,7 +521,7 @@ exports.default = async ({ page }) => {
         if (!isModelCode(fn, arg)) return evaluate.call(this, fn, arg, ...rest);
         const run = () => evaluate.call(this, fn, `eval(${JSON.stringify(`(${arg})\n//# sourceURL=${EVALUATE_URL}`)})`, ...rest);
         let result;
-        if (callsContrast(arg)) {
+        if (needsAxe(arg)) {
           const axe = readAxe();
           // Refused rather than run, so the page's own axe, if it has one, never stands in for kosh's.
           if (!axe) return Promise.reject(new Error("axe-core is missing from kosh's folder: run `npm ci` there"));
