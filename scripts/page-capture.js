@@ -313,6 +313,8 @@ const summary = ([site, ...urls]) => {
   console.log(missing.length ? `No visit captured yet for: ${missing.join(', ')}` : 'Every page given has a captured visit.');
 };
 
+const web = (href) => /^https?:/i.test(href);
+
 // What functional's checks read from the inventory, small enough to print: each page's outline, then every link once, the site's own apart from the rest.
 const inventoryView = (rows, site) => {
   const links = new Map();
@@ -330,11 +332,11 @@ const inventoryView = (rows, site) => {
       headings: headings.map((heading) => `${heading.tag}${heading.hidden ? ' (hidden)' : ''}: ${heading.text}`),
       hiddenLinks: (row.links ?? []).filter((link) => link.hidden).length,
       imagesWithoutAlt: (row.images ?? []).filter((image) => image.alt === null).map((image) => image.src),
-      meta: row.meta,
+      meta: Object.fromEntries(Object.entries(row.meta ?? {}).filter(([, value]) => value !== null)),
+      missingMeta: Object.keys(row.meta ?? {}).filter((tag) => row.meta[tag] === null),
     };
   });
   const group = (test) => [...links].filter(([href]) => test(href)).map(([href, text]) => ({ text, href }));
-  const web = (href) => /^https?:/i.test(href);
   return {
     pages,
     siteLinks: group((href) => web(href) && host(href) === host(site)),
@@ -343,15 +345,68 @@ const inventoryView = (rows, site) => {
   };
 };
 
-const inventory = ([site, ...urls]) => {
+const PUBLISHED_TIMEOUT = 10000;
+
+// Only the URLs, and only on the site's own host: anything else in the answer is text the model doesn't need.
+const readPublished = async (site, [source, route, parse]) => {
+  const res = await fetch(new URL(route, site), { signal: AbortSignal.timeout(PUBLISHED_TIMEOUT), headers: { 'user-agent': 'Mozilla/5.0 (compatible; kosh-inventory)' } });
+  if (!res.ok) throw new Error(`${source} answered ${res.status}`);
+  if (host(res.url) !== host(site)) throw new Error(`${source} redirected off the site`);
+  const { urls, total } = parse(await res.text(), res);
+  const own = urls.filter((url) => web(url) && host(url) === host(site));
+  if (!own.length) throw new Error(`${source} lists no pages on this site`);
+  return { source, total, urls: own };
+};
+const fromRest = (body, res) => {
+  let list = null;
+  try { list = JSON.parse(body); } catch {}
+  if (!Array.isArray(list)) throw new Error('the REST API answered something other than a list');
+  return { urls: list.map((page) => page?.link).filter((link) => typeof link === 'string'), total: Number(res.headers.get('x-wp-total')) || list.length };
+};
+const fromSitemap = (body) => {
+  const urls = [...body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((match) => match[1]);
+  return { urls, total: urls.length };
+};
+// Query routes, since `/wp-json` and `/wp-sitemap-…` need permalinks on, and a rooted path would leave a site in a subdirectory.
+const SOURCES = [['REST API', '?rest_route=/wp/v2/pages&per_page=100&_fields=link', fromRest], ['sitemap', '?sitemap=posts&sitemap-subtype=page&paged=1', fromSitemap]];
+
+// The query counts, since a site on plain permalinks tells its pages apart by `?page_id=`.
+const pathOf = (url) => { try { const { pathname, search } = new URL(url); return `${pathname.replace(/\/+$/, '')}${search}`; } catch { return null; } };
+
+// A page no menu or link leads to is still published, so walking the site never finds it.
+const published = async (site, rows) => {
+  const seen = rows.flatMap((row) => [row.url, ...(row.redirectedFrom ?? []), ...(row.links ?? []).map((link) => link.href)]);
+  const reached = new Set(seen.filter((url) => host(url) === host(site)).map(pathOf));
+  const errors = [];
+  for (const entry of SOURCES) {
+    try {
+      const { source, total, urls } = await readPublished(site, entry);
+      return { source, total, notReached: urls.filter((url) => !reached.has(pathOf(url))) };
+    } catch (error) {
+      errors.push(error.message);
+    }
+  }
+  return { error: errors.join('; ') };
+};
+
+// One line per row, since runs read this by line count, and pretty-printed they cut out the middle pages.
+const printInventory = (view) => {
+  const rows = (list) => (list.length ? `[\n${list.map((row) => `    ${JSON.stringify(row)}`).join(',\n')}\n  ]` : '[]');
+  return `{\n${Object.entries(view).map(([key, value]) => `  ${JSON.stringify(key)}: ${Array.isArray(value) ? rows(value) : JSON.stringify(value)}`).join(',\n')}\n}`;
+};
+
+const inventory = async ([site, ...urls]) => {
   const file = captureFile();
   const rows = buildInventory(reportEntries([...readEntries(takenFile(file)), ...readEntries(file)], site));
-  console.log(JSON.stringify(inventoryView(rows, site), null, 2));
+  const view = inventoryView(rows, site);
+  // Only a host the run's browser has loaded, since the model writes this command's arguments. First, since a run often reads only the top of this.
+  const answer = rows.length ? { published: await published(site, rows), ...view } : view;
+  console.log(printInventory(answer));
   const missing = uncovered([site, ...urls], rows);
   console.error(missing.length ? `No visit captured yet for: ${missing.join(', ')}` : 'Every page given has a captured visit.');
 };
 
-module.exports = { archiveText, badFileFixes, buildInventory, buildPages, host, inventoryView, numberFindings, readEntries, readLinkChecks, reportEntries, take, takenFile, uncovered, visitCount };
+module.exports = { archiveText, badFileFixes, buildInventory, buildPages, host, inventoryView, numberFindings, printInventory, published, readEntries, readLinkChecks, reportEntries, take, takenFile, uncovered, visitCount };
 
 if (require.main === module) {
   const [command, ...args] = process.argv.slice(2);

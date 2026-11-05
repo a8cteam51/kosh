@@ -481,7 +481,7 @@ test("browser_evaluate's code is named for Chrome's initiator stack and keeps it
   assert.strictEqual(seen.at(-1), 'data from browser_run_code_unsafe');
 });
 
-test("axe-core is evaluated into the page before model code that calls __kosh.contrast, and only then", async (t) => {
+test("axe-core is evaluated into the page before model code that calls __kosh.contrast or __kosh.page, and only then", async (t) => {
   sandbox(t);
   const seen = [];
   const page = await start(fakePage({ evaluate: async (fn, arg) => (seen.push(typeof fn === 'string' ? fn : arg), typeof arg === 'string' ? 'ran' : answer(fn, { documentUrl: 'about:blank', ...TIMING })) }));
@@ -492,6 +492,10 @@ test("axe-core is evaluated into the page before model code that calls __kosh.co
   assert.match(seen[0], /^\/\*! axe v4\.13\.0/);
   assert.ok(seen[0].endsWith(`//# sourceURL=${capture.EVALUATE_URL}`), "axe's own messages are tagged as the model's");
   assert.match(seen[1], /__kosh\.contrast\(\)/);
+  seen.length = 0;
+  await page.evaluate(mcpEvaluate, '() => __kosh.page()');
+  assert.strictEqual(seen.length, 2, 'the per-page call needs axe too');
+  assert.match(seen[0], /^\/\*! axe v4\.13\.0/);
   seen.length = 0;
   await page.evaluate(mcpEvaluate, '() => __kosh.images()');
   assert.strictEqual(seen.length, 1);

@@ -85,7 +85,7 @@ Cover at least five distinct pages at desktop where the site has them, reaching 
 4. one index or archive page: the blog, a category or a listing;
 5. a support or contact page: Contact, FAQ, Help or Resources;
 
-plus a page that doesn't exist (the site's URL with `/bp93r` on the end), to see the site's 404 page. A site with fewer pages has fewer; say in `testMethodology` how you know (the menu, a sitemap). Then `browser_resize` to 375×812 and load the homepage and at least two of the same pages again.
+plus a page that doesn't exist (the site's URL with `/bp93r` on the end), to see the site's 404 page. A site with fewer pages has fewer; say in `testMethodology` how you know (`published`, below). The menus never prove a site has nothing else, because a page nothing links to is still published, and that's where test pages sit: read `published` in the inventory below, and load what it lists directly, or on a site with many, the ones that look least finished. Then `browser_resize` to 375×812 and load the homepage and at least two of the same pages again.
 
 On a small viewport, open the menu by the ref `browser_snapshot` gives it rather than by a CSS selector: themes often ship one copy of the menu per breakpoint, so a selector can match the hidden copy, and the click times out or matches several elements.
 
@@ -97,52 +97,52 @@ Every page you load is recorded as it loads: its title, headings, links, images 
 node <kosh>/scripts/page-capture.js inventory <homepage URL> <every page URL you loaded>
 ```
 
-It prints each page's outline (`h1`, `headings`, `meta`, `imagesWithoutAlt`, and `hiddenLinks`, the links with no layout box, such as another breakpoint's copy of the menu), then every link the run saw once: `siteLinks`, `offSiteLinks` and `otherLinks` (`mailto:`, `tel:`). Pass full URLs. It names any page you passed that has no recorded load; load it before writing the report, since the report is refused while `visitedPages` lists a page the browser never loaded.
+It prints `published` first: `notReached` is the site's published pages you haven't loaded or seen a link to, and `total` how many it has, though from the REST API the list covers only the newest 100. If it has `error` instead, the script couldn't read them, so ask the REST API from the page (see Investigating) before saying what the site holds. Then each page's outline, one line a page (`h1`, `headings`, `meta`, `missingMeta` for the share tags it lacks, `imagesWithoutAlt`, and `hiddenLinks`, the links with no layout box, such as another breakpoint's copy of the menu), then every link the run saw once, one line each: `siteLinks`, `offSiteLinks` and `otherLinks` (`mailto:`, `tel:`). Pass full URLs. It names any page you passed that has no recorded load; load it before writing the report, since the report is refused while `visitedPages` lists a page the browser never loaded.
 
 Load times are the performance test's to measure: don't report them here.
 
 ## What to check
 
-On each page, take a screenshot of the first screen, then scroll to the bottom and back so lazy content loads, and look at what's there. Use `browser_evaluate` to read the markup behind anything that looks wrong: a finding names the markup that is actually wrong, so a reader can act on it without re-running the test.
+On each page, at each viewport, take a screenshot of the first screen, then run this and look at what's there:
+
+```javascript
+() => __kosh.page()
+```
+
+It scrolls to the bottom and back so lazy content loads, then returns what every page needs, so there's no need to write this code yourself: `images` and `contrast` (below), `headings` (each one's level, size in px, weight and text), `text` (what `main` shows, or the body on a page without one), `clipped` (elements cutting off their own text) and `overflow` (`viewportWidth`, `pageWidth` and the elements running past the viewport). It's asynchronous, so inside an `async` function write `await __kosh.page()`. Use `browser_evaluate` to read the markup behind anything that looks wrong or that this doesn't answer: a finding names the markup that is actually wrong, so a reader can act on it without re-running the test.
 
 **Layout and design.** Overlapping or clipped elements, content that breaks out of its container, cramped or uneven spacing, a single word wrapping onto its own line, misaligned buttons and images, heading sizes that don't follow the hierarchy, body text too small or too tightly set to read, a heading used for styling where the text is a paragraph. Then across the pages: the same font, heading styles, button styles, link styles, colors, spacing, header and footer everywhere, and the current page marked in the menu. An inconsistency names both pages.
 
 A full-page screenshot of a page taller than about 16,000 px repeats parts of the page past that point, which looks like duplicated sections. Check a suspected duplicate by scrolling to it, not from that screenshot.
 
-**Images.** Run this on every page to find images whose pixels fall short of what their slot needs at the device pixel ratio:
-
-```javascript
-() => __kosh.images()
-```
-
-Each flagged image comes with a `diagnosisCategory`, and the category decides what to say:
+**Images.** `images` lists the images whose pixels fall short of what their slot needs at the device pixel ratio. `() => __kosh.images()` runs the same check again, adding a `diagnosis` in words. Each flagged image comes with a `diagnosisCategory`, and the category decides what to say:
 
 - `source` — the asset, or its srcset, doesn't offer a large-enough candidate. Investigate the upload, the srcset generator and the src URL to find which is the constraint, then fix that one. You may measure the original upload with `__kosh.imageSize` (stripping any Photon or CDN `?resize=` or `?w=` parameters) to confirm its true size.
 - `markup` — the asset is fine; the page told the browser to pick a smaller candidate. The fix is `sizes` (or `width`/`srcset`) in the block markup. Never recommend re-uploading, and never write that the source is too small.
 - `request` — there's no larger srcset candidate, and the src asks the image CDN for a derivative smaller than the slot (`?resize=350,200`, `?w=1024`), which the CDN delivered, give or take a pixel of its own rounding. The fix is the size the template or block requests. Don't recommend re-uploading on this evidence alone: only if the original, measured with `__kosh.imageSize` with the resize parameters stripped, is also below `neededForCrisp`, and then report both constraints.
 - `unknown` — the image is in a `<picture>` whose `<source srcset>` the check doesn't read, so either source or markup could be responsible. Read those srcsets before writing a finding.
 
-`status: "needs visual review"` (ratio 0.75 to 1.0) is marginal: look at it on a screenshot, and report it only if it's visibly soft. `status: "unknown"` means the image hadn't loaded: scroll it into view, wait a second or two, and run the check again. `status: "broken"` means it finished loading with no pixels: re-check it the same way, and if it's still broken, report a broken image, not a resolution problem. Under `object-fit` (`cover`, `contain`, `scale-down`, `none`) the aspect ratio is preserved, so never call such an image stretched or distorted: `cover` crops it to fill the slot, and the others leave space around it.
+`sizeUnconfirmed` means the real pixels of a srcset pick couldn't be read, so `naturalSize` may under-count: check the picked src with `__kosh.imageSize` before reporting. `status: "needs visual review"` (ratio 0.75 to 1.0) is marginal: look at it on a screenshot, and report it only if it's visibly soft. `status: "unknown"` means the image hadn't loaded: scroll it into view, wait a second or two, and run the check again. `status: "broken"` means it finished loading with no pixels: re-check it the same way, and if it's still broken, report a broken image, not a resolution problem. Under `object-fit` (`cover`, `contain`, `scale-down`, `none`) the aspect ratio is preserved, so never call such an image stretched or distorted: `cover` crops it to fill the slot, and the others leave space around it.
 
 An image isn't a page: checking one's real dimensions is fine even on a CDN host, with `() => __kosh.imageSize("<image URL>")`, which loads it as an image and returns only `{ width, height }`. Use it for the og:image (1200×630 is the recommended size) and the apple-touch-icon (180×180) too.
 
-**Contrast.** Run this on every page:
+**Contrast.** `contrast` comes from axe-core's color-contrast rule over the page's own text (not text inside iframes, such as an embedded form or map: judge that by eye), which resolves the background each piece of text actually sits on, translucent layers and modern color syntax included. Kosh adds what axe leaves out: a ratio range for text on a gradient, and `::placeholder` text, in the same lists with `reason: "placeholder"`.
 
-```javascript
-() => __kosh.contrast()
-```
+It's `{ violations, incomplete, counts }`: two lists with `selector`, `html`, `ratio`, `threshold`, `textColor` (with its transparency, like `#ffffff at 30%`), `background`, `reason` and sometimes `ratioRange`, where elements with the same measurement share a row, with `count` saying how many and `selector` naming the first, and `counts`, how many of each there were in all. A ` >>> ` in `selector` marks a shadow root: find `#host >>> p` with `document.querySelector('#host').shadowRoot.querySelector('p')`.
 
-It runs axe-core's color-contrast rule over the page's own text (not text inside iframes, such as an embedded form or map: judge that by eye), which resolves the background each piece of text actually sits on, translucent layers and modern color syntax included. It's asynchronous, so inside an `async` function write `await __kosh.contrast()`. It returns `{ violations, incomplete, counts }`: two lists of elements with `selector`, `html`, `ratio`, `threshold`, `textColor`, `background`, `fontSize`, `fontWeight` and `reason`, each holding at most the first 50, and `counts`, how many of each there were in all. A ` >>> ` in `selector` marks a shadow root: find `#host >>> p` with `document.querySelector('#host').shadowRoot.querySelector('p')`. It checks the text on the page as it is, so run it again after opening a menu or scrolling lazy content into view.
+`() => __kosh.contrast()` runs it again on the page as it is, so use it after opening a menu or when a row's other elements matter: it lists each element (the first 50), with `fontSize` and `fontWeight`, and it's asynchronous too.
 
-- `violations` is text axe measured below its threshold (4.5:1 for normal text, 3:1 for large text: 18pt, or 14pt bold). Report it with the actual ratio and threshold. `reason` is `null`, or `fgOnShadowColor` or `shadowOnBgColor` when the failing pair is the text and its `text-shadow`.
+- `violations` is text measured below its threshold (4.5:1 for normal text, 3:1 for large text: 18pt, or 14pt bold). Report it with the actual ratio and threshold. `reason` is `null`, `placeholder`, or `fgOnShadowColor` or `shadowOnBgColor` when the failing pair is the text and its `text-shadow`.
 - `incomplete` is text axe couldn't measure, and `reason` says why: `imgNode`, `bgImage` or `bgGradient` (text over an image or gradient; a cover block's text reads `imgNode`), `bgOverlap` or `elmPartiallyObscured` (something covers it), `fgAlpha` or `pseudoContent`, `nonBmp` or `shortTextContent` (an icon glyph or a character or two, usually not text, so skip it unless it carries meaning), and others. Look at each one on a screenshot and decide whether it's readable; report it only if the eye says it fails, and say it was judged by eye, without a ratio.
+- A `ratioRange` (`{ min, max }`) on an `incomplete` row is the worst and best ratio that text can have anywhere on its gradient, worked out from the gradient's stops. `max` below `threshold` fails wherever the text sits, so report it as a failure with the range. `min` at or above `threshold` passes wherever it sits, so skip it. Between the two, it depends where the text sits: judge it by eye as above, and give the range rather than a single ratio.
+- Don't work out contrast yourself, from the CSS or from a screenshot's pixels. Text over video or a photo changes across its background, so one sampled point would read as a measurement it isn't: that's what judging by eye is for.
 - Both empty means no text on the page fails or needs a look. A string saying axe-core is not loaded means call it exactly as above; an error saying it's missing or couldn't be loaded means run it again if the page was still loading, and otherwise tell the user what it says rather than measuring contrast another way.
 
 Confirm every failure on a screenshot before reporting it. When many elements fail with the same pair of colors, the color choice is the finding ("the brand red used for body text fails AA across the site"), not each element. UI components (buttons, form borders, icons) need 3:1 against what's next to them, which the check doesn't measure: judge those by eye.
 
 Contrast is the only accessibility criterion this test measures, so it's the only one a finding cites: `wcag` is `1.4.3` for text and `1.4.11` for a UI component. Report any other accessibility observation (missing alt text, headings that don't outline the page, a form field without a label) under the `Accessibility` category with what you saw and no criterion: the report points readers at the full accessibility test for those.
 
-**Content.** Spelling and grammar, placeholder text, content that isn't ready to publish (WordPress's Sample Page or Hello World!, Lorem Ipsum, FooBar blocks, test pages, raw screenshots in a gallery), messaging that contradicts itself between pages, and calls to action that are unclear. Quote the text and say where it is.
+**Content.** Read `text` on every page, since a screenshot won't show you a typo reliably; one ending in `…` was cut at 8,000 characters, so read the rest with `browser_evaluate` if the page's copy matters. Check it for spelling and grammar, placeholder text, content that isn't ready to publish (WordPress's Sample Page or Hello World!, Lorem Ipsum, FooBar blocks, test pages, raw screenshots in a gallery), messaging that contradicts itself between pages, and calls to action that are unclear. Quote the text and say where it is.
 
 **Footer.** The copyright year, and the credit link, whose wording must be exactly "Designed with WordPress": report the older "Proudly powered by WordPress", or any other wording, quoting what you found. Check the footer on every page you load, since it's one template.
 
