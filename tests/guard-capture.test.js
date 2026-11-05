@@ -7,6 +7,7 @@ const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const HOOK = path.join(ROOT, 'hooks/guard-capture.js');
+const WRAPPER = path.join(ROOT, 'hooks/guard-capture.sh');
 
 // KOSH and SPACED are folders kosh has run in, FRESH a clone no run has used yet, ELSEWHERE an unrelated project,
 // OTHER one whose kosh-reports/data holds a log that only looks like a capture, NESTED a project inside KOSH.
@@ -36,14 +37,14 @@ const SESSION = '0b3f6c2e-5d1a';
 const RECASED = path.join(path.dirname(KOSH), path.basename(KOSH).toUpperCase());
 const caseInsensitiveDisk = fs.existsSync(RECASED);
 
-// `reports: null` runs the guard as installed, with KOSH_REPORTS_DIR unset; `project` is the root Claude Code gives hooks.
+// Every case goes through the shell pre-filter, so a block it skipped fails here. `reports: null` runs the guard as installed, with KOSH_REPORTS_DIR unset; `project` is the root Claude Code gives hooks.
 const guard = (input, { reports = KOSH, project, cwd = ROOT } = {}) => {
   const env = { ...process.env, KOSH_REPORTS_DIR: reports && path.join(reports, 'kosh-reports'), CLAUDE_PROJECT_DIR: project };
   if (!reports) delete env.KOSH_REPORTS_DIR;
   if (!project) delete env.CLAUDE_PROJECT_DIR;
-  return spawnSync('node', [HOOK], { input: typeof input === 'string' ? input : JSON.stringify(input), encoding: 'utf8', cwd, env });
+  return spawnSync('sh', [WRAPPER], { input: typeof input === 'string' ? input : JSON.stringify(input), encoding: 'utf8', cwd, env });
 };
-const call = (tool_name, tool_input, cwd = KOSH) => ({ hook_event_name: 'PreToolUse', cwd, tool_name, tool_input });
+const call = (tool_name, tool_input, cwd = KOSH) => ({ hook_event_name: 'PreToolUse', transcript_path: '/Users/x/.claude/projects/p/s.jsonl', cwd, tool_name, tool_input });
 
 for (const [name, input, options] of [
   ['writing a capture', call('Write', { file_path: path.join(KOSH, 'kosh-reports/data/capture-0b3f6c2e-5d1a.jsonl'), content: '{}' })],
@@ -154,9 +155,42 @@ for (const [name, input, options] of [
 
 test('the plugin runs the guard before every write and shell command', () => {
   const entries = require(path.join(ROOT, 'hooks/hooks.json')).hooks.PreToolUse;
-  const guarded = entries.filter((entry) => entry.hooks.some((hook) => hook.command.includes('hooks/guard-capture.js')));
-  assert.ok(fs.existsSync(HOOK));
+  const guarded = entries.filter((entry) => entry.hooks.some((hook) => hook.command.includes('hooks/guard-capture.sh')));
+  assert.ok(fs.existsSync(HOOK) && fs.existsSync(WRAPPER));
   for (const tool of ['Write', 'Edit', 'MultiEdit', 'Bash']) {
     assert.ok(guarded.some((entry) => new RegExp(`^(?:${entry.matcher})$`).test(tool)), `${tool} is not guarded`);
+  }
+});
+
+// A PATH with the tools the pre-filter needs and no node.
+const withoutNode = () => {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-guard-bin-'));
+  for (const tool of ['cat', 'grep', 'sed', 'dirname']) {
+    fs.symlinkSync(spawnSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf8' }).stdout.trim(), path.join(bin, tool));
+  }
+  return bin;
+};
+
+test('without node, the guard blocks a call a rule could match and allows any other', (t) => {
+  const bin = withoutNode();
+  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+  const run = (input) => spawnSync('/bin/sh', [WRAPPER], { input: JSON.stringify(input), encoding: 'utf8', cwd: KOSH, env: { PATH: bin } });
+  const blocked = run(call('Bash', { command: 'rm kosh-reports/data/capture-abc.jsonl' }));
+  assert.strictEqual(blocked.status, 2, blocked.stderr);
+  assert.match(blocked.stderr, /needs node/);
+  const allowed = run(call('Bash', { command: 'git status' }));
+  assert.strictEqual(allowed.status, 0, allowed.stderr);
+  // Claude Code's input always has a .jsonl transcript path, and a project folder can be named anything.
+  const real = run({ ...call('Bash', { command: 'git status' }, path.join(OTHER, 'kosh-reports/data/capture-links')), session_id: SESSION, transcript_path: `/Users/x/.claude/projects/p/${SESSION}.jsonl` });
+  assert.strictEqual(real.status, 0, real.stderr);
+  const spaced = spawnSync('/bin/sh', [WRAPPER], { input: JSON.stringify({ transcript_path: '/p/s.jsonl', cwd: '/capture', tool_name: 'Bash', tool_input: { command: 'ls' } }, null, 1), encoding: 'utf8', cwd: KOSH, env: { PATH: bin } });
+  assert.strictEqual(spaced.status, 0, spaced.stderr);
+  // The guard never reads an edit's text, so text that mentions captures doesn't need node.
+  for (const input of [
+    call('Edit', { file_path: 'README.md', old_string: 'a', new_string: 'see the links and kosh-reports/data/capture-abc.jsonl' }),
+    call('Write', { file_path: 'docs/notes.md', content: '"command": "rm capture.jsonl"' }),
+  ]) {
+    const text = run(input);
+    assert.strictEqual(text.status, 0, text.stderr);
   }
 });
