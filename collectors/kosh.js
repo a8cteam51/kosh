@@ -279,7 +279,14 @@
 
   const paintOf = (color) => (color.alpha < 1 ? `${color.toHexString()} at ${Math.round(color.alpha * 100)}%` : color.toHexString());
 
+  // Opacity fades text together with what it sits on, so the text's own paint no longer says how it looks.
+  const faded = (element) => {
+    for (let item = element; item; item = item.parentElement) if (Number(getComputedStyle(item).opacity) < 1) return true;
+    return false;
+  };
+
   const ratioRange = (foreground, element) => {
+    if (faded(element)) return null;
     const { flattenColors, getContrast } = window.axe.commons.color;
     const backgrounds = backgroundsBehind(element);
     if (!backgrounds?.length) return null;
@@ -417,7 +424,8 @@
     const elements = [];
     for (const element of document.body.querySelectorAll('*')) {
       const rect = element.getBoundingClientRect();
-      if (!rect.width || !rect.height || (rect.right <= width + 1 && rect.left >= -1)) continue;
+      // Content past the left edge can't be scrolled to, and that's where skip links are parked.
+      if (!rect.width || !rect.height || rect.right <= width + 1) continue;
       if (!shown(element) || heldBack(element)) continue;
       past.add(element);
       // The outermost one is the cause; what's inside it just moved with it.

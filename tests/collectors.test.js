@@ -294,10 +294,23 @@ test('contrast: the range samples between stops, where the text can vanish', asy
   assert.ok(node.ratioRange.min < 1.2, `min ${node.ratioRange.min}`);
 });
 
-test("contrast: a layer's opacity scales its stops", async () => {
-  const window = withRealColors('<div id="hero"></div>', { hero: { backgroundImage: 'linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0))', opacity: '0.5', color: 'rgb(0, 0, 0)' } }, (w) => ({ incomplete: [{ id: 'color-contrast', nodes: [gradientNode(w.document.getElementById('hero'))] }] }));
+test("contrast: a layer behind the text has its stops scaled by its opacity", async () => {
+  const window = withRealColors('<div id="hero"></div><div id="below"></div>', { below: { backgroundImage: 'linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0))', opacity: '0.5' } }, (w) => ({ incomplete: [{ id: 'color-contrast', nodes: [gradientNode(w.document.getElementById('hero'))] }] }));
+  window.stackBelow = [window.document.getElementById('below')];
   const [node] = plain(await window.__kosh.contrast()).incomplete;
   assert.deepStrictEqual(node.ratioRange, { min: 5.32, max: 5.32 });
+});
+
+test('contrast: text faded with what it sits on gets no range, since its own paint no longer says how it looks', async () => {
+  // Black on black at 50% over white paints grey on grey, 1:1, not black on grey.
+  for (const [body, styles] of [
+    ['<div id="hero"></div>', { hero: { backgroundImage: 'linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0))', opacity: '0.5' } }],
+    ['<div id="wrap"><div id="hero"></div></div>', { wrap: { opacity: '0.5' }, hero: { backgroundImage: 'linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0))' } }],
+  ]) {
+    const window = withRealColors(body, styles, (w) => ({ incomplete: [{ id: 'color-contrast', nodes: [gradientNode(w.document.getElementById('hero'))] }] }));
+    const [node] = plain(await window.__kosh.contrast()).incomplete;
+    assert.strictEqual(node.ratioRange, undefined, body);
+  }
 });
 
 test('contrast: layered gradients all count, like a dot pattern over a radial', async () => {
@@ -399,6 +412,13 @@ test('contrast: large placeholder text gets the 3:1 threshold, and its opacity c
   assert.deepStrictEqual(plain(violations).map((node) => node.selector), ['#faint']);
   assert.ok(violations[0].ratio < 2);
   assert.strictEqual(violations[0].textColor, '#333333 at 30%');
+});
+
+test('contrast: a placeholder in a faded field is incomplete, with no ratio, to judge by eye', async () => {
+  const window = withRealColors('<div id="wrap"><input id="field" placeholder="Email"></div>', { wrap: { opacity: '0.6' }, 'field::placeholder': { color: 'rgb(51, 51, 51)' } });
+  const { violations, incomplete } = plain(await window.__kosh.contrast());
+  assert.strictEqual(violations.length, 0);
+  assert.deepStrictEqual([incomplete[0].selector, incomplete[0].ratio, incomplete[0].ratioRange], ['#field', null, undefined]);
 });
 
 test('contrast: a placeholder on a gradient that straddles the threshold is incomplete, with its range', async () => {
@@ -526,7 +546,7 @@ test('page: clipped text is an element cutting off its own text, not a screen-re
   assert.deepStrictEqual(plain(clipped), [{ selector: '#cut', text: 'Cut off text', box: '100x20', content: '300x20' }]);
 });
 
-test('page: overflow names the outermost element past the viewport, not its children, a scroller inside or a fixed panel', async () => {
+test('page: overflow names the outermost element past the viewport\'s right edge, not its children, a scroller inside, a fixed panel or a skip link parked off the left', async () => {
   const past = { width: 500, height: 10, left: 900, right: 1400 };
   const { window } = laidOut(`
     <div id="wide"><span id="inner"></span></div>
@@ -534,17 +554,21 @@ test('page: overflow names the outermost element past the viewport, not its chil
     <div id="fixed"></div>
     <div id="fine"></div>
     <div id="empty"></div>
+    <a id="skip">Skip to content</a>
+    <div id="both"></div>
   `, {
     boxes: {
       root: { clientWidth: 1000, scrollWidth: 1400 },
       wide: { rect: past }, inner: { rect: past }, scrolled: { rect: past }, fixed: { rect: past },
       fine: { rect: { width: 500, height: 10, left: 0, right: 1000.5 } },
       empty: { rect: { width: 0, height: 0, left: 2000, right: 2000 } },
+      skip: { rect: { width: 120, height: 20, left: -9999, right: -9879 } },
+      both: { rect: { width: 1200, height: 10, left: -100, right: 1100 } },
     },
     styles: { scroller: { overflowX: 'auto' }, fixed: { position: 'fixed' }, wide: { overflowX: 'visible' }, inner: { overflowX: 'visible' }, scrolled: { overflowX: 'visible' } },
   });
   const { overflow } = await window.__kosh.page();
-  assert.deepStrictEqual(plain(overflow), { viewportWidth: 1000, pageWidth: 1400, elements: [{ selector: '#wide', left: 900, right: 1400 }] });
+  assert.deepStrictEqual(plain(overflow), { viewportWidth: 1000, pageWidth: 1400, elements: [{ selector: '#wide', left: 900, right: 1400 }, { selector: '#both', left: -100, right: 1100 }] });
 });
 
 test('page: an unawaited call says so', () => {
