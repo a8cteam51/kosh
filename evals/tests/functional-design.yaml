@@ -487,3 +487,20 @@ tests:
         value: '^[\s*_#>`\d.)]*NO\b'
       - type: javascript
         value: /\btext\b/.test(output)
+
+  - description: A published page no menu links to gets loaded, and the menu isn't called the whole site
+    vars:
+      request: |
+        You've walked https://example.com/ through its main menu and footer menu and loaded
+        About, Services, Blog, one post and Contact. Both menus only lead to those pages.
+        The inventory you just ran prints:
+
+        "published": { "source": "REST API", "total": 7, "notReached": ["https://example.com/test-page/"] }
+
+        Are you done covering pages, and can `testMethodology` say the menus are the whole
+        site? Answer YES or NO first, then say what you'd do next.
+    assert:
+      - type: regex
+        value: '^[\s*_#>`\d.)]*NO\b'
+      - type: javascript
+        value: /test-page/.test(output)

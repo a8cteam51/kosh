@@ -85,7 +85,7 @@ Cover at least five distinct pages at desktop where the site has them, reaching 
 4. one index or archive page: the blog, a category or a listing;
 5. a support or contact page: Contact, FAQ, Help or Resources;
 
-plus a page that doesn't exist (the site's URL with `/bp93r` on the end), to see the site's 404 page. A site with fewer pages has fewer; say in `testMethodology` how you know (the menu, a sitemap). Then `browser_resize` to 375×812 and load the homepage and at least two of the same pages again.
+plus a page that doesn't exist (the site's URL with `/bp93r` on the end), to see the site's 404 page. A site with fewer pages has fewer; say in `testMethodology` how you know (`published`, below). The menus never prove a site has nothing else, because a page nothing links to is still published, and that's where test pages sit: read `published` in the inventory below, and load what it lists directly, or on a site with many, the ones that look least finished. Then `browser_resize` to 375×812 and load the homepage and at least two of the same pages again.
 
 On a small viewport, open the menu by the ref `browser_snapshot` gives it rather than by a CSS selector: themes often ship one copy of the menu per breakpoint, so a selector can match the hidden copy, and the click times out or matches several elements.
 
@@ -97,7 +97,7 @@ Every page you load is recorded as it loads: its title, headings, links, images 
 node <kosh>/scripts/page-capture.js inventory <homepage URL> <every page URL you loaded>
 ```
 
-It prints each page's outline (`h1`, `headings`, `meta`, `imagesWithoutAlt`, and `hiddenLinks`, the links with no layout box, such as another breakpoint's copy of the menu), then every link the run saw once: `siteLinks`, `offSiteLinks` and `otherLinks` (`mailto:`, `tel:`). Pass full URLs. It names any page you passed that has no recorded load; load it before writing the report, since the report is refused while `visitedPages` lists a page the browser never loaded.
+It prints each page's outline (`h1`, `headings`, `meta`, `imagesWithoutAlt`, and `hiddenLinks`, the links with no layout box, such as another breakpoint's copy of the menu), then every link the run saw once: `siteLinks`, `offSiteLinks` and `otherLinks` (`mailto:`, `tel:`). Then `published`: `notReached` is the site's published pages you haven't loaded or seen a link to, and `total` how many it has, though from the REST API the list covers only the newest 100. If it has `error` instead, the script couldn't read them, so ask the REST API from the page (see Investigating) before saying what the site holds. Pass full URLs. It names any page you passed that has no recorded load; load it before writing the report, since the report is refused while `visitedPages` lists a page the browser never loaded.
 
 Load times are the performance test's to measure: don't report them here.
 
