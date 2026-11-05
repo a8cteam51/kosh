@@ -332,7 +332,8 @@ const inventoryView = (rows, site) => {
       headings: headings.map((heading) => `${heading.tag}${heading.hidden ? ' (hidden)' : ''}: ${heading.text}`),
       hiddenLinks: (row.links ?? []).filter((link) => link.hidden).length,
       imagesWithoutAlt: (row.images ?? []).filter((image) => image.alt === null).map((image) => image.src),
-      meta: row.meta,
+      meta: Object.fromEntries(Object.entries(row.meta ?? {}).filter(([, value]) => value !== null)),
+      missingMeta: Object.keys(row.meta ?? {}).filter((tag) => row.meta[tag] === null),
     };
   });
   const group = (test) => [...links].filter(([href]) => test(href)).map(([href, text]) => ({ text, href }));
@@ -388,18 +389,24 @@ const published = async (site, rows) => {
   return { error: errors.join('; ') };
 };
 
+// One line per row, since runs read this by line count, and pretty-printed they cut out the middle pages.
+const printInventory = (view) => {
+  const rows = (list) => (list.length ? `[\n${list.map((row) => `    ${JSON.stringify(row)}`).join(',\n')}\n  ]` : '[]');
+  return `{\n${Object.entries(view).map(([key, value]) => `  ${JSON.stringify(key)}: ${Array.isArray(value) ? rows(value) : JSON.stringify(value)}`).join(',\n')}\n}`;
+};
+
 const inventory = async ([site, ...urls]) => {
   const file = captureFile();
   const rows = buildInventory(reportEntries([...readEntries(takenFile(file)), ...readEntries(file)], site));
   const view = inventoryView(rows, site);
-  // Only a host the run's browser has loaded, since the model writes this command's arguments.
-  if (rows.length) view.published = await published(site, rows);
-  console.log(JSON.stringify(view, null, 2));
+  // Only a host the run's browser has loaded, since the model writes this command's arguments. First, since a run often reads only the top of this.
+  const answer = rows.length ? { published: await published(site, rows), ...view } : view;
+  console.log(printInventory(answer));
   const missing = uncovered([site, ...urls], rows);
   console.error(missing.length ? `No visit captured yet for: ${missing.join(', ')}` : 'Every page given has a captured visit.');
 };
 
-module.exports = { archiveText, badFileFixes, buildInventory, buildPages, host, inventoryView, numberFindings, published, readEntries, readLinkChecks, reportEntries, take, takenFile, uncovered, visitCount };
+module.exports = { archiveText, badFileFixes, buildInventory, buildPages, host, inventoryView, numberFindings, printInventory, published, readEntries, readLinkChecks, reportEntries, take, takenFile, uncovered, visitCount };
 
 if (require.main === module) {
   const [command, ...args] = process.argv.slice(2);

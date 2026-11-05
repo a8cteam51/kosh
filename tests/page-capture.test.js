@@ -6,7 +6,7 @@ const path = require('path');
 const http = require('http');
 const util = require('util');
 const { execFile, spawnSync } = require('child_process');
-const { badFileFixes, buildInventory, buildPages, inventoryView, numberFindings, published, readLinkChecks, reportEntries, take, uncovered } = require('../scripts/page-capture.js');
+const { badFileFixes, buildInventory, buildPages, inventoryView, numberFindings, printInventory, published, readLinkChecks, reportEntries, take, uncovered } = require('../scripts/page-capture.js');
 
 const DESKTOP = { width: 1920, height: 1080 };
 const MOBILE = { width: 375, height: 812 };
@@ -261,6 +261,39 @@ test("the inventory view prints each page's outline and every link once, the sit
   assert.deepEqual(view.otherLinks.map((link) => link.href), ['mailto:hi@example.com']);
 });
 
+test('the inventory view lists the share tags a page has apart from those it lacks', () => {
+  const rows = buildInventory([
+    { type: 'visit', visit: 'a-1', url: 'https://example.com/', status: 200, redirectedFrom: [] },
+    load('a-1', DESKTOP, 900),
+    inventoryRow('a-1', 'Home', { meta: { description: '', ogTitle: 'Home', ogImage: null, canonical: null } }),
+  ]);
+  const [page] = inventoryView(rows, 'https://example.com/').pages;
+  assert.deepEqual(page.meta, { description: '', ogTitle: 'Home' });
+  assert.deepEqual(page.missingMeta, ['ogImage', 'canonical']);
+});
+
+test('the printed inventory is the same JSON, with one line for each page and each link', () => {
+  const view = {
+    published: { source: 'REST API', total: 2, notReached: ['https://example.com/a/'] },
+    pages: [{ url: 'https://example.com/', headings: ['h1: Home', 'h2: News'] }, { url: 'https://example.com/b/', headings: [] }],
+    siteLinks: [{ text: 'A', href: 'https://example.com/a/' }],
+    offSiteLinks: [],
+  };
+  const printed = printInventory(view);
+  assert.deepEqual(JSON.parse(printed), view);
+  assert.equal(printed, `{
+  "published": {"source":"REST API","total":2,"notReached":["https://example.com/a/"]},
+  "pages": [
+    {"url":"https://example.com/","headings":["h1: Home","h2: News"]},
+    {"url":"https://example.com/b/","headings":[]}
+  ],
+  "siteLinks": [
+    {"text":"A","href":"https://example.com/a/"}
+  ],
+  "offSiteLinks": []
+}`);
+});
+
 test('the inventory command takes full URLs only, and prints only JSON on stdout', (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kosh-inventory-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -393,6 +426,11 @@ test('the inventory command asks a site its browser loaded what is published, an
 
   const { stdout } = await run(`${site}/`);
   assert.deepEqual(JSON.parse(stdout).published, { source: 'REST API', total: 2, notReached: [`${site}/test-page/`] });
+  assert.equal(Object.keys(JSON.parse(stdout))[0], 'published');
+  const lines = stdout.trimEnd().split('\n');
+  const pageLine = lines.filter((line) => line.includes('"title":"Home"'));
+  assert.equal(pageLine.length, 1, 'a page is one line');
+  assert.ok(lines.length < 12, `${lines.length} lines for one page and no links`);
 
   const other = await siteServer(t, {});
   const notLoaded = JSON.parse((await run(`${other.site}/`)).stdout);
