@@ -185,4 +185,12 @@ test('without node, the guard blocks a call a rule could match and allows any ot
   assert.strictEqual(real.status, 0, real.stderr);
   const spaced = spawnSync('/bin/sh', [WRAPPER], { input: JSON.stringify({ transcript_path: '/p/s.jsonl', cwd: '/capture', tool_name: 'Bash', tool_input: { command: 'ls' } }, null, 1), encoding: 'utf8', cwd: KOSH, env: { PATH: bin } });
   assert.strictEqual(spaced.status, 0, spaced.stderr);
+  // The guard never reads an edit's text, so text that mentions captures doesn't need node.
+  for (const input of [
+    call('Edit', { file_path: 'README.md', old_string: 'a', new_string: 'see the links and kosh-reports/data/capture-abc.jsonl' }),
+    call('Write', { file_path: 'docs/notes.md', content: '"command": "rm capture.jsonl"' }),
+  ]) {
+    const text = run(input);
+    assert.strictEqual(text.status, 0, text.stderr);
+  }
 });
