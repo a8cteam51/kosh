@@ -321,6 +321,29 @@ test("a functional report shows each finding's fix and where it goes, its invent
   assert.match(html, /<h2>Open questions<\/h2>[\s\S]*Would settle it:<\/strong> The client confirms the list/);
 });
 
+test("a functional report lists the published pages its run never reached, or why they couldn't be read", (t) => {
+  const { root, reportsDir } = sandbox(t);
+  const renderWith = (published) => {
+    const input = path.join(root, 'qa-report-functional.json');
+    fs.writeFileSync(input, JSON.stringify({
+      url: 'https://example.com/', websiteName: 'Functional Fixture', timestamp: '2026-01-01T00:00:00Z', environment: 'staging',
+      provenance: { model: 'claude-test-1', captureSha256: 'a'.repeat(64) },
+      visitedPages: ['https://example.com/'], issues: { critical: [], high: [], medium: [], low: [] }, published,
+    }));
+    const { status, stdout, stderr } = spawnSync('node', [GENERATOR, input, '--functional'], { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: reportsDir } });
+    assert.equal(status, 0, stdout + stderr);
+    return fs.readFileSync(stdout.match(/^HTML report generated: (.*)$/m)[1], 'utf8');
+  };
+
+  const listed = renderWith({ source: 'REST API', total: 240, notReached: ['https://example.com/test-page/'] });
+  assert.match(listed, /<h3>Published pages not reached<\/h3>\s*<p>Read from the site by kosh after the run, not reported by the model\. The site has 240 published pages \(from its REST API, of which kosh read the newest 100\)\. This run neither loaded these nor saw a link to them:/);
+  assert.match(listed, /<li><a href="https:\/\/example\.com\/test-page\/"/);
+  assert.match(renderWith({ source: 'REST API', total: 240, notReached: [] }), /of which kosh read the newest 100\)\. This run loaded each of the 100 kosh read, or saw a link to it\./, 'a clean list from a capped read must not cover the pages kosh never read');
+  assert.match(renderWith({ source: 'sitemap', total: 3, notReached: [] }), /The site has 3 published pages \(from its sitemap\)\. This run loaded each one or saw a link to it\./);
+  assert.match(renderWith({ error: 'REST API answered <b>500</b>' }), /kosh couldn't read the site's published pages: REST API answered &lt;b&gt;500&lt;\/b&gt;\./);
+  assert.doesNotMatch(renderWith(undefined), /Published pages not reached/);
+});
+
 test("an accessibility report's findings never point at the accessibility test", (t) => {
   const { root, reportsDir } = sandbox(t);
   const input = path.join(root, 'qa-report-accessibility.json');

@@ -3,7 +3,8 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const http = require('http');
+const { execFile, spawnSync } = require('child_process');
 const { buildPages } = require('../scripts/page-capture.js');
 
 // Inside Claude Code these point the stamp at the real session's transcript and effort.
@@ -42,9 +43,10 @@ const write = (box, name, value) => {
 };
 
 const SESSION = 'wrapper-test';
+const OFFLINE = `${process.env.NODE_OPTIONS ?? ''} --require ${JSON.stringify(path.join(__dirname, 'no-network.js'))}`;
 
 const run = (box, command, args, env = {}) => {
-  const { status, stdout, stderr, error } = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir, CLAUDE_CODE_SESSION_ID: SESSION, ...env } });
+  const { status, stdout, stderr, error } = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir, CLAUDE_CODE_SESSION_ID: SESSION, NODE_OPTIONS: OFFLINE, ...env } });
   assert.ifError(error);
   return { status, output: (stdout + stderr).replace(/\x1b\[[0-9;]*m/g, '') };
 };
@@ -177,6 +179,7 @@ test("a fresh functional run whose browser wasn't held to the site is refused, a
 
   assert.notEqual(status, 0, output);
   assert.match(output, /This run's browser wasn't held to example\.com/);
+  assert.doesNotMatch(output, /Published pages/, 'a run refused for its wall still asked the site for its pages');
   assert.ok(!fs.existsSync(path.join(box.reportsDir, 'data', 'archive')), output);
 });
 
@@ -197,6 +200,59 @@ test("a functional report takes its session's link checks, numbers its findings,
   assert.deepEqual(saved.issues.high.map((finding) => finding.id), ['F-01']);
   assert.ok(Array.isArray(saved.inventory));
   assert.ok(!fs.existsSync(links), "the link checks are still there for the next run to inherit");
+  assert.deepEqual(saved.published, { error: 'offline; offline' }, 'a list that could not be read must not look like a site with nothing left');
+  assert.match(output, /Published pages not read: offline; offline/);
+});
+
+test("a functional report lists the site's published pages its run never reached, read from the site after the run", async (t) => {
+  const box = sandbox(t);
+  const server = http.createServer((req, res) => {
+    res.writeHead(req.url.startsWith('/?rest_route=/wp/v2/pages') ? 200 : 404, { 'x-wp-total': '3' });
+    res.end(req.url.startsWith('/?rest_route=') ? JSON.stringify(['/', '/about/', '/test-page/'].map((page) => ({ link: `${site}${page}` }))) : '');
+  });
+  await new Promise((resolve) => { server.listen(0, '127.0.0.1', resolve); });
+  t.after(() => server.close());
+  const site = `http://127.0.0.1:${server.address().port}`;
+  writeCapture(box, SESSION, [
+    { type: 'visit', visit: 'p-1', browser: 'run', url: `${site}/`, status: 200, redirectedFrom: [] },
+    { type: 'wall', browser: 'run', host: new URL(site).host },
+    { type: 'visit', visit: 'p-2', browser: 'run', url: `${site}/about/`, status: 200, redirectedFrom: [] },
+  ]);
+  const json = write(box, SKILL_OUTPUT, report((r) => { r.url = `${site}/`; r.visitedPages = [`${site}/`, `${site}/about/`]; }));
+
+  // The wrapper runs while this process serves the site, so it can't be spawnSync.
+  const output = await new Promise((resolve) => {
+    execFile(WRAPPER, [json], { env: { ...process.env, KOSH_REPORTS_DIR: box.reportsDir, CLAUDE_CODE_SESSION_ID: SESSION } }, (error, stdout, stderr) => resolve({ error, text: stdout + stderr }));
+  });
+
+  assert.ifError(output.error);
+  assert.match(output.text, /Published pages not reached: 1 of 3/);
+  const name = archived(box).find((file) => file.endsWith('.json'));
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(box.reportsDir, 'data', 'archive', name), 'utf8')).published, { source: 'REST API', total: 3, notReached: [`${site}/test-page/`] });
+  const html = fs.readdirSync(box.reportsDir).find((file) => file.endsWith('.html'));
+  assert.match(fs.readFileSync(path.join(box.reportsDir, html), 'utf8'), /<h3>Published pages not reached<\/h3>[\s\S]*\/test-page\//);
+});
+
+test("a functional run whose browser recorded nothing is refused when it checked links, pointing at the restart", (t) => {
+  const box = sandbox(t);
+  fs.mkdirSync(path.join(box.reportsDir, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(box.reportsDir, 'data', `links-${SESSION}.jsonl`), `${JSON.stringify({ at: '2026-01-01T00:05:00.000Z', url: 'https://x.example/', outcome: 'checked', status: 200, redirectedTo: null, pathChanged: false })}\n`);
+
+  const { status, output } = run(box, WRAPPER, [write(box, SKILL_OUTPUT, report())]);
+
+  assert.notEqual(status, 0, output);
+  assert.match(output, /no page capture[\s\S]*linkChecks\[\] came without a page capture[\s\S]*restart Claude Code/);
+});
+
+test("a functional run with no capture keeps no published list the model wrote", (t) => {
+  const box = sandbox(t);
+  const json = write(box, SKILL_OUTPUT, report((r) => { r.published = { source: 'REST API', total: 1, notReached: [] }; }));
+
+  const { status, output } = run(box, WRAPPER, [json]);
+
+  assert.equal(status, 0, output);
+  const name = archived(box).find((file) => file.endsWith('.json'));
+  assert.ok(!('published' in JSON.parse(fs.readFileSync(path.join(box.reportsDir, 'data', 'archive', name), 'utf8'))), output);
 });
 
 test("a skill's rendered report takes its session's page capture, for its own host only", (t) => {
@@ -734,10 +790,11 @@ test("a correction can't move the report to another site, or change its inventor
     copy.url = 'https://other.example/';
     copy.inventory = [];
     copy.linkChecks = [];
+    copy.published = { source: 'REST API', total: 1, notReached: [] };
   });
 
   assert.equal(status, 0, output);
-  assert.match(output, /Restored from the archived report, not this copy: url, inventory, linkChecks/);
+  assert.match(output, /Restored from the archived report, not this copy: url, inventory, linkChecks, published/);
   assert.deepEqual(readArchived(box), original);
 });
 

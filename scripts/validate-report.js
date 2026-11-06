@@ -85,6 +85,10 @@ function checkReport(report, reportPath, types) {
       if (rows?.length && !report.provenance?.captureSha256) {
         ok = false;
         console.error(`✗ ${field}[] has rows the page capture didn't write. ${path.join(__dirname, 'run-qa-report.sh')} builds them from the browser's record, and only for ${path.join(path.dirname(captureFile()), `qa-report-${type}.json`)}: save the report there without ${field}[], and re-run.`);
+      } else if (type === 'functional' && !report.provenance?.captureSha256 && (report.published || report.linkChecks?.length)) {
+        ok = false;
+        const added = report.published ? 'published' : 'linkChecks[]';
+        console.error(`✗ ${added} came without a page capture. ${path.join(__dirname, 'run-qa-report.sh')} adds it only to a report it merged from this session's capture, at ${path.join(path.dirname(captureFile()), `qa-report-${type}.json`)}. If a "no page capture" warning came first, restart Claude Code and run the skill again; otherwise save the report there without ${added}, and re-run.`);
       } else if (missing.length) {
         ok = false;
         console.error(`✗ visitedPages lists pages the browser has no record of loading:\n${missing.map((url) => `  ${url}`).join('\n')}\nLoad each in the browser and re-run, or take it out of visitedPages if this run didn't test it.`);
