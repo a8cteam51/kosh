@@ -203,7 +203,7 @@ const refuseBadFixes = (report) => {
   }
 };
 
-const RUN_FIELDS = ['url', 'pages', 'inventory', 'linkChecks'];
+const RUN_FIELDS = ['url', 'pages', 'inventory', 'linkChecks', 'published'];
 const captureBeside = (file) => file.replace(/\.json$/, '.capture.jsonl');
 
 // A refused report is sealed too but never archived, so only a finished run's copy has a match here.
@@ -237,7 +237,7 @@ const correction = (reportPath, report, copyPath, flags) => {
   if (functional) refuseBadFixes(report);
 };
 
-const merge = (reportPath, flags) => {
+const merge = async (reportPath, flags) => {
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   const copyPath = sealedCopy(report);
   if (copyPath) return correction(reportPath, report, copyPath, flags);
@@ -267,8 +267,15 @@ const merge = (reportPath, flags) => {
   const functional = types.includes('functional');
   if (functional) {
     // Without a capture there's nothing to check visitedPages against, and the warning above says why.
-    if (visitCount(entries)) report.inventory = buildInventory(entries);
-    else delete report.inventory;
+    if (visitCount(entries)) {
+      report.inventory = buildInventory(entries);
+      // A run that skipped what inventory listed would otherwise leave no trace. Not for a run that's refused for its wall.
+      if (report.provenance?.heldTo) report.published = await published(report.url, report.inventory);
+      else delete report.published;
+    } else {
+      delete report.inventory;
+      delete report.published;
+    }
     report.linkChecks = readLinkChecks(recordFile(), started);
     numberFindings(report.issues);
   }
@@ -297,6 +304,8 @@ const merge = (reportPath, flags) => {
 
 const mergedFunctional = (report, entries) => {
   console.log(`Page inventory merged: ${report.inventory?.length ?? 0} page × viewport rows from ${visitCount(entries)} visits on ${host(report.url)}, and ${report.linkChecks.length} link check${report.linkChecks.length === 1 ? '' : 's'}`);
+  const { published: listed } = report;
+  if (listed) console.log(listed.error ? `  Published pages not read: ${listed.error}` : `  Published pages not reached: ${listed.notReached.length} of ${listed.total}`);
   refuseBadFixes(report);
   // Only a fresh run is refused, as for performance: without a capture there's no inventory, and an old archive re-renders.
   if (report.inventory?.length && !report.provenance?.heldTo) {
@@ -410,7 +419,8 @@ module.exports = { archiveText, badFileFixes, buildInventory, buildPages, host, 
 
 if (require.main === module) {
   const [command, ...args] = process.argv.slice(2);
-  if (command === 'merge' && args[0]) merge(args[0], args.slice(1));
+  // run-qa-report.sh stops on this exit code, which an unhandled rejection doesn't always set.
+  if (command === 'merge' && args[0]) merge(args[0], args.slice(1)).catch((error) => { console.error(error.stack); process.exitCode = 1; });
   else if (command === 'summary' && host(args[0])) summary(args);
   else if (command === 'inventory' && host(args[0]) && args.every((url) => host(url))) inventory(args);
   else {

@@ -125,6 +125,51 @@
       },
       "description": "kosh's link checker's result for each off-site link checked this run. Added by scripts/run-qa-report.sh from the link checker's record — do not write this field."
     },
+    "published": {
+      "description": "The site's published pages that this run neither loaded nor saw a link to, read from the site's REST API or sitemap after the run, or why they couldn't be read. Added by scripts/run-qa-report.sh — do not write this field.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "source",
+            "total",
+            "notReached"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "enum": [
+                "REST API",
+                "sitemap"
+              ]
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "notReached": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
     "explorationPass": {
       "type": "array",
       "description": "Threads investigated beyond the checks, recorded whatever the outcome, so an observation outside this test's scope survives here instead of becoming a finding. Findings themselves live in `issues`.",

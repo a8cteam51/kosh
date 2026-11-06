@@ -270,6 +270,19 @@ test("a functional report's inventory must be the merge's, and cover every visit
   assert.match(uncovered.output, /visitedPages lists pages the browser has no record of loading:\n {2}https:\/\/example\.com\/about\//);
 
   assert.equal(run(t, 'qa-report-functional.json', merged).status, 0);
+
+  const handWritten = run(t, 'qa-report-functional.json', { ...valid, published: { source: 'REST API', total: 1, notReached: [] } });
+  assert.notEqual(handWritten.status, 0, handWritten.output);
+  assert.match(handWritten.output, /published came without a page capture/);
+  const checks = [{ url: 'https://x.example/', outcome: 'checked', status: 200, redirectedTo: null, pathChanged: false }];
+  const unmerged = run(t, 'qa-report-functional.json', { ...valid, linkChecks: checks });
+  assert.notEqual(unmerged.status, 0, unmerged.output);
+  assert.match(unmerged.output, /linkChecks\[\] came without a page capture[\s\S]*restart Claude Code/);
+  assert.equal(run(t, 'qa-report-functional.json', { ...valid, linkChecks: [] }).status, 0, 'no link checks needs no capture');
+  assert.equal(run(t, 'qa-report-functional.json', { ...merged, linkChecks: checks }).status, 0);
+  assert.equal(run(t, 'qa-report-functional.json', { ...merged, published: { error: 'REST API answered 500' } }).status, 0);
+  const blank = run(t, 'qa-report-functional.json', { ...merged, published: { error: '' } });
+  assert.notEqual(blank.status, 0, 'an empty error would render as a site with nothing left');
 });
 
 test('a compact report with no websiteName still reaches the renderer', (t) => {
