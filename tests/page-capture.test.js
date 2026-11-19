@@ -327,6 +327,13 @@ const walked = (site) => [
   { url: `${site}/about/`, redirectedFrom: [] },
 ];
 
+test('a merge that fails exits non-zero even when Node only warns on an unhandled rejection', () => {
+  const script = path.join(__dirname, '../scripts/page-capture.js');
+  const ran = spawnSync('node', [script, 'merge', path.join(os.tmpdir(), 'kosh-no-such-report.json'), '--functional'], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '--unhandled-rejections=warn' } });
+  assert.equal(ran.status, 1, ran.stderr);
+  assert.match(ran.stderr, /ENOENT/);
+});
+
 test("published names the site's pages the run neither loaded nor saw a link to, with how many there are", async (t) => {
   const routes = {};
   const { site } = await siteServer(t, routes);

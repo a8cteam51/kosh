@@ -349,6 +349,23 @@ const visitedPagesList = visitedPages.length
   ? `<ul>${visitedPages.map((p) => `<li>${renderLink(p)}</li>`).join('')}</ul>`
   : '<p class="muted">Not recorded.</p>';
 
+const published = report.published && typeof report.published === 'object' ? report.published : null;
+const notReached = Array.isArray(published?.notReached) ? published.notReached.filter((url) => typeof url === 'string') : [];
+const publishedSummary = () => {
+  if (published.error) return `kosh couldn't read the site's published pages: ${escHtml(published.error)}.`;
+  const capped = published.source === 'REST API' && published.total > 100;
+  const none = capped ? 'This run loaded each of the 100 kosh read, or saw a link to it.' : 'This run loaded each one or saw a link to it.';
+  return `The site has ${escHtml(published.total)} published pages (from its ${escHtml(published.source)}${capped ? ', of which kosh read the newest 100' : ''}). ${notReached.length ? 'This run neither loaded these nor saw a link to them:' : none}`;
+};
+const publishedBlock = published
+  ? `
+    <div class="visited-pages">
+      <h3>Published pages not reached</h3>
+      <p>Read from the site by kosh after the run, not reported by the model. ${publishedSummary()}</p>
+      ${notReached.length ? `<ul>${notReached.map((url) => `<li>${renderLink(url)}</li>`).join('')}</ul>` : ''}
+    </div>`
+  : '';
+
 // Core Web Vitals thresholds: https://web.dev/articles/vitals
 const BANDS = { lcp: [2500, 4000], cls: [0.1, 0.25] };
 const BAND_LABELS = { good: 'Good', fair: 'Needs improvement', poor: 'Poor' };
@@ -987,7 +1004,7 @@ ${explorationSection}
     <div class="visited-pages">
       <h3>Visited pages</h3>
       ${visitedPagesList}
-    </div>
+    </div>${publishedBlock}
   </section>
 
   <footer class="report-foot">
