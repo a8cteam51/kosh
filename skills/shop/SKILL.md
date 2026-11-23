@@ -47,7 +47,7 @@ This skill is written WooCommerce-first: the selectors, page conventions, and be
 - You MUST navigate by clicking real links and buttons (simulate real customer behavior)
 - You MUST click actual add-to-cart buttons and fill actual form fields
 - You MUST take actual screenshots at key journey steps and at both viewports
-- You MUST save every screenshot by passing its full path as the `filename` argument to `browser_take_screenshot`: `kosh-reports/screenshots/<name>.png` (e.g. `filename: "kosh-reports/screenshots/cart-desktop.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. (Note: a finding's `screenshots` field uses a path relative to `kosh-reports/`, i.e. `screenshots/<name>.png` — see §5.1.)
+- You MUST save every screenshot by passing a path relative to the project, not an absolute one, as the `filename` argument to `browser_take_screenshot`: `kosh-reports/screenshots/<name>.png` (e.g. `filename: "kosh-reports/screenshots/cart-desktop.png"`). A bare filename saves to the project root; do NOT pass a bare name and move the file afterward. (Note: a finding's `screenshots` field uses a path relative to `kosh-reports/`, i.e. `screenshots/<name>.png` — see §5.1.)
 - You MUST verify state after every interaction rather than assuming it worked
 - If you cannot perform these actions, explicitly state that the Playwright MCP is not available and cannot proceed with testing
 

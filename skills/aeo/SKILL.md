@@ -414,7 +414,7 @@ Persist the result as `technicalNotes.applicableSchemas`. It drives two signals 
 
 - The browser is already at the homepage from Phase 0
 - Confirm desktop viewport (1920×1080) via `browser_resize` if needed
-- `browser_take_screenshot` with `filename: "kosh-reports/screenshots/homepage-aeo-desktop.png"` (full page). Pass the full `kosh-reports/screenshots/...` path as `filename`; a bare filename saves to the project root, so do NOT pass a bare name and move the file afterward.
+- `browser_take_screenshot` with `filename: "kosh-reports/screenshots/homepage-aeo-desktop.png"` (full page). Pass a path relative to the project, `kosh-reports/screenshots/...`, as `filename`, not an absolute one; a bare filename saves to the project root, so do NOT pass a bare name and move the file afterward.
 
 ### 1.2 Technical Health
 
