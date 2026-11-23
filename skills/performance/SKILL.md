@@ -146,7 +146,7 @@ Write `kosh-reports/data/qa-report-performance.json`. Leave `timestamp` as the e
 - `testMethodology` says in a few sentences how the run went: the pages and why, the viewports, and anything that changes how the numbers compare, such as an inferred environment or a page that had to be loaded again.
 - Anything you looked into beyond these checks goes in `explorationPass`, with its outcome.
 - Set `provenance.model` to the exact model ID you are running as, copied from your system prompt. If your system prompt does not state one, write `"unknown"` — never guess. Add no other `provenance` fields: `<kosh>/scripts/run-qa-report.sh` adds the plugin version and skill hash.
-- Save each screenshot with `browser_take_screenshot`, passing the full path as `filename`: `kosh-reports/screenshots/<name>.png`. A bare filename saves to the project root, and moving the file afterwards is a step that gets skipped. A finding's `screenshots` lists paths relative to `kosh-reports/`: `screenshots/<name>.png` for the file at `kosh-reports/screenshots/<name>.png`.
+- Save each screenshot with `browser_take_screenshot`, passing a path relative to the project as `filename`: `kosh-reports/screenshots/<name>.png`, not an absolute one. A bare filename saves to the project root, and moving the file afterwards is a step that gets skipped. A finding's `screenshots` lists paths relative to `kosh-reports/`: `screenshots/<name>.png` for the file at `kosh-reports/screenshots/<name>.png`.
 
 An illustrative report, not one to copy:
 
