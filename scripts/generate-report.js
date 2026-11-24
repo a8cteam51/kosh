@@ -13,7 +13,7 @@
  * AEO reports are auto-detected from `report.mode === "aeo"`; --aeo forces the
  * AEO branch explicitly. The test-type flag affects the output filename.
  * Design tokens (colors, fonts) live in the TOKENS constant below — edit them
- * there if the report's look needs to change.
+ * there if the report's look needs to change. The AEO renderer keeps its own copy.
  */
 
 const fs = require('fs');
@@ -239,6 +239,8 @@ const fixPlace = ({ kind, path: file, line, detail }) => `${kind}${file ? `: ${f
 
 const renderFinding = (finding, index) => {
   const extraFields = [];
+  if (finding.impact) extraFields.push(`<dt>Impact</dt><dd>${escHtml(finding.impact)}</dd>`);
+  if (finding.fix) extraFields.push(`<dt>Fix</dt><dd>${escHtml(finding.fix)}</dd>`);
   if (finding.metric) extraFields.push(`<dt>Metric</dt><dd>${escHtml(finding.metric)}</dd>`);
   if (finding.wcag_criterion) extraFields.push(`<dt>WCAG</dt><dd>${escHtml(finding.wcag_criterion)}</dd>`);
   if (finding.wcag) extraFields.push(`<dt>WCAG</dt><dd>${escHtml(WCAG_NAMES[finding.wcag] ?? finding.wcag)}</dd>`);
@@ -253,12 +255,10 @@ const renderFinding = (finding, index) => {
   return `
     <article class="finding" id="finding-${index}">
       <header class="finding__header">
-        <h4 class="finding__category">${escHtml(finding.category || 'Finding')}</h4>
-        ${device}${id}
+        ${id}<h4 class="finding__category">${escHtml(finding.category || 'Finding')}</h4>
+        ${device}
       </header>
       <p class="finding__issue">${escHtml(finding.issue)}</p>
-      <p class="finding__impact"><strong>Impact:</strong> ${escHtml(finding.impact)}</p>
-      ${finding.fix ? `<p class="finding__impact"><strong>Fix:</strong> ${escHtml(finding.fix)}</p>` : ''}
       ${extraDl}
       ${referred}
       ${renderPages(finding.pages)}
@@ -278,7 +278,6 @@ const renderSeverityBlock = (sev) => {
           <h3>${label}</h3>
           <span class="severity-block__count">0</span>
         </header>
-        <p class="severity-block__empty-message">No ${sev} findings.</p>
       </section>
     `;
   }
@@ -338,15 +337,23 @@ const explorationSection = explorationPass.length
   ? `
   <section class="exploration">
     <h2>Exploration pass</h2>
-    <p class="exploration__intro">Threads investigated beyond the findings above, recorded whatever the outcome — so a reader can tell the difference between a surface that was checked and found clean, and one nobody looked at.</p>
+    <p class="section__intro">Threads investigated beyond the findings above, recorded whatever the outcome — so a reader can tell the difference between a surface that was checked and found clean, and one nobody looked at.</p>
     ${notableChecks.length ? `<div class="exploration__grid">${notableChecks.map(renderCheck).join('')}</div>` : ''}
     ${cleanChecksBlock}
   </section>`
   : '';
 
+const pathOf = (url) => {
+  try { const parsed = new URL(url); return parsed.pathname + parsed.search; } catch { return String(url); }
+};
+const reportOrigin = (() => { try { return new URL(report.url).origin; } catch { return null; } })();
+// A path alone would hide a second origin (www., http) or a fragment, so those keep the full URL.
+const listLabel = (url) => {
+  try { const parsed = new URL(url); return parsed.origin === reportOrigin && !parsed.hash ? pathOf(url) : String(url); } catch { return String(url); }
+};
 const visitedPages = Array.isArray(report.visitedPages) ? report.visitedPages : [];
 const visitedPagesList = visitedPages.length
-  ? `<ul>${visitedPages.map((p) => `<li>${renderLink(p)}</li>`).join('')}</ul>`
+  ? `<ul>${visitedPages.map((p) => `<li>${renderLink(p, listLabel(p))}</li>`).join('')}</ul>`
   : '<p class="muted">Not recorded.</p>';
 
 const published = report.published && typeof report.published === 'object' ? report.published : null;
@@ -362,7 +369,7 @@ const publishedBlock = published
     <div class="visited-pages">
       <h3>Published pages not reached</h3>
       <p>Read from the site by kosh after the run, not reported by the model. ${publishedSummary()}</p>
-      ${notReached.length ? `<ul>${notReached.map((url) => `<li>${renderLink(url)}</li>`).join('')}</ul>` : ''}
+      ${notReached.length ? `<ul>${notReached.map((url) => `<li>${renderLink(url, listLabel(url))}</li>`).join('')}</ul>` : ''}
     </div>`
   : '';
 
@@ -373,9 +380,6 @@ const MOBILE_MAX_WIDTH = 767;
 const PERFORMANCE_FLOOR = 4;
 
 const measuredPages = Array.isArray(report.pages) ? report.pages.filter((page) => page && typeof page === 'object') : [];
-const pathOf = (url) => {
-  try { const parsed = new URL(url); return parsed.pathname + parsed.search; } catch { return String(url); }
-};
 const viewportLabel = (viewport) => {
   const width = Number(String(viewport).split('x')[0]);
   if (!/^\d+x\d+$/.test(String(viewport))) return 'unknown viewport';
@@ -402,7 +406,7 @@ const pageRow = (page) => {
   return `
         <tr>
           <th scope="row">${renderLink(page.url, pathOf(page.url))}${visits}${loggedIn}${status}</th>
-          <td>${escHtml(viewportLabel(page.viewport))}</td>
+          <td class="nowrap">${escHtml(viewportLabel(page.viewport))}</td>
           ${vitalCell('lcp', page.lcp, page.vitalsSettled)}
           ${vitalCell('cls', page.cls, page.vitalsSettled)}
           <td class="num">${ms(page.loadTime)}</td>
@@ -442,7 +446,7 @@ const pagesSection = measuredPages.length
   ? `
   <section class="pages-measured">
     <h2>Pages measured</h2>
-    <p class="pages-measured__intro">Numbers recorded by the browser, not reported by the model: the first load of each page at each viewport, one lab load each. LCP and CLS are banded by the Core Web Vitals thresholds (LCP good up to 2.5 s, poor over 4 s; CLS good up to 0.1, poor over 0.25), which ranks the pages against each other but is not a Core Web Vitals assessment: that needs field data from real visitors. * means a new LCP candidate or layout shift arrived in the last second before the read ended, or the page shifted more often than the 150 times Chrome keeps, so its CLS is at least the number shown. HTML and Files are the bytes transferred for the page's document and for everything else it loaded. Files near 0 KB means they came from a warm cache, which flatters the page's numbers.</p>
+    <p class="section__intro">Numbers recorded by the browser, not reported by the model: the first load of each page at each viewport, one lab load each. LCP and CLS are banded by the Core Web Vitals thresholds (LCP good up to 2.5 s, poor over 4 s; CLS good up to 0.1, poor over 0.25), which ranks the pages against each other but is not a Core Web Vitals assessment: that needs field data from real visitors. * means a new LCP candidate or layout shift arrived in the last second before the read ended, or the page shifted more often than the 150 times Chrome keeps, so its CLS is at least the number shown. HTML and Files are the bytes transferred for the page's document and for everything else it loaded. Files near 0 KB means they came from a warm cache, which flatters the page's numbers.</p>
     ${coveredPages < PERFORMANCE_FLOOR ? `<p class="pages-measured__note">This run covered ${coveredPages} page${coveredPages === 1 ? '' : 's'}; the performance check covers at least ${PERFORMANCE_FLOOR} where the site has them.</p>` : ''}
     ${loggedInRows ? `<p class="pages-measured__note">${loggedInRows} of ${measuredPages.length} rows were measured logged in to WordPress, marked (logged in): those pages also loaded the admin bar and the tools WordPress adds for a logged-in user, which a visitor doesn't get, so they can be slower and heavier than a visitor's.</p>` : ''}
     <div class="pages-measured__scroll">
@@ -482,7 +486,7 @@ const inventoryRow = (row) => {
   return `
         <tr>
           <th scope="row">${renderLink(row.url, pathOf(row.url))}</th>
-          <td>${escHtml(viewportLabel(row.viewport))}</td>${cells}
+          <td class="nowrap">${escHtml(viewportLabel(row.viewport))}</td>${cells}
         </tr>`;
 };
 const outline = (row) => `
@@ -499,7 +503,7 @@ const inventorySection = inventory.length
   ? `
   <section class="pages-measured">
     <h2>Pages as loaded</h2>
-    <p class="pages-measured__intro">Recorded by the browser as each page first loaded at each viewport, not reported by the model. Hidden counts links with no layout box, such as another breakpoint's copy of the menu; no alt counts images with no alt attribute at all, which is different from an empty one. The lists stop at 100 headings, 300 links and 150 images per page.</p>
+    <p class="section__intro">Recorded by the browser as each page first loaded at each viewport, not reported by the model. Hidden counts links with no layout box, such as another breakpoint's copy of the menu; no alt counts images with no alt attribute at all, which is different from an empty one. The lists stop at 100 headings, 300 links and 150 images per page.</p>
     <div class="pages-measured__scroll">
       <table>
         <thead>
@@ -522,7 +526,7 @@ const linkChecksSection = linkChecks.length
   ? `
   <section class="pages-measured">
     <h2>Off-site links checked</h2>
-    <p class="pages-measured__intro">Each off-site link was requested by kosh's link checker, never opened in the browser, and only its status and where it ended up were kept. A different page there can mean a login or error page.</p>
+    <p class="section__intro">Each off-site link was requested by kosh's link checker, never opened in the browser, and only its status and where it ended up were kept. A different page there can mean a login or error page.</p>
     <div class="pages-measured__scroll">
       <table>
         <thead>
@@ -531,7 +535,7 @@ const linkChecksSection = linkChecks.length
         <tbody>${linkChecks.map((check) => `
           <tr>
             <th scope="row">${renderLink(check.url)}</th>
-            <td>${escHtml(linkResult(check))}</td>
+            <td class="nowrap">${escHtml(linkResult(check))}</td>
             <td>${escHtml([check.redirectedTo, check.pathChanged ? 'a different page' : ''].filter(Boolean).join(', ') || (check.outcome === 'checked' ? 'the same page' : '—'))}</td>
             <td>${escHtml(linkNote(check))}</td>
           </tr>`).join('')}
@@ -546,7 +550,7 @@ const openQuestionsSection = openQuestions.length
   ? `
   <section class="exploration">
     <h2>Open questions</h2>
-    <p class="exploration__intro">Things that may be problems but that this run couldn't settle, with what would. They aren't counted as findings.</p>
+    <p class="section__intro">Things that may be problems but that this run couldn't settle, with what would. They aren't counted as findings.</p>
     <div class="exploration__grid">${openQuestions.map((question) => `
       <article class="check">
         <p class="check__what">${escHtml(question.seen)}</p>
@@ -559,17 +563,19 @@ const openQuestionsSection = openQuestions.length
   : '';
 
 const TOKENS = {
-  bg: '#F8FAFC', surface: '#ffffff', border: '#E2E8F0',
-  text: '#0F172A', muted: '#64748B', accent: '#7C3AED',
-  sevCritical: '#E11D48', sevHigh: '#F97316', sevMedium: '#FBBF24', sevLow: '#0EA5E9',
-  envProdBg: '#FECDD3', envProdFg: '#9F1239',
-  envStagingBg: '#FDE68A', envStagingFg: '#854D0E',
-  envDevBg: '#BAE6FD', envDevFg: '#075985',
-  envUnspecBg: '#E2E8F0', envUnspecFg: '#64748B',
-  checkOkBg: '#DCFCE7', checkOkFg: '#166534',
-  checkRaisedBg: '#FFE4E6', checkRaisedFg: '#9F1239',
-  checkOpenBg: '#FEF3C7', checkOpenFg: '#854D0E',
-  checkScopeBg: '#E0E7FF', checkScopeFg: '#3730A3',
+  bg: '#F8F3FC', surface: '#ffffff', border: '#E3E3E3',
+  text: '#353535', muted: '#5D5D5D', accent: '#3D62D3',
+  sevCritical: '#D73428', sevHigh: '#F2C243', sevMedium: '#3D62D3', sevLow: '#4BA05B',
+  // Fills are tints because 353535 text fails on the full red, blue and green.
+  envProdBg: '#EC88AE', envProdFg: '#353535',
+  envStagingBg: '#66C0AA', envStagingFg: '#353535',
+  envDevBg: '#C8E36B', envDevFg: '#353535',
+  envUnspecBg: '#E3E3E3', envUnspecFg: '#5D5D5D',
+  checkOkBg: '#C8E36B', checkOkFg: '#353535',
+  checkRaisedBg: '#F1B8B4', checkRaisedFg: '#353535',
+  checkOpenBg: '#F9E1A1', checkOpenFg: '#353535',
+  checkScopeBg: '#BBC8F0', checkScopeFg: '#353535',
+  vitalGoodBg: '#ECF5CB', vitalFairBg: '#FCF0D0', vitalPoorBg: '#F5CCC9',
   fontBody: '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   fontHeading: 'inherit',
 };
@@ -586,11 +592,15 @@ const styles = `
     font-family: ${t.fontBody};
     font-size: 16px;
     line-height: 1.55;
+    overflow-wrap: break-word;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: ${t.fontHeading};
   }
-  a { color: ${t.accent}; text-decoration: underline; text-underline-offset: 2px; }
+  .wrap > section { margin: 0 0 3rem; }
+  .wrap > section > h2 { font-size: 1.375rem; line-height: 1.3; margin: 0 0 0.5rem; }
+  .section__intro { margin: 0 0 1rem; color: ${t.muted}; font-size: 0.9375rem; max-width: 72ch; }
+  a { color: ${t.text}; text-decoration: underline; text-underline-offset: 2px; }
   a:hover { text-decoration-thickness: 2px; }
   .wrap {
     max-width: 980px;
@@ -611,7 +621,7 @@ const styles = `
   }
   dl.meta {
     display: grid;
-    grid-template-columns: max-content 1fr;
+    grid-template-columns: max-content minmax(0, 1fr);
     gap: 0.5rem 1rem;
     margin: 0 0 1.5rem;
     font-size: 0.95rem;
@@ -644,10 +654,7 @@ const styles = `
   .env-tag--development,
   .env-tag--local      { background: ${t.envDevBg}; color: ${t.envDevFg}; }
   .env-tag--unspecified { background: ${t.envUnspecBg}; color: ${t.envUnspecFg}; }
-  .exploration { margin-bottom: 2rem; }
-  .exploration h2 { font-size: 1.125rem; margin: 0 0 0.375rem; }
-  .exploration__intro { margin: 0 0 0.875rem; color: ${t.muted}; font-size: 0.9375rem; max-width: 68ch; }
-  .exploration__grid { display: grid; gap: 0.625rem; }
+  .exploration__grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.625rem; }
   .check {
     background: ${t.surface};
     border: 1px solid ${t.border};
@@ -694,10 +701,6 @@ const styles = `
   .exploration__clean[open] > .exploration__clean-summary::after { transform: rotate(180deg); }
   .exploration__clean-summary:hover { color: ${t.text}; }
   .exploration__clean-body { margin-top: 0.625rem; }
-  .summary {
-    margin-bottom: 2rem;
-  }
-  .summary h2 { font-size: 1.125rem; margin: 0 0 0.625rem; }
   .severity-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -729,10 +732,6 @@ const styles = `
     color: ${t.muted};
     text-transform: uppercase;
     letter-spacing: 0.04em;
-  }
-  .findings-section h2 {
-    font-size: 1.125rem;
-    margin: 0 0 1rem;
   }
   .severity-block {
     margin: 0 0 0.875rem;
@@ -777,32 +776,27 @@ const styles = `
     background: ${t.bg};
     border-radius: 999px;
   }
-  .severity-block--empty .severity-block__header { cursor: default; }
-  .severity-block--empty .severity-block__empty-message {
-    margin: 0;
-    padding: 0 1.125rem 0.875rem;
-    color: ${t.muted};
-    font-size: 0.875rem;
-    font-style: italic;
-  }
+  .severity-block--empty { margin-bottom: 0.5rem; }
+  .severity-block--empty .severity-block__header { cursor: default; padding-block: 0.5rem; }
+  .severity-block--empty .severity-block__header h3 { color: ${t.muted}; font-weight: 500; font-size: 0.9375rem; }
   .severity-block__body {
     padding: 0 1.125rem 0.5rem;
   }
   .finding {
     border-top: 1px solid ${t.border};
-    padding: 1rem 0;
+    padding: 1.5rem 0;
   }
   .severity-block__body > .finding:first-child { border-top: none; padding-top: 0.25rem; }
   .finding__header {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.25rem;
+    gap: 0.625rem;
+    margin-bottom: 0.375rem;
     flex-wrap: wrap;
   }
   .finding__category {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: 1.0625rem;
     font-weight: 600;
   }
   .finding__device {
@@ -815,28 +809,34 @@ const styles = `
     letter-spacing: 0.04em;
   }
   .finding__id {
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
     color: ${t.muted};
     font-variant-numeric: tabular-nums;
   }
   .finding__issue {
-    margin: 0.375rem 0;
-    font-size: 0.95rem;
-  }
-  .finding__impact {
-    margin: 0.375rem 0;
-    font-size: 0.875rem;
-    color: ${t.text};
+    margin: 0 0 0.875rem;
+    max-width: 72ch;
   }
   .finding__extra {
     display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0.125rem 0.75rem;
-    margin: 0.5rem 0;
-    font-size: 0.8125rem;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.5rem 1rem;
+    margin: 0 0 0.75rem;
+    padding: 0.75rem 1rem;
+    background: ${t.bg};
+    border-radius: 6px;
+    font-size: 0.875rem;
   }
-  .finding__extra dt { color: ${t.muted}; font-weight: 600; }
-  .finding__extra dd { margin: 0; }
+  .finding__extra dt {
+    color: ${t.muted};
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding-top: 0.125rem;
+  }
+  .finding__extra dd { margin: 0; max-width: 72ch; }
   details.pages {
     margin: 0.5rem 0;
     font-size: 0.8125rem;
@@ -901,40 +901,39 @@ const styles = `
     word-break: break-all;
   }
   .methodology {
-    margin-top: 2rem;
     background: ${t.surface};
     border: 1px solid ${t.border};
     border-radius: 6px;
-    padding: 1rem 1.125rem;
-    font-size: 0.875rem;
+    padding: 1.25rem 1.25rem 1.5rem;
+    font-size: 0.9375rem;
   }
-  .methodology h2 { font-size: 1rem; margin: 0 0 0.5rem; }
-  .methodology p { margin: 0.5rem 0; }
+  .methodology p { margin: 0.5rem 0; max-width: 72ch; }
   .visited-pages {
-    margin-top: 1rem;
+    margin-top: 1.25rem;
   }
-  .visited-pages h3 { font-size: 0.875rem; margin: 0 0 0.375rem; color: ${t.muted}; text-transform: uppercase; letter-spacing: 0.04em; }
+  .visited-pages h3 { font-size: 0.75rem; margin: 0 0 0.5rem; color: ${t.muted}; text-transform: uppercase; letter-spacing: 0.04em; }
   .visited-pages ul {
     margin: 0;
     padding-left: 1rem;
     font-size: 0.8125rem;
-    word-break: break-all;
+    columns: 2 18rem;
+    column-gap: 2rem;
   }
-  .pages-measured { margin-bottom: 2rem; }
-  .pages-measured h2 { font-size: 1.125rem; margin: 0 0 0.375rem; }
-  .pages-measured h3 { font-size: 0.875rem; margin: 1rem 0 0.375rem; color: ${t.muted}; text-transform: uppercase; letter-spacing: 0.04em; }
-  .pages-measured__intro { margin: 0 0 0.875rem; color: ${t.muted}; font-size: 0.875rem; max-width: 72ch; }
+  .visited-pages li { break-inside: avoid; padding: 0.0625rem 0; }
+  .pages-measured h3 { font-size: 0.75rem; margin: 1.25rem 0 0.5rem; color: ${t.muted}; text-transform: uppercase; letter-spacing: 0.04em; }
   .pages-measured__note { margin: 0 0 0.875rem; padding: 0.5rem 0.75rem; background: ${t.checkOpenBg}; color: ${t.checkOpenFg}; border-radius: 6px; font-size: 0.875rem; }
   .pages-measured__scroll { overflow-x: auto; background: ${t.surface}; border: 1px solid ${t.border}; border-radius: 6px; }
   .pages-measured table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
-  .pages-measured th, .pages-measured td { padding: 0.5rem 0.5rem; border-bottom: 1px solid ${t.border}; text-align: left; vertical-align: top; }
-  .pages-measured tbody th { font-weight: 500; word-break: break-all; min-width: 10rem; }
-  .pages-measured .num { white-space: nowrap; }
-  .page-status { display: block; margin-top: 0.125rem; color: ${t.checkRaisedFg}; font-weight: 600; }
+  .pages-measured th, .pages-measured td { padding: 0.5rem 0.625rem; border-bottom: 1px solid ${t.border}; text-align: left; vertical-align: top; }
+  .pages-measured thead th { background: ${t.bg}; color: ${t.muted}; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .pages-measured tbody tr:last-child > * { border-bottom: none; }
+  .pages-measured tbody th { font-weight: 500; overflow-wrap: anywhere; min-width: 10rem; }
+  .pages-measured .num, .pages-measured .nowrap { white-space: nowrap; }
+  .page-status { display: table; margin-top: 0.25rem; padding: 0 0.375rem; border-radius: 4px; background: ${t.checkRaisedBg}; color: ${t.checkRaisedFg}; font-weight: 600; }
   .vital { min-width: 6.5rem; }
-  .vital--good { background: ${t.checkOkBg}; color: ${t.checkOkFg}; }
-  .vital--fair { background: ${t.checkOpenBg}; color: ${t.checkOpenFg}; }
-  .vital--poor { background: ${t.checkRaisedBg}; color: ${t.checkRaisedFg}; }
+  .vital--good { background: ${t.vitalGoodBg}; color: ${t.text}; }
+  .vital--fair { background: ${t.vitalFairBg}; color: ${t.text}; }
+  .vital--poor { background: ${t.vitalPoorBg}; color: ${t.text}; }
   .vital__band { display: block; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
   .patterns { margin: 0; padding-left: 1rem; font-size: 0.8125rem; word-break: break-all; }
   .patterns li { margin: 0.25rem 0; }

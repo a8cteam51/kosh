@@ -254,7 +254,7 @@ test('site text in the page table renders as text, and no site URL becomes a scr
   assert.doesNotMatch(table, /<img|onerror=alert\(1\)>|href="javascript/i);
   assert.match(table, /Failed: &lt;img src=x onerror=alert\(1\)&gt;/);
   assert.match(table, /<code>&lt;img src=x onerror=alert\(1\)&gt;: &lt;img src=x onerror=alert\(1\)&gt;<\/code>/);
-  assert.match(table, /<td>unknown viewport<\/td>/);
+  assert.match(table, /<td class="nowrap">unknown viewport<\/td>/);
   assert.doesNotMatch(html, /<script|<[^>]*\son[a-z]+\s*=/i);
 });
 
@@ -278,7 +278,7 @@ test("a functional report shows each finding's fix and where it goes, its invent
   fs.writeFileSync(input, JSON.stringify({
     url: 'https://example.com/', websiteName: 'Functional Fixture', timestamp: '2026-01-01T00:00:00Z', environment: 'staging',
     provenance: { model: 'claude-test-1', captureSha256: 'a'.repeat(64) },
-    visitedPages: ['https://example.com/'],
+    visitedPages: ['https://example.com/', 'https://www.example.com/', 'https://example.com/#form'],
     inventory: [{
       url: 'https://example.com/', redirectedFrom: [], viewport: '1920x1080', status: 200, title: 'Home',
       counts: { headings: 2, links: 2, images: 1 },
@@ -304,7 +304,11 @@ test("a functional report shows each finding's fix and where it goes, its invent
   assert.equal(status, 0, stdout + stderr);
   const html = fs.readFileSync(stdout.match(/^HTML report generated: (.*)$/m)[1], 'utf8');
 
-  assert.match(html, /<strong>Fix:<\/strong> Change it/);
+  assert.match(html, /<dt>Fix<\/dt><dd>Change it<\/dd>/);
+  const visited = html.slice(html.indexOf('<h3>Visited pages</h3>'));
+  assert.match(visited, /href="https:\/\/example\.com\/"[^>]*>\/<\/a>/, 'a page on the report\'s origin is labelled by its path');
+  assert.match(visited, />https:\/\/www\.example\.com\/<\/a>/, 'a page on another origin keeps its full URL');
+  assert.match(visited, />https:\/\/example\.com\/#form<\/a>/, 'a URL with a fragment keeps its full URL');
   assert.match(html, /<dt>Where<\/dt><dd>file: theme\/style\.css:12 — the \.hero rule<\/dd>/);
   assert.match(html, /<dt>WCAG<\/dt><dd>1\.4\.3 Contrast \(Minimum\)<\/dd>/);
   assert.equal((html.match(/<code>\/kosh:a11y<\/code>/g) || []).length, 1, 'only the accessibility finding without a contrast criterion points at the full audit');
